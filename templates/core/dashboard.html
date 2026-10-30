@@ -1,0 +1,1267 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+        <p class="text-muted mb-0 small">
+            Vista general del estado de la red
+            {% if total_devices > 0 %}
+            · <strong>{{ total_devices }}</strong> equipo{{ total_devices|pluralize:"s" }} activo{{ total_devices|pluralize:"s" }}
+            {% endif %}
+            · Actualizado: <span id="last-update">—</span>
+        </p>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Barra de acceso rápido + timeframe                           -->
+<!-- ============================================================ -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <div class="d-flex flex-wrap align-items-center gap-1">
+            <small class="text-muted me-2 d-none d-md-inline">
+                <i class="bi bi-lightning-charge-fill text-warning"></i>
+                <strong>Acceso rápido:</strong>
+            </small>
+            <a href="{% url 'inventario:device_list' %}"
+               class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-hdd-network"></i>
+                <span class="d-none d-sm-inline">Equipos</span>
+            </a>
+            <a href="{% url 'inventario:device_model_list' %}"
+               class="btn btn-sm btn-outline-info">
+                <i class="bi bi-cpu"></i>
+                <span class="d-none d-sm-inline">Modelos</span>
+            </a>
+            <a href="{% url 'alertas:rule_list' %}"
+               class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-shield-exclamation"></i>
+                <span class="d-none d-sm-inline">Reglas</span>
+            </a>
+            <a href="{% url 'alertas:alert_list' %}?status=activa"
+               class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-bell"></i>
+                <span class="d-none d-sm-inline">Alertas</span>
+                {% if active_alerts_count > 0 %}
+                <span class="badge bg-danger ms-1">{{ active_alerts_count }}</span>
+                {% endif %}
+            </a>
+            <a href="{% url 'monitoreo:monitor_live' %}"
+               class="btn btn-sm btn-outline-success">
+                <i class="bi bi-broadcast"></i>
+                <span class="d-none d-sm-inline">Monitor</span>
+            </a>
+            <a href="{% url 'monitoreo:monitor_status' %}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-activity"></i>
+                <span class="d-none d-md-inline">Estado</span>
+            </a>
+            <a href="{% url 'core:profile' %}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-person-circle"></i>
+                <span class="d-none d-sm-inline">Perfil</span>
+            </a>
+            {% if is_superadmin %}
+            <a href="{% url 'core:system_settings' %}"
+               class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-sliders"></i>
+                <span class="d-none d-sm-inline">Config</span>
+            </a>
+            {% endif %}
+
+            <!-- Discovery rápido (admin) -->
+            {% if is_admin %}
+            <button type="button" class="btn btn-sm btn-outline-success ms-auto"
+                    data-bs-toggle="modal" data-bs-target="#discoveryModal"
+                    title="Ejecutar discovery en todos los equipos">
+                <i class="bi bi-arrow-repeat"></i>
+                <span class="d-none d-md-inline">Discovery</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats generales                                              -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <!-- Equipos activos -->
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'inventario:device_list' %}?active=1"
+           class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-primary">{{ total_devices }}</div>
+                        <div class="metric-label">Equipos activos</div>
+                        {% if core_devices > 0 %}
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            {{ core_devices }} Core/Distribución
+                        </small>
+                        {% endif %}
+                    </div>
+                    <i class="bi bi-hdd-network metric-icon text-primary"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Modelos registrados -->
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'inventario:device_model_list' %}"
+           class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-info">{{ total_models }}</div>
+                        <div class="metric-label">Modelos registrados</div>
+                        {% if wireless_models > 0 %}
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            <i class="bi bi-broadcast-pin"></i>
+                            {{ wireless_models }} radioenlace{{ wireless_models|pluralize:"s" }}
+                        </small>
+                        {% else %}
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            Sin radioenlaces
+                        </small>
+                        {% endif %}
+                    </div>
+                    <i class="bi bi-cpu metric-icon text-info"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Reglas activas -->
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'alertas:rule_list' %}?enabled=1"
+           class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-warning">{{ active_rules }}</div>
+                        <div class="metric-label">Reglas activas</div>
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            {{ total_rules }} total{{ total_rules|pluralize:"es" }}
+                            {% if rules_with_telegram > 0 %}
+                            · {{ rules_with_telegram }} Telegram
+                            {% endif %}
+                        </small>
+                    </div>
+                    <i class="bi bi-shield-exclamation metric-icon text-warning"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+
+    <!-- Alertas activas -->
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'alertas:alert_list' %}?status=activa"
+           class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value
+                            {% if critical_count > 0 %}text-danger
+                            {% elif active_alerts_count > 0 %}text-warning
+                            {% else %}text-success{% endif %}">
+                            {{ active_alerts_count }}
+                        </div>
+                        <div class="metric-label">
+                            Alertas activas
+                            {% if critical_count > 0 %}
+                            <span class="badge bg-danger ms-1"
+                                  style="font-size: 0.62rem;">
+                                {{ critical_count }} críticas
+                            </span>
+                            {% endif %}
+                        </div>
+                        <small class="text-muted" style="font-size: 0.7rem;">
+                            {{ alerts_in_range }} {{ range_info.alerts_label }}
+                        </small>
+                    </div>
+                    <i class="bi bi-bell metric-icon
+                        {% if critical_count > 0 %}text-danger
+                        {% elif active_alerts_count > 0 %}text-warning
+                        {% else %}text-success{% endif %}"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Layout: equipos + alertas                                    -->
+<!-- ============================================================ -->
+<div class="row g-4">
+
+    <!-- ======================================================== -->
+    <!-- Equipos monitoreados                                     -->
+    <!-- ======================================================== -->
+    <div class="col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-hdd-network"></i> Equipos monitoreados
+                <small class="text-muted fw-normal ms-1">
+                    ({{ device_ids_to_show|length }}{% if has_more_devices %} de {{ total_devices }}{% endif %})
+                </small>
+            </h5>
+            <div class="d-flex align-items-center gap-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                    <label class="form-check-label" for="auto-refresh">
+                        <small class="text-muted">Auto</small>
+                    </label>
+                </div>
+                <a href="{% url 'monitoreo:monitor_live' %}"
+                   class="btn btn-sm btn-outline-primary">
+                    Ver todos <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Contenedor de cards -->
+        <div id="devices-container" class="row g-3">
+            {% if devices_to_show %}
+                {% for d in devices_to_show %}
+                <div class="col-lg-4 col-md-6">
+                    <div class="card h-100 dashboard-device-card"
+                         style="min-height: 240px;"
+                         data-device-id="{{ d.id }}">
+                        <div class="card-body p-3">
+                            <div class="text-center text-muted py-4">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                                <p class="mt-2 mb-0 small">{{ d.name }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center text-muted py-5">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-3 mb-2">No hay equipos activos.</p>
+                            {% if is_admin %}
+                            <a href="{% url 'inventario:device_create' %}"
+                               class="btn btn-primary btn-sm">
+                                <i class="bi bi-plus-lg"></i> Añadir el primero
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        {% if has_more_devices %}
+        <div class="alert alert-info mt-3 d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle-fill" style="font-size: 1.3rem;"></i>
+            <div class="flex-grow-1 small">
+                <strong>Mostrando {{ max_devices_shown }} de {{ total_devices }} equipos activos.</strong>
+                Las cards priorizan Core y Distribución. Para ver <em>todos</em>
+                los equipos con sus métricas en tiempo real, usa el
+                <strong>Monitoreo en vivo</strong>.
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{% url 'monitoreo:monitor_live' %}"
+                   class="btn btn-sm btn-primary">
+                    <i class="bi bi-broadcast"></i> Monitor en vivo
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- Alertas recientes + selector de timeframe                -->
+    <!-- ======================================================== -->
+    <div class="col-lg-4">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h5 class="mb-0">
+                <i class="bi bi-bell"></i> Alertas recientes
+            </h5>
+            <div class="btn-group btn-group-sm" role="group">
+                {% for key, info in timeframe_choices.items %}
+                <a href="?range={{ key }}"
+                   class="btn {% if range_key == key %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+                   title="{{ info.label }}">
+                    {{ key }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="list-group list-group-flush"
+                 style="max-height: 700px; overflow-y: auto;">
+                {% for alert in recent_alerts %}
+                <div class="list-group-item py-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <div class="mb-1 d-flex flex-wrap align-items-center gap-1">
+                                <span class="badge
+                                    {% if alert.severity == 'critical' %}bg-danger
+                                    {% elif alert.severity == 'warning' %}bg-warning text-dark
+                                    {% else %}bg-info{% endif %}"
+                                    style="font-size: 0.65rem;">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                                {% if alert.device %}
+                                <a href="{% url 'inventario:device_detail' alert.device.id %}"
+                                   class="small text-decoration-none text-truncate"
+                                   style="max-width: 130px;">
+                                    {{ alert.device.name }}
+                                </a>
+                                {% endif %}
+                            </div>
+                            <div class="small text-truncate" title="{{ alert.message }}">
+                                {{ alert.message|truncatechars:60 }}
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                <i class="bi bi-clock"></i>
+                                {{ alert.created_at|timesince }} atrás
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="list-group-item text-center text-muted py-5">
+                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2 small">Sin alertas recientes</p>
+                    <small class="text-muted" style="font-size: 0.7rem;">
+                        {{ range_info.label }}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+            {% if recent_alerts %}
+            <div class="card-footer bg-white text-center">
+                <a href="{% url 'alertas:alert_list' %}?status=activa"
+                   class="small text-decoration-none">
+                    Ver todas las alertas <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if active_rules == 0 %}
+        <div class="alert alert-warning mt-3 small">
+            <i class="bi bi-exclamation-triangle"></i>
+            <strong>No tienes reglas activas.</strong>
+            Las alertas no se generarán hasta que crees al menos una.
+            <a href="{% url 'alertas:rule_create' %}" class="alert-link">
+                Crear regla <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Modal: Discovery rápido                                      -->
+<!-- ============================================================ -->
+{% if is_admin %}
+<div class="modal fade" id="discoveryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-arrow-repeat"></i> Discovery rápido
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">
+                    Se ejecutará el discovery en <strong>todos los equipos activos</strong>:
+                </p>
+                <ul class="small mb-2">
+                    <li>Interfaces IF-MIB para todos los equipos</li>
+                    <li>Clientes AP para los radioenlaces</li>
+                </ul>
+                <div class="alert alert-warning small py-2 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Esta operación puede tardar varios segundos por equipo.
+                    Los equipos caídos serán saltados automáticamente.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success"
+                        id="btn-confirm-discovery"
+                        onclick="runDashboardDiscovery()">
+                    <i class="bi bi-play-fill"></i> Ejecutar ahora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================ -->
+<!-- Contenedor de toasts (esquina superior derecha)              -->
+<!-- ============================================================ -->
+<div class="toast-container position-fixed top-0 end-0 p-3"
+     style="z-index: 1090; margin-top: 60px;" id="toast-container"></div>
+
+<style>
+    .dashboard-device-card {
+        transition: box-shadow 0.15s ease, border-color 0.15s ease;
+        border-left: 3px solid var(--cf-primary, #0d6efd);
+    }
+    .dashboard-device-card:hover {
+        box-shadow: var(--cf-shadow-md, 0 3px 10px rgba(0,0,0,0.1));
+    }
+    .dashboard-device-card.device-down {
+        border-left-color: var(--cf-danger, #dc3545) !important;
+    }
+    .dashboard-device-card.device-stale {
+        border-left-color: var(--cf-warning, #e67e00) !important;
+    }
+
+    .dashboard-device-card .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .dashboard-device-card .status-dot.alive { background-color: #198754; }
+    .dashboard-device-card .status-dot.down { background-color: #dc3545; }
+    .dashboard-device-card .status-dot.unknown { background-color: #6c757d; }
+
+    .dashboard-device-card .device-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .dashboard-device-card .btn-xs {
+        padding: 0.15rem 0.45rem;
+        font-size: 0.7rem;
+        line-height: 1.2;
+    }
+    .radio-signal-bar {
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    .sparkline-svg {
+        width: 100%;
+        height: 28px;
+        display: block;
+    }
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Dashboard — Guía de uso",
+    sections: [
+        {
+            heading: "¿Qué es el Dashboard?",
+            body: `
+                Es la vista principal del sistema. Muestra un resumen
+                del estado de la red: métricas globales, los 6 equipos
+                más críticos con sus datos en vivo, y las alertas
+                recientes. Se actualiza cada 15s automáticamente.
+            `
+        },
+        {
+            heading: "Selector de rango temporal",
+            body: `
+                Los botones <strong>1h / 24h / 7d</strong> arriba de la
+                lista de alertas cambian la ventana temporal de:
+                <br>
+                • Las alertas recientes mostradas.
+                <br>
+                • El contador "Alertas activas" (subtítulo).
+                <br><br>
+                <strong>1h:</strong> útil en operación diaria activa.
+                <strong>24h:</strong> vista general del día (default).
+                <strong>7d:</strong> análisis de tendencia semanal.
+            `
+        },
+        {
+            heading: "Cards de equipos (3 por fila)",
+            body: `
+                Muestra hasta <strong>6 equipos</strong>, priorizando:
+                <br>
+                1. Core (rojo)
+                <br>
+                2. Distribución (naranja)
+                <br>
+                3. Acceso (azul)
+                <br>
+                4. CPE (gris)
+                <br><br>
+                Cada card incluye un <strong>sparkline</strong> (mini-gráfico)
+                de los últimos 10 minutos que muestra la tendencia de la
+                métrica principal. Se actualiza junto con los datos en vivo.
+            `
+        },
+        {
+            heading: "Métricas por tipo de equipo",
+            body: `
+                <strong>Equipos normales:</strong> muestra la interfaz
+                destacada (o la primera con tráfico) con:
+                <br>
+                • Barra de utilización (%) con color.
+                <br>
+                • Bps de entrada (↓) y salida (↑).
+                <br>
+                • Sparkline de tráfico de entrada.
+                <br><br>
+                <strong>Radioenlaces:</strong> muestra la señal del enlace:
+                <br>
+                • Barra de señal con color (verde/amarillo/rojo).
+                <br>
+                • Tasas TX/RX del radio.
+                <br>
+                • Sparkline de señal (tendencia de los últimos 10 min).
+            `
+        },
+        {
+            heading: "Toasts de alertas nuevas",
+            body: `
+                El dashboard hace polling cada 30s para detectar alertas
+                nuevas. Cuando aparece una alerta crítica o de advertencia,
+                se muestra un <em>toast</em> (notificación flotante) en
+                la esquina superior derecha.
+                <br><br>
+                Los toasts persisten en el tiempo y pueden cerrarse
+                individualmente. El sistema recuerda qué alertas ya se
+                mostraron para no repetirlas.
+            `
+        },
+        {
+            heading: "Discovery rápido",
+            body: `
+                El botón <strong>Discovery</strong> en la barra superior
+                ejecuta el discovery completo:
+                <br>
+                • Interfaces IF-MIB en todos los equipos.
+                <br>
+                • Clientes AP en los radioenlaces.
+                <br><br>
+                Solo visible para administradores. Útil antes de revisar
+                el dashboard para asegurar datos frescos.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+const DASH_DEVICE_IDS = {{ device_ids_to_show|safe }};
+const DASH_URL_LIVE = "{% url 'monitoreo:devices_live' %}";
+const DASH_URL_SPARKLINE = "{% url 'monitoreo:dashboard_sparkline' %}";
+const DASH_URL_ALERTS = "{% url 'core:recent_alerts_api' %}";
+const DASH_URL_DISCOVERY = "{% url 'monitoreo:discover_all' %}";
+const DASH_REFRESH_MS = 15000;
+const ALERTS_POLL_MS = 30000;
+const SPARKLINE_MINUTES = 10;
+
+let dashTimer = null;
+let alertsTimer = null;
+let lastAlertTimestamp = null;
+let shownAlertIds = new Set(
+    JSON.parse(localStorage.getItem('dash_shown_alerts') || '[]')
+);
+
+// ============================================================
+// HELPERS
+// ============================================================
+function formatBps(v) {
+    if (v === null || v === undefined) return '—';
+    if (v >= 1e9) return (v / 1e9).toFixed(1) + 'G';
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+    if (v >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return v.toFixed(0);
+}
+
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function roleBadge(role) {
+    const classes = {
+        'core':         'badge-core',
+        'distribution': 'badge-distribution',
+        'access':       'badge-access',
+        'cpe':          'badge-cpe',
+    };
+    const labels = {
+        'core':         'Core',
+        'distribution': 'Distrib.',
+        'access':       'Acceso',
+        'cpe':          'CPE',
+    };
+    return `<span class="badge badge-role ${classes[role] || 'badge-cpe'}"
+                  style="font-size: 0.62rem;">
+                ${labels[role] || role}
+            </span>`;
+}
+
+function signalColorClass(signal) {
+    if (signal === null || signal === undefined) return 'bg-secondary';
+    if (signal < -80) return 'bg-danger';
+    if (signal < -70) return 'bg-warning';
+    if (signal < -50) return 'bg-success';
+    return 'bg-info';
+}
+
+function signalToPercent(signal) {
+    if (signal === null || signal === undefined) return 0;
+    const pct = ((signal + 100) / 80) * 100;
+    return Math.max(0, Math.min(100, pct));
+}
+
+function utilColorClass(util) {
+    if (util === null || util === undefined) return 'bg-secondary';
+    if (util > 85) return 'bg-danger';
+    if (util > 70) return 'bg-warning';
+    if (util > 40) return 'bg-info';
+    return 'bg-success';
+}
+
+/**
+ * Genera un SVG de sparkline a partir de una serie de puntos.
+ * @param {Array} points - [{t, v}, ...]
+ * @param {string} color - color CSS del trazo.
+ * @returns {string} HTML del SVG (o "" si no hay datos).
+ */
+function renderSparklineSvg(points, color) {
+    if (!points || points.length < 2) {
+        return '<div class="text-muted small text-center" style="height:28px;line-height:28px;"><i class="bi bi-dash"></i></div>';
+    }
+
+    const values = points.map(p => p.v).filter(v => v !== null && !isNaN(v));
+    if (values.length < 2) return '';
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    // Dimensiones lógicas (viewBox) — el CSS escala el SVG
+    const W = 100;
+    const H = 28;
+    const stepX = W / (values.length - 1);
+
+    // Construir path
+    const points_str = values.map((v, i) => {
+        const x = i * stepX;
+        const y = H - ((v - min) / range) * (H - 4) - 2;  // padding 2px
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+
+    // Área bajo la curva (relleno semitransparente)
+    const area_path = `M0,${H} L${points_str.replace(/ /g, ' L')} L${W},${H} Z`;
+
+    const stroke = color || '#0d6efd';
+    return `
+        <svg class="sparkline-svg" viewBox="0 0 ${W} ${H}"
+             preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="${area_path}" fill="${stroke}" opacity="0.15"></path>
+            <polyline points="${points_str}"
+                      fill="none" stroke="${stroke}" stroke-width="1.2"
+                      stroke-linejoin="round" stroke-linecap="round"></polyline>
+        </svg>
+    `;
+}
+
+// ============================================================
+// SPARKLINE
+// ============================================================
+const sparklineCache = {};
+
+async function loadSparkline(deviceId, metric) {
+    const key = `${deviceId}:${metric}`;
+    try {
+        const url = `${DASH_URL_SPARKLINE}?device_id=${deviceId}&metric=${metric}&minutes=${SPARKLINE_MINUTES}`;
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        sparklineCache[key] = data.points || [];
+
+        // Re-renderizar el SVG específico
+        const el = document.querySelector(
+            `.sparkline-slot[data-device-id="${deviceId}"][data-metric="${metric}"]`
+        );
+        if (el) {
+            const color = metric === 'signal'
+                ? (data.points.length ? signalStrokeColor(data.points[data.points.length - 1].v) : '#0d6efd')
+                : '#0d6efd';
+            el.innerHTML = renderSparklineSvg(data.points, color);
+        }
+    } catch (e) {
+        console.warn('Error cargando sparkline:', e);
+    }
+}
+
+/**
+ * Devuelve el color de trazo según el valor de señal.
+ */
+function signalStrokeColor(signal) {
+    if (signal < -80) return '#dc3545';
+    if (signal < -70) return '#e67e00';
+    return '#198754';
+}
+
+// ============================================================
+// RENDER DE CARD COMPACTA
+// ============================================================
+function renderDeviceCard(device) {
+    const icmp = device.icmp || {};
+    const isWireless = device.is_wireless_link;
+
+    // Estado
+    let statusClass = 'unknown';
+    let statusText = 'Sin datos';
+    let statusIcon = 'question-circle';
+    let icmpDetail = '';
+
+    if (icmp.alive === null || icmp.alive === undefined) {
+        statusClass = 'unknown';
+    } else if (icmp.alive) {
+        statusClass = 'alive';
+        statusText = 'Vivo';
+        statusIcon = 'check-circle-fill';
+        if (icmp.rtt !== null && icmp.rtt !== undefined) {
+            icmpDetail = ` · ${icmp.rtt.toFixed(1)} ms`;
+        }
+    } else {
+        statusClass = 'down';
+        statusText = 'Caído';
+        statusIcon = 'x-circle-fill';
+    }
+
+    const cardCls = statusClass === 'down' ? 'device-down' : '';
+
+    const wirelessBadge = isWireless ? `
+        <span class="badge bg-info text-dark ms-1"
+              style="font-size: 0.6rem;" title="Radioenlace">
+            <i class="bi bi-broadcast-pin"></i>
+        </span>
+    ` : '';
+
+    // Métricas + sparkline
+    let metricsSection = '';
+    let sparklineMetric = null;
+
+    if (isWireless) {
+        const radio = device.radio;
+        if (radio && radio.signal !== null && radio.signal !== undefined) {
+            const sig = radio.signal;
+            const sigPct = signalToPercent(sig);
+            const sigColor = signalColorClass(sig);
+            const tx = formatBps(radio.tx_rate);
+            const rx = formatBps(radio.rx_rate);
+            sparklineMetric = 'signal';
+
+            metricsSection = `
+                <div class="mt-2 pt-2 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-1"
+                         style="font-size: 0.72rem;">
+                        <span class="text-muted">
+                            <i class="bi bi-reception-4"></i> Señal
+                        </span>
+                        <strong class="${sig < -80 ? 'text-danger' : sig < -70 ? 'text-warning' : 'text-success'}">
+                            ${sig.toFixed(0)} dBm
+                        </strong>
+                    </div>
+                    <div class="progress radio-signal-bar mb-2">
+                        <div class="progress-bar ${sigColor}"
+                             style="width: ${sigPct}%;"></div>
+                    </div>
+                    <div class="sparkline-slot"
+                         data-device-id="${device.id}"
+                         data-metric="signal">
+                        <div class="text-center text-muted" style="height:28px;line-height:28px;font-size:0.7rem;">
+                            <i class="bi bi-dash"></i>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1"
+                         style="font-size: 0.72rem;">
+                        <span class="text-success">
+                            <i class="bi bi-arrow-down-circle"></i> ${tx}
+                        </span>
+                        <span class="text-warning">
+                            <i class="bi bi-arrow-up-circle"></i> ${rx}
+                        </span>
+                    </div>
+                </div>
+            `;
+        } else {
+            metricsSection = `
+                <div class="mt-2 pt-2 border-top text-muted fst-italic"
+                     style="font-size: 0.72rem;">
+                    <i class="bi bi-broadcast-pin"></i> Sin datos de RF
+                </div>
+            `;
+        }
+    } else {
+        // Equipo normal: usar dashboard_traffic (que el backend ya eligió)
+        const wan = device.dashboard_traffic;
+        if (wan) {
+            const util = wan.utilization;
+            const utilPct = util !== null && util !== undefined
+                ? Math.min(util, 100) : 0;
+            const utilColor = utilColorClass(util);
+            sparklineMetric = 'traffic_in';
+
+            metricsSection = `
+                <div class="mt-2 pt-2 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-1"
+                         style="font-size: 0.72rem;">
+                        <span class="text-muted text-truncate"
+                              style="max-width: 70%;">
+                            <i class="bi bi-ethernet"></i>
+                            ${escapeHtmlJs(wan.interface || 'WAN')}
+                            ${wan.alias ? `<small>(${escapeHtmlJs(wan.alias)})</small>` : ''}
+                        </span>
+                        <strong class="text-muted">
+                            ${util !== null && util !== undefined ? util.toFixed(1) + '%' : '—'}
+                        </strong>
+                    </div>
+                    <div class="progress radio-signal-bar mb-2">
+                        <div class="progress-bar ${utilColor}"
+                             style="width: ${utilPct}%;"></div>
+                    </div>
+                    <div class="sparkline-slot"
+                         data-device-id="${device.id}"
+                         data-metric="traffic_in">
+                        <div class="text-center text-muted" style="height:28px;line-height:28px;font-size:0.7rem;">
+                            <i class="bi bi-dash"></i>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1"
+                         style="font-size: 0.72rem;">
+                        <span class="text-success">
+                            <i class="bi bi-arrow-down-circle"></i>
+                            ${formatBps(wan.in_bps)}
+                        </span>
+                        <span class="text-warning">
+                            <i class="bi bi-arrow-up-circle"></i>
+                            ${formatBps(wan.out_bps)}
+                        </span>
+                    </div>
+                </div>
+            `;
+        } else {
+            metricsSection = `
+                <div class="mt-2 pt-2 border-top text-muted fst-italic"
+                     style="font-size: 0.72rem;">
+                    <i class="bi bi-ethernet"></i> Sin datos de tráfico
+                </div>
+            `;
+        }
+    }
+
+    const detailUrl = `/equipos/${device.id}/`;
+    const interfacesUrl = `/equipos/${device.id}/interfaces/`;
+    const canManageInterfaces = device.has_interfaces_support || device.is_wireless_link;
+
+    return `
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100 dashboard-device-card ${cardCls}"
+                 data-device-id="${device.id}">
+                <div class="card-body p-3 d-flex flex-column">
+
+                    <!-- Header: nombre + IP + rol -->
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="status-dot ${statusClass}"
+                                      title="${statusText}"></span>
+                                <a href="${detailUrl}"
+                                   class="text-decoration-none text-truncate device-name"
+                                   title="${escapeHtmlJs(device.name)}">
+                                    ${escapeHtmlJs(device.name)}
+                                </a>
+                                ${wirelessBadge}
+                            </div>
+                            <small class="text-muted d-block text-truncate"
+                                   style="font-size: 0.7rem;">
+                                <code>${escapeHtmlJs(device.ip)}</code>
+                            </small>
+                        </div>
+                        <div class="ms-1">
+                            ${roleBadge(device.role)}
+                        </div>
+                    </div>
+
+                    <!-- ICMP compacto -->
+                    <div class="d-flex align-items-center gap-1 mt-1"
+                         style="font-size: 0.72rem;">
+                        <i class="bi bi-${statusIcon}
+                            ${statusClass === 'alive' ? 'text-success'
+                              : statusClass === 'down' ? 'text-danger'
+                              : 'text-muted'}"></i>
+                        <span class="${statusClass === 'alive' ? 'text-success'
+                              : statusClass === 'down' ? 'text-danger'
+                              : 'text-muted'}">
+                            ${statusText}
+                        </span>
+                        ${icmpDetail ? `<span class="text-muted">${icmpDetail}</span>` : ''}
+                    </div>
+
+                    <div class="flex-grow-1">
+                        ${metricsSection}
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                        <a href="${detailUrl}"
+                           class="btn btn-xs btn-outline-primary"
+                           title="Ver detalle del equipo">
+                            <i class="bi bi-info-circle"></i> Detalle
+                        </a>
+                        ${canManageInterfaces ? `
+                        <a href="${interfacesUrl}"
+                           class="btn btn-xs btn-outline-info"
+                           title="${device.is_wireless_link ? 'Clientes AP' : 'Interfaces'}">
+                            <i class="bi bi-${device.is_wireless_link ? 'broadcast-pin' : 'ethernet'}"></i>
+                        </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// CARGA DE DATOS
+// ============================================================
+async function loadDevices() {
+    const container = document.getElementById('devices-container');
+    if (!container) return;
+    if (!DASH_DEVICE_IDS || DASH_DEVICE_IDS.length === 0) return;
+
+    try {
+        const response = await fetch(DASH_URL_LIVE, {
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+
+        const data = await response.json();
+        const devicesMap = {};
+        (data.devices || []).forEach(d => {
+            if (DASH_DEVICE_IDS.includes(d.id)) devicesMap[d.id] = d;
+        });
+
+        const ordered = DASH_DEVICE_IDS
+            .map(id => devicesMap[id])
+            .filter(Boolean);
+
+        if (ordered.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body text-center text-muted py-5">
+                            <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                            <p class="mt-3 mb-0">
+                                Los equipos no responden al endpoint de monitoreo.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = ordered.map(renderDeviceCard).join('');
+
+        // Cargar sparklines en paralelo
+        ordered.forEach(d => {
+            const metric = d.is_wireless_link ? 'signal' : 'traffic_in';
+            loadSparkline(d.id, metric);
+        });
+
+        // Timestamp
+        const ts = new Date(data.timestamp);
+        const el = document.getElementById('last-update');
+        if (el) el.textContent = ts.toLocaleTimeString('es-VE');
+
+    } catch (e) {
+        console.error('Error cargando equipos:', e);
+        const el = document.getElementById('last-update');
+        if (el) el.textContent = 'error';
+    }
+}
+
+// ============================================================
+// TOASTS DE ALERTAS NUEVAS
+// ============================================================
+async function pollNewAlerts() {
+    try {
+        let url = DASH_URL_ALERTS;
+        if (lastAlertTimestamp) {
+            url += `?since=${encodeURIComponent(lastAlertTimestamp)}`;
+        }
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        lastAlertTimestamp = data.timestamp;
+
+        const container = document.getElementById('toast-container');
+        if (!container) return;
+
+        (data.alerts || []).forEach(alert => {
+            // Evitar repetir la misma alerta
+            if (shownAlertIds.has(alert.id)) return;
+
+            shownAlertIds.add(alert.id);
+            showAlertToast(alert);
+        });
+
+        // Persistir en localStorage (máx 100 ids)
+        const ids = Array.from(shownAlertIds).slice(-100);
+        shownAlertIds = new Set(ids);
+        try {
+            localStorage.setItem('dash_shown_alerts', JSON.stringify(ids));
+        } catch (e) {}
+
+    } catch (e) {
+        console.warn('Error polling alertas:', e);
+    }
+}
+
+/**
+ * Muestra un toast para una alerta nueva.
+ * @param {object} alert - payload del endpoint.
+ */
+function showAlertToast(alert) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    // Configuración por severidad
+    let headerClass, iconClass, title;
+    if (alert.severity === 'critical') {
+        headerClass = 'bg-danger text-white';
+        iconClass = 'bi-fire';
+        title = '🔴 Alerta Crítica';
+    } else if (alert.severity === 'warning') {
+        headerClass = 'bg-warning text-dark';
+        iconClass = 'bi-exclamation-triangle-fill';
+        title = '🟡 Advertencia';
+    } else {
+        headerClass = 'bg-info text-white';
+        iconClass = 'bi-info-circle-fill';
+        title = '🔵 Info';
+    }
+
+    const toastId = `toast-alert-${alert.id}`;
+    const deviceLink = alert.device_id
+        ? `<a href="/equipos/${alert.device_id}/" class="text-decoration-none">${escapeHtmlJs(alert.device)}</a>`
+        : '';
+
+    const html = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive"
+             aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-header ${headerClass}">
+                <i class="bi ${iconClass} me-2"></i>
+                <strong class="me-auto">${title}</strong>
+                <small>ahora</small>
+                <button type="button" class="btn-close btn-close-white ms-2"
+                        data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body small">
+                ${deviceLink ? `<div class="mb-1"><strong>${deviceLink}</strong></div>` : ''}
+                <div>${escapeHtmlJs(alert.message)}</div>
+                <div class="mt-2 text-end">
+                    <a href="/alertas/" class="btn btn-sm btn-outline-secondary">
+                        Ver alertas <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.insertAdjacentHTML('beforeend', html);
+    const toastEl = document.getElementById(toastId);
+    if (toastEl) {
+        const toast = new bootstrap.Toast(toastEl, { autohide: false });
+        toast.show();
+    }
+}
+
+// ============================================================
+// DISCOVERY RÁPIDO
+// ============================================================
+async function runDashboardDiscovery() {
+    const btn = document.getElementById('btn-confirm-discovery');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ejecutando...';
+    }
+
+    try {
+        const csrfToken = getCookie('csrftoken');
+        const response = await fetch(DASH_URL_DISCOVERY, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+            },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+
+        // Cerrar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('discoveryModal'));
+        if (modal) modal.hide();
+
+        // Mostrar toast con el resultado
+        const successCount = data.success_count || 0;
+        const total = data.total || 0;
+        showInfoToast(
+            'Discovery completado',
+            `${successCount}/${total} equipos procesados exitosamente.`,
+            successCount === total ? 'success' : 'warning'
+        );
+
+        // Refrescar el dashboard
+        loadDevices();
+
+    } catch (e) {
+        console.error('Error en discovery:', e);
+        showInfoToast('Error en Discovery', e.message, 'danger');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-play-fill"></i> Ejecutar ahora';
+        }
+    }
+}
+
+/**
+ * Toast genérico informativo.
+ */
+function showInfoToast(title, message, severity) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const colors = {
+        success: 'bg-success text-white',
+        warning: 'bg-warning text-dark',
+        danger: 'bg-danger text-white',
+        info: 'bg-info text-white',
+    };
+    const icons = {
+        success: 'bi-check-circle-fill',
+        warning: 'bi-exclamation-triangle-fill',
+        danger: 'bi-x-circle-fill',
+        info: 'bi-info-circle-fill',
+    };
+    const id = 'toast-info-' + Date.now();
+
+    container.insertAdjacentHTML('beforeend', `
+        <div id="${id}" class="toast" role="alert" data-bs-autohide="true"
+             data-bs-delay="5000">
+            <div class="toast-header ${colors[severity] || colors.info}">
+                <i class="bi ${icons[severity] || icons.info} me-2"></i>
+                <strong class="me-auto">${escapeHtmlJs(title)}</strong>
+                <button type="button" class="btn-close btn-close-white ms-2"
+                        data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body small">${escapeHtmlJs(message)}</div>
+        </div>
+    `);
+
+    const el = document.getElementById(id);
+    if (el) new bootstrap.Toast(el).show();
+}
+
+// ============================================================
+// AUTO-REFRESH
+// ============================================================
+function startAutoRefresh() {
+    if (dashTimer) clearInterval(dashTimer);
+    dashTimer = setInterval(loadDevices, DASH_REFRESH_MS);
+}
+
+function stopAutoRefresh() {
+    if (dashTimer) {
+        clearInterval(dashTimer);
+        dashTimer = null;
+    }
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    if (DASH_DEVICE_IDS && DASH_DEVICE_IDS.length > 0) {
+        loadDevices();
+    }
+
+    // Iniciar polling de alertas (independiente del de devices)
+    lastAlertTimestamp = new Date().toISOString();
+    pollNewAlerts();  // primera llamada para inicializar timestamp
+    alertsTimer = setInterval(pollNewAlerts, ALERTS_POLL_MS);
+
+    const toggle = document.getElementById('auto-refresh');
+    if (toggle) {
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) startAutoRefresh();
+            else stopAutoRefresh();
+        });
+        if (toggle.checked && DASH_DEVICE_IDS.length > 0) {
+            startAutoRefresh();
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopAutoRefresh();
+            if (alertsTimer) {
+                clearInterval(alertsTimer);
+                alertsTimer = null;
+            }
+        } else {
+            const toggleEl = document.getElementById('auto-refresh');
+            if (toggleEl && toggleEl.checked && DASH_DEVICE_IDS.length > 0) {
+                startAutoRefresh();
+                loadDevices();
+            }
+            // Reanudar polling de alertas
+            pollNewAlerts();
+            if (!alertsTimer) {
+                alertsTimer = setInterval(pollNewAlerts, ALERTS_POLL_MS);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

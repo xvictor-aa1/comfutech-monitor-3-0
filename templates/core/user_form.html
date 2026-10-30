@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">{{ title }}</h2>
+        <p class="text-muted mb-0 small">
+            {% if is_edit %}
+                Modifica la información del usuario.
+                El nombre de usuario no se puede cambiar.
+            {% else %}
+                Crea un nuevo usuario con acceso al sistema.
+                Se enviará automáticamente un enlace de verificación al correo.
+            {% endif %}
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:user_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">
+            {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" id="user-form" novalidate>
+            {% csrf_token %}
+
+            <!-- ============================================================ -->
+            <!-- Información del usuario                                      -->
+            <!-- ============================================================ -->
+            <div class="card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-person text-primary"></i> Información del usuario
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <!-- Username -->
+                    {% if not is_edit %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.username.id_for_label }}">
+                            {{ form.username.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.username }}
+                        {% if form.username.errors %}
+                        <div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Solo letras, números, puntos (.), guiones (-) y
+                            guiones bajos (_). <strong>Sin espacios.</strong>
+                            Mínimo 3 caracteres.
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Nombre de usuario</label>
+                        <input type="text" class="form-control"
+                               value="{{ target_user.username }}" disabled>
+                        <div class="form-text">
+                            <i class="bi bi-lock"></i>
+                            El nombre de usuario no se puede cambiar una vez creado.
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Nombre y Apellido -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.first_name.id_for_label }}">
+                                {{ form.first_name.label }}
+                            </label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                            <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Solo letras, espacios, guiones y apóstrofes.
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.last_name.id_for_label }}">
+                                {{ form.last_name.label }}
+                            </label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                            <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Solo letras, espacios, guiones y apóstrofes.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Email -->
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.email.id_for_label }}">
+                            {{ form.email.label }}
+                            {% if not is_edit %}<span class="text-danger">*</span>{% endif %}
+                            {% if is_edit %}
+                                <span class="ms-2">
+                                    {% if email_verified %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-patch-check-fill"></i> Verificado
+                                    </span>
+                                    {% elif target_user.email %}
+                                    <span class="badge bg-warning text-dark">
+                                        <i class="bi bi-exclamation-circle-fill"></i> Sin verificar
+                                    </span>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </label>
+
+                        {% if is_edit and not can_change_email %}
+                            <input type="text" class="form-control"
+                                   value="{{ target_user.email }}" disabled>
+                            <div class="form-text text-warning">
+                                <i class="bi bi-shield-lock"></i>
+                                Solo el Superadministrador puede cambiar el correo electrónico.
+                            </div>
+                        {% else %}
+                            <div class="input-group">
+                                {{ form.email }}
+                                <span class="input-group-text">
+                                    {% if is_edit and email_verified %}
+                                    <i class="bi bi-patch-check-fill text-success"
+                                       title="Correo verificado"></i>
+                                    {% elif is_edit and target_user.email %}
+                                    <i class="bi bi-exclamation-circle-fill text-warning"
+                                       title="Correo sin verificar"></i>
+                                    {% else %}
+                                    <i class="bi bi-envelope text-muted"
+                                       title="Se enviará verificación al guardar"></i>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        {% endif %}
+
+                        {% if form.email.errors %}
+                        <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                        {% endif %}
+
+                        {% if is_edit %}
+                            {% if email_verified %}
+                            <div class="alert alert-success small mt-2 mb-0 py-2">
+                                <i class="bi bi-patch-check-fill"></i>
+                                Este correo está verificado y puede recibir
+                                notificaciones y recuperar contraseña.
+                            </div>
+                            {% elif target_user.email %}
+                            <div class="alert alert-warning small mt-2 py-2 mb-2">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                Este correo <strong>aún no ha sido verificado</strong>.
+                                El usuario no podrá recuperar su contraseña
+                                hasta validarlo.
+                            </div>
+                            <form id="send-verification-form" method="post"
+                                  action="{% url 'core:user_send_verification' target_user.id %}"
+                                  style="display: none;">
+                                {% csrf_token %}
+                            </form>
+                            <button type="button"
+                                    class="btn btn-outline-primary btn-sm"
+                                    onclick="document.getElementById('send-verification-form').submit();">
+                                <i class="bi bi-envelope-check"></i>
+                                Enviar enlace de verificación
+                            </button>
+                            {% else %}
+                            <div class="form-text">
+                                <i class="bi bi-info-circle"></i>
+                                Este usuario aún no tiene correo asignado.
+                            </div>
+                            {% endif %}
+                        {% else %}
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Un correo solo puede estar registrado en un usuario.
+                            Se enviará un enlace de verificación automáticamente.
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Rol -->
+                    {% if is_edit and target_user.pk == request.user.pk %}
+                    <div class="mb-0">
+                        <label class="form-label">Rol</label>
+                        <input type="text" class="form-control"
+                               value="{% if target_user.is_superuser %}Superadministrador{% else %}{{ target_user.groups.first.name|default:'Sin rol' }}{% endif %}"
+                               disabled>
+                        <div class="form-text text-warning">
+                            <i class="bi bi-shield-lock"></i>
+                            No puedes cambiar tu propio rol.
+                        </div>
+                    </div>
+                    <input type="hidden" name="role" value="{{ form.role.value }}">
+                    {% else %}
+                    <div class="mb-0">
+                        <label class="form-label" for="{{ form.role.id_for_label }}">
+                            {{ form.role.label }}
+                        </label>
+                        {{ form.role }}
+                        {% if form.role.errors %}
+                        <div class="text-danger small mt-1">{{ form.role.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Administrador:</strong> gestiona equipos y usuarios normales.
+                            <strong>Usuario:</strong> solo lectura.
+                            <br>
+                            El rol <em>Superadmin</em> no se puede asignar desde aquí
+                            (solo existe uno, creado en setup).
+                        </div>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+
+            <!-- ============================================================ -->
+            <!-- Contraseña (solo en creación)                                -->
+            <!-- ============================================================ -->
+            {% if not is_edit %}
+            <div class="card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-key text-warning"></i> Contraseña
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle"></i>
+                        La contraseña debe tener entre <strong>8 y 16 caracteres</strong>.
+                        Se recomienda mezclar mayúsculas, minúsculas, números y símbolos.
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="id_password1">
+                            Contraseña <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password"
+                                   name="password1"
+                                   id="id_password1"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   minlength="8"
+                                   maxlength="16"
+                                   required>
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="togglePassword('id_password1', this)"
+                                    title="Mostrar/ocultar">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        {% if form.password1.errors %}
+                        <div class="text-danger small mt-1">{{ form.password1.errors.0 }}</div>
+                        {% endif %}
+
+                        <div class="mt-2" id="strength-container" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted">Seguridad:</small>
+                                <small id="strength-label" class="fw-bold"></small>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div id="strength-bar"
+                                     class="progress-bar"
+                                     role="progressbar"
+                                     style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-text">
+                            <i class="bi bi-info-circle"></i>
+                            Mínimo 8 caracteres. Recomendado: mayúsculas,
+                            minúsculas, números y símbolos.
+                        </div>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label" for="id_password2">
+                            Repetir contraseña <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password"
+                                   name="password2"
+                                   id="id_password2"
+                                   class="form-control"
+                                   autocomplete="new-password"
+                                   minlength="8"
+                                   maxlength="16"
+                                   required>
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="togglePassword('id_password2', this)"
+                                    title="Mostrar/ocultar">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        {% if form.password2.errors %}
+                        <div class="text-danger small mt-1">{{ form.password2.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text" id="match-feedback"></div>
+                    </div>
+
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Botones -->
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{% url 'core:user_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary btn-lg">
+                    <i class="bi bi-save"></i>
+                    {% if is_edit %}Guardar cambios{% else %}Crear usuario{% endif %}
+                </button>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+registerHelpContent({
+    title: "Formulario de Usuario — Guía",
+    sections: [
+        {
+            heading: "¿Qué es este formulario?",
+            body: `
+                Permite <strong>crear</strong> un nuevo usuario o
+                <strong>editar</strong> uno existente. Los administradores
+                pueden gestionar usuarios normales; solo el Superadmin
+                puede gestionar otros admins y cambiar emails.
+            `
+        },
+        {
+            heading: "Crear vs editar",
+            body: `
+                <strong>Modo creación:</strong> todos los campos son editables,
+                incluidos username y contraseña. Al guardar, se envía
+                automáticamente un enlace de verificación al email ingresado.
+                <br><br>
+                <strong>Modo edición:</strong> el username no se puede cambiar.
+                El email solo lo puede cambiar el Superadmin. La contraseña
+                no está en este formulario (se cambia desde la acción
+                "Cambiar contraseña" en la lista).
+            `
+        },
+        {
+            heading: "Nombre de usuario (username)",
+            body: `
+                Identificador único para iniciar sesión:
+                <br>
+                • Solo letras, números, puntos (.), guiones (-) y guiones bajos (_).
+                <br>
+                • <strong>Sin espacios.</strong>
+                <br>
+                • Mínimo 3 caracteres, máximo 150.
+                <br>
+                • Único en el sistema (no puede repetirse).
+                <br>
+                • <strong>No se puede cambiar</strong> una vez creado.
+            `
+        },
+        {
+            heading: "Nombre y apellido",
+            body: `
+                Campos opcionales para identificar al usuario:
+                <br>
+                • Solo letras (incluyendo acentos y ñ), espacios, guiones y apóstrofes.
+                <br>
+                • No se permiten números ni símbolos especiales.
+                <br>
+                • Se usan para mostrar el nombre completo en la UI.
+            `
+        },
+        {
+            heading: "Email",
+            body: `
+                Correo electrónico del usuario:
+                <br>
+                • <strong>Único en el sistema</strong> — un email = un usuario.
+                <br>
+                • Se usa para verificación y recuperación de contraseña.
+                <br>
+                • Al crear el usuario, se envía automáticamente un enlace de verificación.
+                <br>
+                • Si el email cambia (solo superadmin), se invalida la verificación anterior y se envía un nuevo enlace.
+                <br><br>
+                <strong>Verificación:</strong> el usuario recibe un email con
+                un enlace válido por 48 horas. Al hacer clic, marca el correo
+                como verificado.
+                <br><br>
+                <strong>Importante:</strong> sin el email verificado, el usuario
+                <strong>no puede recuperar su contraseña</strong>.
+            `
+        },
+        {
+            heading: "Contraseña (solo en creación)",
+            body: `
+                Debe tener entre <strong>8 y 16 caracteres</strong>. El
+                indicador de fuerza muestra 5 niveles:
+                <br>
+                • Muy corta (rojo) — menos de 8 caracteres.
+                <br>
+                • Débil (rojo) — solo un tipo de caracteres.
+                <br>
+                • Aceptable (amarillo) — mezcla básica.
+                <br>
+                • Buena (azul) — buena mezcla de tipos.
+                <br>
+                • Excelente (verde) — mayúsculas + minúsculas + números + símbolos + 12+ chars.
+                <br><br>
+                Se valida además que no sea una contraseña común
+                (<code>password</code>, <code>12345678</code>, etc.) ni
+                similar al nombre de usuario o email.
+            `
+        },
+        {
+            heading: "Rol del usuario",
+            body: `
+                El rol determina qué puede hacer el usuario:
+                <br><br>
+                <strong>Administrador:</strong> puede gestionar usuarios
+                normales y equipos. No puede crear/editar otros admins.
+                <br><br>
+                <strong>Usuario:</strong> solo lectura. Ve el dashboard,
+                equipos y alertas pero no puede modificar nada.
+                <br><br>
+                <strong>Superadmin:</strong> NO se puede asignar desde este
+                formulario. Solo existe uno, creado en setup inicial.
+            `
+        },
+        {
+            heading: "Verificación de email",
+            body: `
+                Cada usuario puede tener su email en 3 estados:
+                <br>
+                <span class="badge bg-success"><i class="bi bi-patch-check-fill"></i> Verificado</span>
+                — el usuario confirmó el correo. Puede recuperar contraseña.
+                <br>
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle-fill"></i> Sin verificar</span>
+                — correo registrado pero no confirmado. No puede recuperar contraseña.
+                <br>
+                <strong>Sin correo</strong> — no tiene email. Solo puede iniciar sesión.
+                <br><br>
+                Si necesitas reenviar el enlace de verificación (porque
+                expiró o no llegó), usa el botón "Enviar enlace de
+                verificación" en el modo edición.
+            `
+        },
+        {
+            heading: "Modo edición: restricciones",
+            body: `
+                Al editar un usuario, hay varias restricciones:
+                <br>
+                • <strong>Username:</strong> no se puede cambiar.
+                <br>
+                • <strong>Email:</strong> solo lo puede cambiar el Superadmin.
+                <br>
+                • <strong>Tu propio rol:</strong> no lo puedes cambiar (evita auto-degradación).
+                <br>
+                • <strong>Contraseña:</strong> no está aquí. Usa la acción
+                "Cambiar contraseña" en la lista de usuarios.
+                <br><br>
+                Estas restricciones son de seguridad, no son errores.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Verifica el email de los usuarios nuevos</strong>
+                para que puedan recuperar contraseña.
+                <br>
+                • <strong>Usa "usuario" en lugar de "administrador"</strong>
+                cuando no necesiten gestionar nada.
+                <br>
+                • <strong>No compartas el rol admin</strong> sin necesidad —
+                tiene acceso a gestión de usuarios.
+                <br>
+                • <strong>Documenta el motivo</strong> de cada admin creado
+                (en la descripción de la cuenta o en algún registro interno).
+                <br>
+                • <strong>Nunca crees contraseñas débiles</strong> aunque el
+                sistema las acepte — usa el indicador de fuerza como guía.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// Password toggle
+// ============================================================
+function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+
+// ============================================================
+// Password strength
+// ============================================================
+function checkStrength(password) {
+    let score = 0;
+    if (password.length >= 8)   score += 1;
+    if (/[a-z]/.test(password)) score += 1;
+    if (/[A-Z]/.test(password)) score += 1;
+    if (/\d/.test(password))    score += 1;
+    if (/[^A-Za-z0-9]/.test(password)) score += 1;
+    if (password.length >= 12)  score += 1;
+    return Math.min(score, 5);
+}
+
+function updateStrength(input) {
+    const container = document.getElementById('strength-container');
+    const bar = document.getElementById('strength-bar');
+    const label = document.getElementById('strength-label');
+    const password = input.value;
+
+    if (!password) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'block';
+
+    const score = checkStrength(password);
+
+    let color, width, text;
+    if (password.length < 8) {
+        color = 'bg-danger'; width = 20; text = 'Muy corta';
+    } else if (score <= 2) {
+        color = 'bg-danger'; width = 30; text = 'Débil';
+    } else if (score === 3) {
+        color = 'bg-warning'; width = 55; text = 'Aceptable';
+    } else if (score === 4) {
+        color = 'bg-info'; width = 75; text = 'Buena';
+    } else {
+        color = 'bg-success'; width = 100; text = 'Excelente';
+    }
+
+    bar.className = 'progress-bar ' + color;
+    bar.style.width = width + '%';
+    label.textContent = text;
+    label.className = 'fw-bold text-' +
+        (color === 'bg-danger' ? 'danger'
+         : color === 'bg-warning' ? 'warning'
+         : color === 'bg-info' ? 'info'
+         : 'success');
+}
+
+function checkMatch() {
+    const p1 = document.getElementById('id_password1');
+    const p2 = document.getElementById('id_password2');
+    const feedback = document.getElementById('match-feedback');
+    if (!p1 || !p2 || !feedback) return;
+
+    if (!p2.value) {
+        feedback.textContent = '';
+        return;
+    }
+
+    if (p1.value === p2.value) {
+        feedback.innerHTML =
+            '<i class="bi bi-check-circle-fill text-success"></i> Las contraseñas coinciden.';
+        feedback.className = 'form-text text-success';
+    } else {
+        feedback.innerHTML =
+            '<i class="bi bi-x-circle-fill text-danger"></i> Las contraseñas no coinciden.';
+        feedback.className = 'form-text text-danger';
+    }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    const p1 = document.getElementById('id_password1');
+    const p2 = document.getElementById('id_password2');
+    const form = document.getElementById('user-form');
+
+    if (p1) {
+        p1.addEventListener('input', () => updateStrength(p1));
+        p1.addEventListener('input', checkMatch);
+    }
+    if (p2) {
+        p2.addEventListener('input', checkMatch);
+    }
+
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            // Validar contraseña solo en creación
+            if (p1 && p1.value) {
+                if (p1.value.length < 8) {
+                    e.preventDefault();
+                    p1.focus();
+                    alert('La contraseña debe tener al menos 8 caracteres.');
+                    return false;
+                }
+                if (p1.value.length > 16) {
+                    e.preventDefault();
+                    p1.focus();
+                    alert('La contraseña no puede superar los 16 caracteres.');
+                    return false;
+                }
+                if (p1.value !== p2.value) {
+                    e.preventDefault();
+                    p2.focus();
+                    alert('Las contraseñas no coinciden.');
+                    return false;
+                }
+            }
+        });
+
+        // Warning al salir con cambios sin guardar
+        let dirty = false;
+        form.addEventListener('input', () => { dirty = true; });
+        form.addEventListener('submit', () => { dirty = false; });
+        window.addEventListener('beforeunload', (e) => {
+            if (dirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

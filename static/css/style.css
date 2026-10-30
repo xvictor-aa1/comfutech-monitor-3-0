@@ -1,0 +1,1998 @@
+/* ============================================================
+   Comfutech Monitor - Hoja de estilos principal
+   Bootstrap 5.3+ · data-bs-theme en <html>
+   Optimizado para adaptarse al viewport del navegador
+   ============================================================
+   Índice:
+     1.  Variables (light)
+     2.  Variables (dark)
+     3.  Reset y base
+     4.  Layout y contenedor
+     5.  Tipografía fluida
+     6.  Navbar
+     7.  Cards
+     8.  Badges
+     9.  Tablas
+     10. Formularios
+     11. Botones
+     12. Alertas
+     13. Buscador colapsable
+     14. Barras de progreso
+     15. Breadcrumb
+     16. Theme switcher
+     17. Sticky bottom
+     18. Tarjetas compactas de equipo
+     19. Modal
+     20. List group
+     21. Dropdown
+     22. Utilidades
+     23. Accesibilidad
+     24. Impresión
+     25. Responsive
+     26. Overrides de utilidades Bootstrap
+     27. Helpers mobile-first
+   ============================================================ */
+
+
+/* ============================================================
+   1. TEMA CLARO (default)
+   ============================================================ */
+:root,
+[data-bs-theme="light"] {
+    /* --- Colores de marca --- */
+    --cf-primary: #0d6efd;
+    --cf-primary-dark: #0a58ca;
+    --cf-primary-light: #e7f1ff;
+    --cf-success: #198754;
+    --cf-success-light: #d1e7dd;
+    --cf-warning: #e67e00;
+    --cf-warning-light: #fff3cd;
+    --cf-danger: #dc3545;
+    --cf-danger-light: #f8d7da;
+    --cf-info: #0aa2c0;
+    --cf-info-light: #cff4fc;
+
+    /* --- Neutros --- */
+    --cf-body-bg: #e6ebf2;
+    --cf-card-bg: #ffffff;
+    --cf-card-border: #c8d0db;
+    --cf-input-bg: #ffffff;
+    --cf-input-border: #aeb9c7;
+    --cf-text: #1a2028;
+    --cf-text-muted: #4a5563;
+    --cf-text-subtle: #7a8694;
+    --cf-border: #c8d0db;
+    --cf-border-light: #dde3ea;
+    --cf-hover-bg: #eef2f7;
+
+    /* --- Sombras (más sutiles) --- */
+    --cf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --cf-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    --cf-shadow-md: 0 3px 10px rgba(0, 0, 0, 0.10);
+    --cf-shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.14);
+    --cf-shadow-primary: 0 3px 10px rgba(13, 110, 253, 0.25);
+
+    --cf-code-bg: #eef1f5;
+    --cf-code-color: #c7254e;
+
+    /* --- Radios (más pequeños y modernos) --- */
+    --cf-radius-sm: 5px;
+    --cf-radius: 8px;
+    --cf-radius-lg: 12px;
+    --cf-radius-pill: 999px;
+    --cf-transition-fast: 0.12s ease;
+    --cf-transition: 0.18s ease;
+
+    /* ---------------------------------------------------------
+       ESPACIADO FLUIDO COMPACTO
+       Reducido ~25-30% respecto al original para que el contenido
+       quepa en el viewport sin necesidad de scroll en la mayoría
+       de vistas.
+       --------------------------------------------------------- */
+    --cf-page-padding: clamp(0.75rem, 0.8vw + 0.4rem, 1.25rem);
+    --cf-card-padding: clamp(0.7rem, 0.5vw + 0.4rem, 0.95rem);
+    --cf-section-gap: clamp(0.6rem, 0.6vw + 0.35rem, 1rem);
+    --cf-row-gap: clamp(0.5rem, 0.5vw + 0.25rem, 0.75rem);
+    --cf-content-max: 1360px;
+    --cf-content-narrow: 820px;
+
+    /* --- Sobrescribir Bootstrap --- */
+    --bs-body-bg: #e6ebf2;
+    --bs-body-color: #1a2028;
+    --bs-secondary-bg: #ffffff;
+    --bs-tertiary-bg: #eef2f7;
+    --bs-border-color: #c8d0db;
+    --bs-border-color-translucent: rgba(0, 0, 0, 0.12);
+    --bs-emphasis-color: #0d1117;
+    --bs-secondary-color: #4a5563;
+    --bs-heading-color: #1a2028;
+    --bs-link-color: #0d6efd;
+    --bs-link-hover-color: #0a58ca;
+}
+
+
+/* ============================================================
+   2. TEMA OSCURO
+   ============================================================ */
+[data-bs-theme="dark"] {
+    --cf-primary: #4d9bff;
+    --cf-primary-dark: #3b82f6;
+    --cf-primary-light: #1c2d4a;
+    --cf-success: #4ecb71;
+    --cf-success-light: #17341f;
+    --cf-warning: #f5a623;
+    --cf-warning-light: #3d2a10;
+    --cf-danger: #f87575;
+    --cf-danger-light: #3a1a1e;
+    --cf-info: #4dd0e1;
+    --cf-info-light: #143038;
+
+    --cf-body-bg: #0a0e14;
+    --cf-card-bg: #141922;
+    --cf-card-border: #2a3341;
+    --cf-input-bg: #0a0e14;
+    --cf-input-border: #3a4555;
+    --cf-text: #e8eef5;
+    --cf-text-muted: #a8b2c0;
+    --cf-text-subtle: #6e7c8f;
+    --cf-border: #2a3341;
+    --cf-border-light: #1e252e;
+    --cf-hover-bg: #1e252e;
+
+    --cf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --cf-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    --cf-shadow-md: 0 3px 10px rgba(0, 0, 0, 0.6);
+    --cf-shadow-lg: 0 6px 18px rgba(0, 0, 0, 0.7);
+    --cf-shadow-primary: 0 3px 10px rgba(77, 155, 255, 0.30);
+
+    --cf-code-bg: #1e252e;
+    --cf-code-color: #ff8b8b;
+
+    --bs-body-bg: #0a0e14;
+    --bs-body-color: #e8eef5;
+    --bs-secondary-bg: #141922;
+    --bs-tertiary-bg: #1e252e;
+    --bs-border-color: #2a3341;
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.12);
+    --bs-emphasis-color: #ffffff;
+    --bs-secondary-color: #a8b2c0;
+    --bs-heading-color: #e8eef5;
+    --bs-link-color: #4d9bff;
+    --bs-link-hover-color: #70b0ff;
+
+    color-scheme: dark;
+}
+
+
+/* ============================================================
+   3. RESET Y BASE
+   ============================================================ */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior-x: none;
+}
+
+body {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Reducido: base compacta que se adapta al viewport */
+    font-size: clamp(0.8125rem, 0.79rem + 0.08vw, 0.9rem);
+    line-height: 1.45;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    transition: background-color var(--cf-transition),
+                color var(--cf-transition);
+}
+
+img,
+video,
+svg {
+    max-width: 100%;
+    height: auto;
+}
+
+p, h1, h2, h3, h4, h5, h6, li, td, th {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+
+/* Scrollbar más delgado */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--cf-border-light);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--cf-text-subtle);
+    border-radius: var(--cf-radius-pill);
+    border: 2px solid var(--cf-border-light);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--cf-text-muted);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--cf-text-subtle) var(--cf-border-light);
+}
+
+
+/* ============================================================
+   4. LAYOUT Y CONTENEDOR
+   ============================================================ */
+
+/* main: crece para empujar footer + padding vertical compacto */
+main {
+    flex: 1 0 auto;
+    width: 100%;
+    padding: var(--cf-section-gap) 0;
+}
+
+/* ------------------------------------------------------------
+   CONTENEDOR: se adapta al viewport con max-widths razonables.
+   - En laptops pequeñas (992-1199): ocupa casi todo el ancho
+   - En desktop normal (1200-1599): max-width 1360px
+   - En ultrawide (≥1600): max-width 1600px
+   - En 4K (≥2560): max-width 1800px
+   ------------------------------------------------------------ */
+.container-fluid,
+.container {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--cf-page-padding);
+    padding-right: var(--cf-page-padding);
+}
+
+.cf-container-wide {
+    max-width: calc(var(--cf-content-max) + 15vw);
+}
+
+.cf-container-narrow {
+    max-width: var(--cf-content-narrow);
+}
+
+/* Desktop normal: limitamos para que no se estire */
+@media (min-width: 1200px) {
+    .container-fluid {
+        max-width: var(--cf-content-max);
+    }
+}
+
+/* Ultrawide (21:9): máximo 1600px */
+@media (min-width: 1600px) {
+    .container-fluid {
+        max-width: 1600px;
+    }
+}
+
+/* 4K: máximo 1800px */
+@media (min-width: 2560px) {
+    .container-fluid {
+        max-width: 1800px;
+    }
+
+    :root {
+        --cf-page-padding: 2rem;
+        --cf-card-padding: 1.25rem;
+        --cf-section-gap: 1.5rem;
+    }
+
+    body {
+        font-size: 0.95rem;
+    }
+}
+
+footer {
+    flex-shrink: 0;
+    background-color: var(--cf-card-bg);
+    border-top: 1px solid var(--cf-border-light);
+    font-size: 0.78rem;
+    color: var(--cf-text-muted);
+    padding: 0.5rem var(--cf-page-padding);
+    text-align: center;
+}
+
+
+/* ============================================================
+   5. TIPOGRAFÍA FLUIDA (compacta)
+   ============================================================ */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--bs-heading-color);
+    margin-bottom: 0.35rem;
+    letter-spacing: -0.01em;
+}
+
+h1 { font-size: clamp(1.15rem, 1rem + 0.5vw, 1.5rem); }
+h2 { font-size: clamp(1.05rem, 0.95rem + 0.4vw, 1.3rem); }
+h3 { font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.15rem); }
+h4 { font-size: clamp(0.9rem, 0.87rem + 0.15vw, 1rem); }
+h5 { font-size: clamp(0.85rem, 0.83rem + 0.1vw, 0.95rem); }
+h6 { font-size: 0.85rem; }
+
+.text-muted {
+    color: var(--cf-text-muted) !important;
+}
+
+code, pre, .font-monospace {
+    font-family: "SF Mono", Monaco, "Cascadia Code", Consolas,
+                 "Courier New", monospace;
+    font-size: 0.82em;
+}
+
+code {
+    background-color: var(--cf-code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: var(--cf-radius-sm);
+    color: var(--cf-code-color);
+    border: 1px solid var(--cf-border-light);
+    word-break: break-word;
+}
+
+a {
+    color: var(--bs-link-color);
+    transition: color var(--cf-transition-fast);
+}
+
+a:hover {
+    color: var(--bs-link-hover-color);
+}
+
+
+/* ============================================================
+   6. NAVBAR (compacto)
+   ============================================================ */
+.navbar {
+    box-shadow: var(--cf-shadow-sm);
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    padding-left: var(--cf-page-padding);
+    padding-right: var(--cf-page-padding);
+}
+
+@media (min-width: 1200px) {
+    .navbar > .container-fluid {
+        max-width: var(--cf-content-max);
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+[data-bs-theme="dark"] .navbar.bg-dark {
+    background-color: #05080c !important;
+    border-bottom: 1px solid var(--cf-border);
+}
+
+.navbar-brand {
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: clamp(0.9rem, 0.86rem + 0.15vw, 1rem);
+    padding-top: 0.2rem;
+    padding-bottom: 0.2rem;
+}
+
+.navbar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--cf-radius-sm);
+    transition: background-color var(--cf-transition-fast);
+    font-weight: 500;
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.navbar .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #fff;
+}
+
+.navbar .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-weight: 600;
+}
+
+.navbar .dropdown-menu {
+    border: 1px solid var(--cf-card-border);
+    box-shadow: var(--cf-shadow-md);
+    border-radius: var(--cf-radius-sm);
+    padding: 0.3rem;
+    margin-top: 0.35rem;
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    max-width: calc(100vw - 2rem);
+}
+
+.navbar .dropdown-item {
+    border-radius: var(--cf-radius-sm);
+    padding: 0.4rem 0.65rem;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--cf-text);
+    background-color: transparent;
+    transition: background-color var(--cf-transition-fast);
+    width: 100%;
+    text-align: left;
+    border: none;
+    cursor: pointer;
+}
+
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus {
+    background-color: var(--cf-primary-light);
+    color: var(--cf-primary);
+}
+
+[data-bs-theme="dark"] .navbar .dropdown-item:hover,
+[data-bs-theme="dark"] .navbar .dropdown-item:focus {
+    background-color: var(--cf-hover-bg);
+    color: var(--cf-primary);
+}
+
+.navbar .dropdown-divider {
+    border-color: var(--cf-border-light);
+    margin: 0.2rem 0;
+}
+
+
+/* ============================================================
+   7. CARDS (compactas)
+   ============================================================ */
+.card {
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--cf-radius);
+    box-shadow: var(--cf-shadow-sm);
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    transition: box-shadow var(--cf-transition),
+                background-color var(--cf-transition),
+                border-color var(--cf-transition);
+    margin-bottom: var(--cf-section-gap);
+    overflow: hidden;
+}
+
+.card:hover {
+    box-shadow: var(--cf-shadow);
+}
+
+.card-header {
+    border-bottom: 1px solid var(--cf-border-light);
+    padding: 0.6rem var(--cf-card-padding);
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    border-radius: var(--cf-radius) var(--cf-radius) 0 0 !important;
+}
+
+.card-header h4, .card-header h5 {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--cf-text);
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+}
+
+.card-body {
+    padding: var(--cf-card-padding);
+    color: var(--cf-text);
+}
+
+.card-footer {
+    border-top: 1px solid var(--cf-border-light);
+    padding: 0.5rem var(--cf-card-padding);
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    border-radius: 0 0 var(--cf-radius) var(--cf-radius) !important;
+}
+
+/* Card de métrica (dashboard) — reducida significativamente */
+.card-metric {
+    border: 1px solid var(--cf-card-border);
+    border-left: 3px solid var(--cf-primary);
+    box-shadow: var(--cf-shadow-sm);
+    transition: transform var(--cf-transition-fast),
+                box-shadow var(--cf-transition);
+    background-color: var(--cf-card-bg);
+    height: 100%;
+}
+
+.card-metric:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--cf-shadow-md);
+}
+
+.card-metric .card-body {
+    padding: 0.75rem 0.9rem;
+}
+
+.card-metric .metric-value {
+    font-size: clamp(1.15rem, 1rem + 0.6vw, 1.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 0.1rem;
+    color: var(--cf-text);
+}
+
+.card-metric .metric-value small {
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--cf-text-muted);
+}
+
+.card-metric .metric-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    color: var(--cf-text-muted);
+    letter-spacing: 0.4px;
+    font-weight: 600;
+}
+
+.card-metric .metric-icon {
+    font-size: clamp(1.4rem, 1.2rem + 0.7vw, 1.85rem);
+    opacity: 0.35;
+}
+
+a .card-metric {
+    color: inherit;
+    cursor: pointer;
+}
+
+a:hover .card-metric {
+    border-left-color: var(--cf-primary-dark);
+}
+
+
+/* ============================================================
+   8. BADGES
+   ============================================================ */
+.badge {
+    font-weight: 500;
+    letter-spacing: 0.15px;
+    padding: 0.28em 0.55em;
+    white-space: nowrap;
+    font-size: 0.72rem;
+}
+
+.badge-role {
+    font-size: 0.68rem;
+    padding: 0.28em 0.55em;
+    font-weight: 600;
+}
+
+.badge-core { background-color: #dc3545; color: #fff; }
+.badge-distribution { background-color: #e67e00; color: #fff; }
+.badge-access { background-color: #0d6efd; color: #fff; }
+.badge-cpe { background-color: #5a6673; color: #fff; }
+
+.severity-critical { color: var(--cf-danger); font-weight: 600; }
+.severity-warning { color: var(--cf-warning); font-weight: 600; }
+.severity-info { color: var(--cf-primary); font-weight: 600; }
+
+.status-up {
+    color: var(--cf-success);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.status-down {
+    color: var(--cf-danger);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+
+/* ============================================================
+   9. TABLAS (densas)
+   ============================================================ */
+.table {
+    margin-bottom: 0;
+    --bs-table-color: var(--cf-text);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--cf-border-light);
+    --bs-table-hover-bg: var(--cf-hover-bg);
+    --bs-table-hover-color: var(--cf-text);
+    color: var(--cf-text);
+    width: 100%;
+    font-size: 0.85rem;
+}
+
+.table > thead {
+    background-color: var(--cf-hover-bg);
+}
+
+.table > thead th {
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--cf-text-muted);
+    border-bottom: 2px solid var(--cf-border);
+    padding: 0.5rem 0.65rem;
+    white-space: nowrap;
+    vertical-align: middle;
+    background-color: var(--cf-hover-bg);
+}
+
+.table > tbody > tr > td {
+    padding: 0.45rem 0.65rem;
+    vertical-align: middle;
+    border-color: var(--cf-border-light);
+    color: var(--cf-text);
+    background-color: transparent;
+    font-size: 0.85rem;
+}
+
+.table > tbody > tr {
+    transition: background-color var(--cf-transition-fast);
+}
+
+.table > tbody > tr:hover {
+    background-color: var(--cf-hover-bg);
+}
+
+.device-row:hover {
+    background-color: var(--cf-hover-bg);
+    cursor: pointer;
+}
+
+.table > thead th a {
+    color: inherit;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.table > thead th a:hover {
+    color: var(--cf-primary);
+}
+
+.table > thead th a i.bi-arrow-down-up {
+    opacity: 0.4;
+    font-size: 0.7rem;
+}
+
+.table > thead th a:hover i.bi-arrow-down-up {
+    opacity: 1;
+}
+
+.table > thead th a i.bi-caret-up-fill,
+.table > thead th a i.bi-caret-down-fill {
+    color: var(--cf-primary);
+    font-size: 0.78rem;
+}
+
+.interface-monitored {
+    background-color: var(--cf-success-light) !important;
+}
+
+[data-bs-theme="dark"] .interface-monitored {
+    background-color: rgba(78, 203, 113, 0.15) !important;
+}
+
+[data-bs-theme="dark"] .interface-monitored:hover {
+    background-color: rgba(78, 203, 113, 0.22) !important;
+}
+
+tr.opacity-75 {
+    opacity: 0.7;
+}
+
+.table-responsive {
+    border-radius: var(--cf-radius);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+
+/* ============================================================
+   10. FORMULARIOS (compactos)
+   ============================================================ */
+.form-label {
+    font-weight: 500;
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+    color: var(--cf-text);
+}
+
+.form-label .text-danger {
+    font-weight: 700;
+}
+
+.form-control,
+.form-select {
+    border: 1px solid var(--cf-input-border);
+    border-radius: var(--cf-radius-sm);
+    padding: 0.35rem 0.55rem;
+    font-size: 0.85rem;
+    background-color: var(--cf-input-bg);
+    color: var(--cf-text);
+    transition: border-color var(--cf-transition-fast),
+                box-shadow var(--cf-transition-fast),
+                background-color var(--cf-transition);
+    width: 100%;
+    min-height: 34px;
+    line-height: 1.4;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--cf-input-bg);
+    color: var(--cf-text);
+    border-color: var(--cf-primary);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.18);
+}
+
+.form-control:disabled,
+.form-select:disabled,
+.form-control[readonly] {
+    background-color: var(--cf-hover-bg);
+    color: var(--cf-text-muted);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.form-control::placeholder {
+    color: var(--cf-text-subtle);
+    opacity: 1;
+}
+
+.form-text {
+    font-size: 0.74rem;
+    color: var(--cf-text-muted);
+    margin-top: 0.2rem;
+    line-height: 1.35;
+}
+
+.form-select option {
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+}
+
+/* Switches y checkboxes */
+.form-check {
+    margin-bottom: 0.4rem;
+}
+
+.form-check-input {
+    width: 1.9rem;
+    height: 1rem;
+    margin-top: 0.15rem;
+    background-color: var(--cf-input-bg);
+    border: 1px solid var(--cf-input-border);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color var(--cf-transition-fast),
+                border-color var(--cf-transition-fast);
+}
+
+.form-check-input[type="checkbox"]:not(.form-switch .form-check-input) {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.form-check-input:checked {
+    background-color: var(--cf-primary);
+    border-color: var(--cf-primary);
+}
+
+.form-check-input:focus {
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.18);
+    border-color: var(--cf-primary);
+}
+
+.form-check-label {
+    cursor: pointer;
+    user-select: none;
+    color: var(--cf-text);
+    font-size: 0.85rem;
+}
+
+.input-group {
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.input-group .form-control {
+    border-right: none;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.input-group .btn {
+    border: 1px solid var(--cf-input-border);
+    background-color: var(--cf-input-bg);
+    color: var(--cf-text-muted);
+    transition: all var(--cf-transition-fast);
+    min-width: 36px;
+    min-height: 34px;
+    flex-shrink: 0;
+    padding: 0.35rem 0.55rem;
+}
+
+.input-group .btn:hover {
+    background-color: var(--cf-hover-bg);
+    color: var(--cf-primary);
+}
+
+.input-group .btn:focus {
+    box-shadow: none;
+    border-color: var(--cf-primary);
+}
+
+.input-group .input-group-text {
+    background-color: var(--cf-hover-bg);
+    border: 1px solid var(--cf-input-border);
+    color: var(--cf-text-muted);
+    flex-shrink: 0;
+    font-size: 0.82rem;
+    padding: 0.35rem 0.55rem;
+}
+
+
+/* ============================================================
+   11. BOTONES (compactos)
+   ============================================================ */
+.btn {
+    font-weight: 500;
+    border-radius: var(--cf-radius-sm);
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+    transition: all var(--cf-transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 32px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.btn-lg {
+    padding: 0.5rem 1rem;
+    font-size: 0.95rem;
+    min-height: 38px;
+}
+
+.btn-sm {
+    padding: 0.22rem 0.5rem;
+    font-size: 0.75rem;
+    gap: 0.2rem;
+    min-height: 27px;
+}
+
+.btn-primary {
+    background-color: var(--cf-primary);
+    border-color: var(--cf-primary);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: var(--cf-primary-dark);
+    border-color: var(--cf-primary-dark);
+    color: #fff;
+    box-shadow: var(--cf-shadow-primary);
+}
+
+.btn:focus,
+.btn:focus-visible {
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.22);
+}
+
+.btn-group {
+    gap: 0.2rem;
+    flex-wrap: wrap;
+}
+
+[data-bs-theme="dark"] .btn-outline-secondary {
+    color: var(--cf-text-muted);
+    border-color: var(--cf-input-border);
+}
+
+[data-bs-theme="dark"] .btn-outline-secondary:hover {
+    background-color: var(--cf-hover-bg);
+    color: var(--cf-text);
+    border-color: var(--cf-input-border);
+}
+
+[data-bs-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+
+/* ============================================================
+   12. ALERTAS (compactas)
+   ============================================================ */
+.alert {
+    border-radius: var(--cf-radius-sm);
+    border: 1px solid transparent;
+    font-size: 0.84rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--cf-text);
+    overflow-wrap: break-word;
+    margin-bottom: var(--cf-row-gap);
+}
+
+.alert-info {
+    background-color: var(--cf-info-light);
+    border-color: rgba(10, 162, 192, 0.4);
+    color: var(--cf-text);
+}
+
+.alert-warning {
+    background-color: var(--cf-warning-light);
+    border-color: rgba(230, 126, 0, 0.4);
+    color: var(--cf-text);
+}
+
+.alert-danger {
+    background-color: var(--cf-danger-light);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: var(--cf-text);
+}
+
+.alert-success {
+    background-color: var(--cf-success-light);
+    border-color: rgba(25, 135, 84, 0.4);
+    color: var(--cf-text);
+}
+
+[data-bs-theme="dark"] .alert-info {
+    background-color: rgba(77, 208, 225, 0.10);
+    border-color: rgba(77, 208, 225, 0.30);
+}
+
+[data-bs-theme="dark"] .alert-warning {
+    background-color: rgba(245, 166, 35, 0.10);
+    border-color: rgba(245, 166, 35, 0.30);
+}
+
+[data-bs-theme="dark"] .alert-danger {
+    background-color: rgba(248, 117, 117, 0.10);
+    border-color: rgba(248, 117, 117, 0.30);
+}
+
+[data-bs-theme="dark"] .alert-success {
+    background-color: rgba(78, 203, 113, 0.10);
+    border-color: rgba(78, 203, 113, 0.30);
+}
+
+/* Tamaño reducido y alineado al padding del alert */
+.alert .btn-close {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.7rem;
+    background-size: 0.7em;
+    opacity: 0.6;
+    transition: opacity var(--cf-transition-fast);
+}
+
+.alert .btn-close:hover,
+.alert .btn-close:focus {
+    opacity: 1;
+    box-shadow: none;
+}
+
+/* El padding del alert asegura que el botón no sobresalga */
+.alert.alert-dismissible {
+    padding-right: 2rem;
+}
+
+/* Ajuste específico por breakpoint para que no se desborde en móvil */
+@media (max-width: 575.98px) {
+    .alert.alert-dismissible {
+        padding-right: 1.75rem;
+    }
+
+    .alert .btn-close {
+        padding: 0.3rem 0.4rem;
+        font-size: 0.65rem;
+        background-size: 0.65em;
+    }
+}
+
+.alert pre {
+    font-size: 0.75rem;
+    margin-bottom: 0;
+    color: var(--cf-text);
+    background: transparent;
+    border: none;
+    padding: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+[data-bs-theme="dark"] .alert .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+
+/* ============================================================
+   13. BUSCADOR COLAPSABLE
+   ============================================================ */
+.card-header[data-bs-toggle="collapse"] {
+    user-select: none;
+    transition: background-color var(--cf-transition-fast);
+    cursor: pointer;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+}
+
+.card-header[data-bs-toggle="collapse"]:hover {
+    background-color: var(--cf-hover-bg);
+}
+
+.card-header[data-bs-toggle="collapse"] .bi-chevron-down {
+    transition: transform var(--cf-transition);
+}
+
+.card-header[data-bs-toggle="collapse"]:not(.collapsed) .bi-chevron-down {
+    transform: rotate(180deg);
+}
+
+.collapse.show {
+    animation: slideDown 0.18s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ============================================================
+   14. BARRAS DE PROGRESO
+   ============================================================ */
+.progress {
+    height: 5px;
+    background-color: var(--cf-border-light);
+    border-radius: var(--cf-radius-pill);
+    overflow: hidden;
+    width: 100%;
+}
+
+.progress-bar {
+    transition: width 0.3s ease, background-color var(--cf-transition);
+}
+
+#strength-container .progress {
+    height: 6px;
+}
+
+
+/* ============================================================
+   15. BREADCRUMB
+   ============================================================ */
+.breadcrumb {
+    background-color: transparent;
+    padding: 0;
+    margin-bottom: 0.5rem;
+    font-size: 0.78rem;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item a {
+    color: var(--cf-text-muted);
+    text-decoration: none;
+}
+
+.breadcrumb-item a:hover {
+    color: var(--cf-primary);
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: var(--cf-text);
+    font-weight: 500;
+}
+
+
+/* ============================================================
+   16. THEME SWITCHER
+   ============================================================ */
+.theme-switcher .dropdown-menu {
+    min-width: 180px;
+}
+
+.theme-switcher .dropdown-item {
+    gap: 0.5rem;
+    position: relative;
+}
+
+.theme-switcher .dropdown-item.active {
+    background-color: var(--cf-primary-light);
+    color: var(--cf-primary);
+    font-weight: 600;
+}
+
+[data-bs-theme="dark"] .theme-switcher .dropdown-item.active {
+    background-color: var(--cf-hover-bg);
+}
+
+.theme-switcher .bi-check2 {
+    margin-left: auto;
+    color: var(--cf-primary);
+}
+
+
+/* ============================================================
+   17. STICKY BOTTOM (barra de acciones pegajosa)
+   ============================================================ */
+.sticky-bottom {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    background-color: var(--cf-card-bg);
+    border-top: 1px solid var(--cf-border);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+    color: var(--cf-text);
+    padding: 0.55rem var(--cf-page-padding);
+    padding-bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
+    margin-left: calc(var(--cf-page-padding) * -1);
+    margin-right: calc(var(--cf-page-padding) * -1);
+    margin-top: var(--cf-section-gap);
+}
+
+
+/* ============================================================
+   18. TARJETAS COMPACTAS DE EQUIPO
+   ============================================================ */
+.device-compact-card {
+    transition: transform var(--cf-transition-fast),
+                box-shadow var(--cf-transition);
+    border-left: 3px solid var(--cf-primary);
+    min-height: 100%;
+    background-color: var(--cf-card-bg);
+}
+
+.device-compact-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--cf-shadow-md);
+}
+
+.device-compact-card .card-body {
+    padding: 0.7rem !important;
+}
+
+.device-compact-card.device-down {
+    border-left-color: var(--cf-danger);
+}
+
+.device-compact-card.device-unknown {
+    border-left-color: var(--cf-text-subtle);
+}
+
+.device-compact-card .progress {
+    height: 3px;
+    border-radius: 2px;
+}
+
+.device-compact-card a.fw-bold {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+}
+
+.device-compact-card .border-top {
+    border-color: var(--cf-border-light) !important;
+}
+
+
+/* ============================================================
+   19. MODAL
+   ============================================================ */
+.modal-content {
+    border: 1px solid var(--cf-card-border);
+    border-radius: var(--cf-radius);
+    box-shadow: var(--cf-shadow-lg);
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    width: 100%;
+    max-width: 100%;
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--cf-border-light);
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.modal-body {
+    padding: 0.9rem 1rem;
+}
+
+.modal-footer {
+    border-top: 1px solid var(--cf-border-light);
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+[data-bs-theme="dark"] .modal-header .btn-close,
+[data-bs-theme="dark"] .modal-footer .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.modal-backdrop {
+    --bs-backdrop-opacity: 0.55;
+}
+
+
+/* ============================================================
+   20. LIST GROUP
+   ============================================================ */
+.list-group-item {
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    border-color: var(--cf-border-light);
+    overflow-wrap: break-word;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.list-group-item:hover {
+    background-color: var(--cf-hover-bg);
+}
+
+
+/* ============================================================
+   21. DROPDOWN
+   ============================================================ */
+.dropdown-menu {
+    background-color: var(--cf-card-bg);
+    color: var(--cf-text);
+    border-color: var(--cf-card-border);
+    max-width: calc(100vw - 1rem);
+    font-size: 0.85rem;
+}
+
+.dropdown-item {
+    color: var(--cf-text);
+    white-space: normal;
+    padding: 0.4rem 0.7rem;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background-color: var(--cf-hover-bg);
+    color: var(--cf-primary);
+}
+
+.dropdown-divider {
+    border-color: var(--cf-border-light);
+}
+
+
+/* ============================================================
+   22. UTILIDADES
+   ============================================================ */
+hr {
+    border: none;
+    border-top: 1px solid var(--cf-border-light);
+    opacity: 1;
+    margin: 0.75rem 0;
+}
+
+.spinner-border-sm {
+    width: 0.9rem;
+    height: 0.9rem;
+    border-width: 0.14em;
+}
+
+.fade-in {
+    animation: fadeIn 0.25s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+#message-preview {
+    font-size: 0.82rem;
+    min-height: 1.4rem;
+    display: block;
+    overflow-wrap: break-word;
+}
+
+
+/* ============================================================
+   23. ACCESIBILIDAD
+   ============================================================ */
+:focus-visible {
+    outline: 2px solid var(--cf-primary);
+    outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible {
+    border-radius: var(--cf-radius-sm);
+}
+
+.skip-to-content {
+    position: absolute;
+    top: -100px;
+    left: 1rem;
+    background: var(--cf-primary);
+    color: #fff;
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--cf-radius-sm);
+    z-index: 9999;
+    transition: top var(--cf-transition);
+}
+
+.skip-to-content:focus {
+    top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+
+/* ============================================================
+   24. IMPRESIÓN
+   ============================================================ */
+@media print {
+    .navbar, footer, .btn, .btn-group, .dropdown-menu,
+    .sticky-bottom, .theme-switcher, .modal, .spinner-border,
+    .skip-to-content {
+        display: none !important;
+    }
+
+    body {
+        background: #fff !important;
+        color: #000 !important;
+        font-size: 10pt;
+    }
+
+    main {
+        padding: 0 !important;
+    }
+
+    .container-fluid {
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .card {
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        page-break-inside: avoid;
+        background: #fff !important;
+    }
+
+    .table th, .table td {
+        border: 1px solid #999 !important;
+        padding: 3px 5px !important;
+        font-size: 8pt;
+        color: #000 !important;
+    }
+
+    .table thead th {
+        background-color: #e0e0e0 !important;
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .badge {
+        border: 1px solid #666 !important;
+        background-color: #f0f0f0 !important;
+        color: #000 !important;
+    }
+
+    a[href]:after {
+        content: " (" attr(href) ")";
+        font-size: 7pt;
+        color: #555;
+    }
+
+    a[href^="#"]:after,
+    a[href^="javascript:"]:after {
+        content: "";
+    }
+}
+
+
+/* ============================================================
+   25. RESPONSIVE
+   ------------------------------------------------------------
+   Estrategia mobile-first con escalado fluido:
+     - Móviles pequeños: < 400px
+     - Móviles estándar: 400-575px
+     - Móviles grandes: 576-767px
+     - Tablet: 768-991px
+     - Laptop pequeña: 992-1199px
+     - Desktop: ≥ 1200px
+     - Ultrawide: ≥ 1600px
+     - 4K: ≥ 2560px
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   25.1. TABLET Y MENOS (≤ 991px)
+   ------------------------------------------------------------ */
+@media (max-width: 991.98px) {
+    .row.g-3 > .col-md-3,
+    .row.g-3 > .col-sm-6 {
+        flex: 0 0 auto;
+        width: 50%;
+    }
+
+    .container-fluid {
+        max-width: 100%;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.2. MÓVIL Y TABLET (≤ 767px)
+   ------------------------------------------------------------ */
+@media (max-width: 767.98px) {
+    h1 { font-size: 1.15rem; }
+    h2 { font-size: 1.05rem; }
+    h3 { font-size: 0.98rem; }
+
+    /* Cards de métrica más compactas */
+    .card-metric .metric-value { font-size: 1.25rem; }
+    .card-metric .metric-icon { font-size: 1.4rem; }
+    .card-metric .card-body { padding: 0.65rem 0.75rem; }
+
+    /* Headers de página: apila título y botones */
+    .d-flex.justify-content-between.align-items-start.mb-4,
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem !important;
+    }
+
+    .d-flex.justify-content-between.align-items-start.mb-4 > .btn-group,
+    .d-flex.justify-content-between.align-items-center.mb-4 > .btn-group {
+        width: 100%;
+    }
+
+    .d-flex.justify-content-between.align-items-start.mb-4 > .btn-group > .btn,
+    .d-flex.justify-content-between.align-items-center.mb-4 > .btn-group > .btn {
+        flex: 1 1 auto;
+    }
+
+    /* Tablas más densas */
+    .table > thead th,
+    .table > tbody > tr > td {
+        padding: 0.4rem 0.55rem;
+        font-size: 0.78rem;
+    }
+
+    .table-hide-mobile {
+        display: none !important;
+    }
+
+    /* Formularios: apila columnas */
+    .row > [class*="col-md-"],
+    .row > [class*="col-lg-"] {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+
+    /* Previene zoom automático en iOS */
+    .form-control,
+    .form-select {
+        font-size: 0.9rem;
+        min-height: 38px;
+    }
+
+    /* Botones apilables */
+    .btn-group {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .btn-group > .btn {
+        flex: 1 1 calc(50% - 0.2rem);
+        min-width: 0;
+    }
+
+    /* Sticky bottom */
+    .sticky-bottom {
+        padding: 0.5rem var(--cf-page-padding);
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    .sticky-bottom .d-flex {
+        flex-direction: column;
+        gap: 0.4rem;
+        width: 100%;
+    }
+
+    .sticky-bottom .btn {
+        width: 100%;
+    }
+
+    /* Navbar */
+    .navbar .nav-link {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    /* Modales */
+    .modal-dialog {
+        margin: 0.4rem;
+    }
+
+    .modal-content {
+        border-radius: var(--cf-radius-sm);
+    }
+
+    .modal-header,
+    .modal-footer {
+        padding: 0.65rem 0.85rem;
+    }
+
+    /* Dropdowns full-width */
+    .dropdown-menu {
+        width: 100%;
+        min-width: 100%;
+        left: 0;
+        right: 0;
+    }
+
+    /* Alertas */
+    .alert {
+        font-size: 0.8rem;
+        padding: 0.5rem 0.7rem;
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+        font-size: 0.74rem;
+        margin-bottom: 0.4rem;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.3. LARGE MOBILE (576-767px)
+   ------------------------------------------------------------ */
+@media (min-width: 576px) and (max-width: 767.98px) {
+    .row.g-3 > .col-sm-6 {
+        flex: 0 0 auto;
+        width: 50%;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.4. MOBILE ESTÁNDAR (400-575px)
+   ------------------------------------------------------------ */
+@media (max-width: 575.98px) {
+    .row.g-3 > [class*="col-"],
+    .row.g-4 > [class*="col-"] {
+        flex: 0 0 auto;
+        width: 100%;
+    }
+
+    h1 { font-size: 1.1rem; }
+
+    .card-header {
+        padding: 0.5rem var(--cf-card-padding);
+    }
+
+    .btn-sm {
+        padding: 0.28rem 0.45rem;
+        font-size: 0.72rem;
+    }
+
+    .hide-on-small-mobile {
+        display: none !important;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.5. SMALL MOBILE (< 400px)
+   ------------------------------------------------------------ */
+@media (max-width: 399.98px) {
+    :root {
+        --cf-page-padding: 0.6rem;
+        --cf-card-padding: 0.6rem;
+        --cf-section-gap: 0.6rem;
+    }
+
+    body {
+        font-size: 0.8rem;
+    }
+
+    h1 { font-size: 1rem; }
+    h2 { font-size: 0.95rem; }
+    h3 { font-size: 0.9rem; }
+
+    .btn-group > .btn {
+        flex: 1 1 100%;
+    }
+
+    .btn-sm i {
+        font-size: 0.8rem;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.6. TABLET PORTRAIT (768-991px)
+   ------------------------------------------------------------ */
+@media (min-width: 768px) and (max-width: 991.98px) {
+    .card-metric .metric-value { font-size: 1.35rem; }
+
+    .container-fluid {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.7. LAPTOP PEQUEÑA (992-1199px)
+   ------------------------------------------------------------ */
+@media (min-width: 992px) and (max-width: 1199.98px) {
+    .container-fluid {
+        max-width: 100%;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    body {
+        font-size: 0.85rem;
+    }
+
+    .card-metric .metric-value { font-size: 1.35rem; }
+    .card-metric .metric-icon { font-size: 1.6rem; }
+}
+
+/* ------------------------------------------------------------
+   25.8. DESKTOP NORMAL (≥ 1200px)
+   ------------------------------------------------------------ */
+@media (min-width: 1200px) {
+    /* Ya está en la sección 4: max-width: 1360px */
+}
+
+/* ------------------------------------------------------------
+   25.9. ULTRAWIDE (≥ 1600px)
+   ------------------------------------------------------------ */
+@media (min-width: 1600px) {
+    .container-fluid {
+        max-width: 1600px;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.10. 4K (≥ 2560px)
+   ------------------------------------------------------------ */
+@media (min-width: 2560px) {
+    .container-fluid {
+        max-width: 1800px;
+    }
+
+    body {
+        font-size: 0.95rem;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.11. HOVER DESHABILITADO EN TOUCH
+   ------------------------------------------------------------ */
+@media (hover: none) {
+    .card:hover { box-shadow: var(--cf-shadow-sm); }
+    .card-metric:hover { transform: none; box-shadow: var(--cf-shadow-sm); }
+    .device-compact-card:hover { transform: none; box-shadow: var(--cf-shadow-sm); }
+    .card-metric:active { transform: scale(0.98); }
+    .btn:active { transform: scale(0.98); }
+}
+
+/* ------------------------------------------------------------
+   25.12. LANDSCAPE EN MÓVILES
+   ------------------------------------------------------------ */
+@media (max-width: 991.98px) and (orientation: landscape) {
+    .row.g-3 > .col-md-3,
+    .row.g-3 > .col-sm-6 {
+        flex: 0 0 auto;
+        width: 50%;
+    }
+
+    main {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+}
+
+/* ------------------------------------------------------------
+   25.13. ALTO CONTRASTE
+   ------------------------------------------------------------ */
+@media (prefers-contrast: more) {
+    .card { border-width: 2px; }
+    .form-control, .form-select { border-width: 2px; }
+    .btn { border-width: 2px; }
+    .table > thead th, .table > tbody > tr > td { border-color: var(--cf-text); }
+}
+
+
+/* ============================================================
+   26. OVERRIDES DE UTILIDADES BOOTSTRAP (light/dark)
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   26.1. MODO CLARO
+   ------------------------------------------------------------ */
+[data-bs-theme="light"] .bg-white {
+    background-color: #ffffff !important;
+    color: #1a2028 !important;
+}
+
+[data-bs-theme="light"] .text-dark { color: #1a2028 !important; }
+[data-bs-theme="light"] .bg-dark { background-color: #212529 !important; color: #ffffff !important; }
+[data-bs-theme="light"] .text-white { color: #ffffff !important; }
+[data-bs-theme="light"] .bg-light { background-color: #eef2f7 !important; color: #1a2028 !important; }
+[data-bs-theme="light"] .text-light { color: #6c757d !important; }
+[data-bs-theme="light"] .bg-black { background-color: #000000 !important; color: #ffffff !important; }
+[data-bs-theme="light"] .text-black { color: #000000 !important; }
+
+[data-bs-theme="light"] .table-light,
+[data-bs-theme="light"] .table-light > th,
+[data-bs-theme="light"] .table-light > td {
+    background-color: #eef2f7 !important;
+    color: #4a5563 !important;
+    border-color: #d8dee6 !important;
+}
+
+/* ------------------------------------------------------------
+   26.2. MODO OSCURO
+   ------------------------------------------------------------ */
+[data-bs-theme="dark"] .bg-white {
+    background-color: #141922 !important;
+    color: #e8eef5 !important;
+}
+
+[data-bs-theme="dark"] .text-dark { color: #e8eef5 !important; }
+[data-bs-theme="dark"] .bg-dark { background-color: #05080c !important; color: #e8eef5 !important; }
+[data-bs-theme="dark"] .text-white { color: #ffffff !important; }
+[data-bs-theme="dark"] .bg-light { background-color: #1e252e !important; color: #e8eef5 !important; }
+[data-bs-theme="dark"] .text-light { color: #a8b2c0 !important; }
+[data-bs-theme="dark"] .bg-black { background-color: #000000 !important; color: #e8eef5 !important; }
+[data-bs-theme="dark"] .text-black { color: #e8eef5 !important; }
+
+[data-bs-theme="dark"] .border-white { border-color: #2a3341 !important; }
+[data-bs-theme="dark"] .border-dark  { border-color: #3a4555 !important; }
+[data-bs-theme="dark"] .border-light { border-color: #1e252e !important; }
+
+[data-bs-theme="dark"] .table-light,
+[data-bs-theme="dark"] .table-light > th,
+[data-bs-theme="dark"] .table-light > td {
+    background-color: #1e252e !important;
+    color: #a8b2c0 !important;
+    border-color: #2a3341 !important;
+}
+
+/* ------------------------------------------------------------
+   26.3. COMBINACIONES
+   ------------------------------------------------------------ */
+[data-bs-theme="dark"] .bg-white.text-dark,
+[data-bs-theme="dark"] .bg-white .text-dark,
+[data-bs-theme="dark"] .bg-white.text-black,
+[data-bs-theme="dark"] .bg-white.text-body {
+    background-color: #141922 !important;
+    color: #e8eef5 !important;
+}
+
+[data-bs-theme="dark"] .bg-white.card-header,
+[data-bs-theme="dark"] .bg-white.card-footer {
+    background-color: #141922 !important;
+    color: #e8eef5 !important;
+    border-color: #2a3341 !important;
+}
+
+[data-bs-theme="dark"] .card-header.bg-white,
+[data-bs-theme="dark"] .card-footer.bg-white {
+    background-color: #141922 !important;
+    color: #e8eef5 !important;
+    border-color: #2a3341 !important;
+}
+
+[data-bs-theme="dark"] .sticky-bottom.bg-white {
+    background-color: #141922 !important;
+    border-color: #2a3341 !important;
+}
+
+/* ------------------------------------------------------------
+   26.4. CASOS ESPECIALES
+   ------------------------------------------------------------ */
+[data-bs-theme="dark"] .bg-white a:not(.btn):not(.badge):not(.nav-link) {
+    color: #4d9bff;
+}
+
+[data-bs-theme="dark"] .bg-white a:not(.btn):not(.badge):not(.nav-link):hover {
+    color: #70b0ff;
+}
+
+[data-bs-theme="dark"] .bg-white .bi { color: inherit; }
+[data-bs-theme="dark"] .bg-white hr { border-color: #2a3341 !important; }
+[data-bs-theme="dark"] .bg-white .form-text,
+[data-bs-theme="dark"] .bg-white.text-dark .form-text { color: #a8b2c0 !important; }
+[data-bs-theme="dark"] .bg-white .text-muted { color: #a8b2c0 !important; }
+
+
+/* ============================================================
+   27. HELPERS MOBILE-FIRST
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   27.1. OCULTAR / MOSTRAR POR BREAKPOINT
+   ------------------------------------------------------------ */
+@media (max-width: 767.98px) {
+    .hide-mobile { display: none !important; }
+}
+
+@media (min-width: 768px) {
+    .show-mobile-only { display: none !important; }
+}
+
+@media (min-width: 992px) {
+    .hide-desktop { display: none !important; }
+}
+
+/* ------------------------------------------------------------
+   27.2. FULL-WIDTH MOBILE
+   ------------------------------------------------------------ */
+@media (max-width: 767.98px) {
+    .w-mobile-100 { width: 100% !important; }
+    .text-mobile-center { text-align: center !important; }
+    .flex-mobile-column { flex-direction: column !important; }
+}
+
+/* ------------------------------------------------------------
+   27.3. GRID FLUIDO PARA CARDS DE MÉTRICA
+   ------------------------------------------------------------ */
+.cf-metric-grid {
+    display: grid;
+    gap: var(--cf-section-gap);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+@media (max-width: 575.98px) {
+    .cf-metric-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ------------------------------------------------------------
+   27.4. ASPECT RATIO
+   ------------------------------------------------------------ */
+.cf-aspect-16-9 { aspect-ratio: 16 / 9; width: 100%; }
+.cf-aspect-4-3  { aspect-ratio: 4 / 3;  width: 100%; }
+.cf-aspect-1-1  { aspect-ratio: 1 / 1;  width: 100%; }
+
+/* ------------------------------------------------------------
+   27.5. TRUNCAR TEXTO
+   ------------------------------------------------------------ */
+.cf-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+/* Line-clamp con prefijos estándar y WebKit */
+.cf-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.cf-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+/* ------------------------------------------------------------
+   27.6. SCROLL VERTICAL PARA LISTAS LARGAS
+   ------------------------------------------------------------ */
+.cf-scroll-y {
+    max-height: 500px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767.98px) {
+    .cf-scroll-y { max-height: 350px; }
+}
+
+/* ------------------------------------------------------------
+   27.7. HINT DE SCROLL HORIZONTAL
+   ------------------------------------------------------------ */
+.cf-h-scroll-hint {
+    position: relative;
+}
+
+.cf-h-scroll-hint::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 30px;
+    height: 100%;
+    background: linear-gradient(to right, transparent, var(--cf-card-bg));
+    pointer-events: none;
+    opacity: 0.9;
+    transition: opacity 0.2s ease;
+}
+
+.cf-h-scroll-hint.at-end::after {
+    opacity: 0;
+}
+
+/* ------------------------------------------------------------
+   27.8. TOUCH TARGET MÍNIMO
+   ------------------------------------------------------------ */
+@media (max-width: 767.98px) {
+    .cf-touch-target {
+        min-width: 40px;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* ------------------------------------------------------------
+   27.9. SAFE AREA (móviles con notch)
+   ------------------------------------------------------------ */
+.cf-safe-area-top    { padding-top: env(safe-area-inset-top, 0px); }
+.cf-safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.cf-safe-area-left   { padding-left: env(safe-area-inset-left, 0px); }
+.cf-safe-area-right  { padding-right: env(safe-area-inset-right, 0px); }

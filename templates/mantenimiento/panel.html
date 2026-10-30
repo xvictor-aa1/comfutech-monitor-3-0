@@ -1,0 +1,612 @@
+{% extends "base.html" %}
+{% block title %}Mantenimiento - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-tools"></i> Panel de Mantenimiento</h2>
+        <p class="text-muted mb-0 small">
+            Backups de la base de datos y archivos de configuración.
+            Solo visible para el superadministrador.
+        </p>
+    </div>
+    <div class="btn-group flex-wrap">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <a href="/django-admin/" target="_blank" rel="noopener"
+           class="btn btn-outline-warning"
+           title="Abrir el admin de Django (solo superadmin)">
+            <i class="bi bi-shield-lock"></i> Django Admin
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Alert informativo                                            -->
+<!-- ============================================================ -->
+<div class="alert alert-light border small mb-3 d-flex align-items-start gap-2">
+    <i class="bi bi-folder2-open text-primary" style="font-size: 1.2rem;"></i>
+    <div class="flex-grow-1">
+        <strong>Directorio de backups:</strong>
+        <code>{{ stats.backup_dir }}</code>
+        <br>
+        <span class="text-muted" style="font-size: 0.72rem;">
+            {% if stats.mysqldump_path %}
+            <i class="bi bi-check-circle-fill text-success"></i>
+            mysqldump detectado: <code>{{ stats.mysqldump_path }}</code>
+            {% else %}
+            <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+            <strong>mysqldump no encontrado.</strong>
+            Instálalo o configura la ruta más abajo.
+            {% endif %}
+        </span>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats                                                        -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-value text-primary">{{ stats.count }}</div>
+                <div class="metric-label">Backups totales</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-value text-info">{{ stats.total_size|filesizeformat }}</div>
+                <div class="metric-label">Espacio usado</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-value text-{% if stats.last_backup_run %}success{% else %}muted{% endif %}"
+                     style="font-size: 1rem;">
+                    {% if stats.last_backup_run %}
+                    {{ stats.last_backup_run|slice:":16" }}
+                    {% else %}
+                    Nunca
+                    {% endif %}
+                </div>
+                <div class="metric-label">Último backup</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Botones de backup manual                                     -->
+<!-- ============================================================ -->
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0">
+            <i class="bi bi-cloud-arrow-down text-primary"></i> Backups manuales
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="card h-100 border-primary">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="text-primary">
+                            <i class="bi bi-database"></i> Base de datos
+                        </h6>
+                        <p class="small text-muted flex-grow-1">
+                            Dump completo en <code>.sql.gz</code> con
+                            estructura y datos. Incluye vistas, procedimientos,
+                            triggers y eventos.
+                        </p>
+                        <form method="post" action="{% url 'mantenimiento:backup_db' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-download"></i> Respaldar BD
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-info">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="text-info">
+                            <i class="bi bi-file-earmark-code"></i> Configuración
+                        </h6>
+                        <p class="small text-muted flex-grow-1">
+                            Archivos <code>config.toml</code> y
+                            <code>system.toml</code> empaquetados en
+                            <code>.zip</code>.
+                        </p>
+                        <form method="post" action="{% url 'mantenimiento:backup_configs' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-info w-100">
+                                <i class="bi bi-download"></i> Respaldar configs
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card h-100 border-success">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="text-success">
+                            <i class="bi bi-box-seam"></i> Backup completo
+                        </h6>
+                        <p class="small text-muted flex-grow-1">
+                            BD + configs en un solo <code>.zip</code>
+                            con manifest. Ideal para migraciones.
+                        </p>
+                        <form method="post" action="{% url 'mantenimiento:backup_full' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="bi bi-download"></i> Respaldar todo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Configuración de backups automáticos                         -->
+<!-- ============================================================ -->
+<form method="post" id="maintenance-form" novalidate>
+    {% csrf_token %}
+
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="bi bi-clock-history text-warning"></i>
+                Backups automáticos
+            </h5>
+        </div>
+        <div class="card-body">
+
+            <div class="alert alert-info small py-2 mb-3">
+                <i class="bi bi-info-circle"></i>
+                El monitor revisa esta configuración cada <strong>60
+                segundos</strong>. Los cambios se aplican sin reiniciar
+                el servicio.
+            </div>
+
+            <div class="row g-3">
+
+                <!-- Auto backup enabled -->
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox"
+                               name="auto_backup_enabled" id="auto_bkp"
+                               {% if cfg.auto_backup_enabled %}checked{% endif %}>
+                        <label class="form-check-label fw-bold" for="auto_bkp">
+                            Activar backup automático diario
+                        </label>
+                    </div>
+                    <div class="form-text small">
+                        Si está desactivado, solo se hacen backups manuales.
+                    </div>
+                </div>
+
+                <!-- Backup time -->
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Hora del backup</label>
+                    <input type="time" name="backup_time"
+                           class="form-control form-control-sm"
+                           value="{{ cfg.backup_time }}">
+                    <div class="form-text small">
+                        Formato HH:MM (24h), hora local.
+                    </div>
+                </div>
+
+                <!-- Retention -->
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">Retención (días)</label>
+                    <input type="number" name="retention_days"
+                           class="form-control form-control-sm"
+                           value="{{ cfg.retention_days }}"
+                           min="0" max="365">
+                    <div class="form-text small">
+                        0 = nunca eliminar.
+                    </div>
+                </div>
+
+                <!-- Backup on startup -->
+                <div class="col-md-12">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox"
+                               name="backup_on_startup" id="bkp_startup"
+                               {% if cfg.backup_on_startup %}checked{% endif %}>
+                        <label class="form-check-label fw-bold" for="bkp_startup">
+                            Ejecutar backup al iniciar el monitor
+                        </label>
+                    </div>
+                    <div class="form-text small">
+                        Anti-spam: se omite si el último backup fue hace menos de 1 hora.
+                    </div>
+                </div>
+
+                <hr class="my-2">
+
+                <!-- Componentes -->
+                <div class="col-md-6">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="backup_db" id="bkp_db"
+                               {% if cfg.backup_db %}checked{% endif %}>
+                        <label class="form-check-label small" for="bkp_db">
+                            Incluir <strong>base de datos</strong> en backups automáticos
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox"
+                               name="backup_config" id="bkp_cfg"
+                               {% if cfg.backup_config %}checked{% endif %}>
+                        <label class="form-check-label small" for="bkp_cfg">
+                            Incluir <strong>archivos .toml</strong> en backups automáticos
+                        </label>
+                    </div>
+                </div>
+
+                <!-- mysqldump path -->
+                <div class="col-md-6">
+                    <label class="form-label small mb-1">
+                        Ruta de <code>mysqldump</code> (opcional)
+                    </label>
+                    <input type="text" name="mysql_dump_path"
+                           class="form-control form-control-sm"
+                           value="{{ cfg.mysql_dump_path }}"
+                           placeholder="Vacío = autodetección">
+                    <div class="form-text small">
+                        Solo si la autodetección falla. Ej:
+                        <code>C:\xampp\mysql\bin\mysqldump.exe</code>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+        <div class="card-footer bg-light d-flex justify-content-between align-items-center">
+            <div class="text-muted small">
+                {% if stats.last_backup_run %}
+                <i class="bi bi-clock-history"></i>
+                Último backup ({{ stats.last_backup_type }}):
+                <strong>{{ stats.last_backup_run|slice:":16" }}</strong>
+                {% if stats.last_backup_filename %}
+                · <code>{{ stats.last_backup_filename }}</code>
+                {% endif %}
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save"></i> Guardar configuración
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- ============================================================ -->
+<!-- Lista de backups                                             -->
+<!-- ============================================================ -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-list-check"></i> Backups existentes
+            <span class="badge bg-secondary ms-1">{{ stats.count }}</span>
+        </h5>
+        <form method="post" action="{% url 'mantenimiento:apply_retention' %}"
+              onsubmit="return confirm('¿Aplicar retención ahora?\n\nSe eliminarán los backups con más de {{ cfg.retention_days }} días.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-warning">
+                <i class="bi bi-trash"></i> Aplicar retención
+            </button>
+        </form>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Archivo</th>
+                    <th>Tipo</th>
+                    <th class="text-end">Tamaño</th>
+                    <th>Fecha</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td><code>{{ b.filename }}</code></td>
+                    <td>
+                        {% if b.type == "db" %}
+                        <span class="badge bg-primary">BD</span>
+                        {% elif b.type == "config" %}
+                        <span class="badge bg-info text-dark">Config</span>
+                        {% else %}
+                        <span class="badge bg-success">Full</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ b.size|filesizeformat }}</td>
+                    <td>
+                        <small class="text-muted" title="{{ b.mtime_dt|date:'d/m/Y H:i:s' }}">
+                            <i class="bi bi-clock"></i>
+                            {{ b.mtime_dt|date:"d/m/Y H:i" }}
+                            ({{ b.mtime_dt|timesince }} atrás)
+                        </small>
+                    </td>
+                    <td class="text-end">
+                        <a href="{% url 'mantenimiento:download_backup' b.filename %}"
+                           class="btn btn-sm btn-outline-primary"
+                           title="Descargar">
+                            <i class="bi bi-download"></i>
+                        </a>
+                        <form method="post"
+                              action="{% url 'mantenimiento:delete_backup' b.filename %}"
+                              class="d-inline"
+                              onsubmit="return confirm('¿Eliminar {{ b.filename|escapejs }}?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger"
+                                    title="Eliminar">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-0">No hay backups creados aún.</p>
+                        <small class="text-muted">
+                            Usa los botones superiores para crear el primero.
+                        </small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+registerHelpContent({
+    title: "Panel de Mantenimiento — Guía",
+    sections: [
+        {
+            heading: "¿Qué es este panel?",
+            body: `
+                Centraliza los respaldos del sistema: base de datos
+                (MySQL) y archivos de configuración (<code>config.toml</code>
+                y <code>system.toml</code>).
+                <br><br>
+                <strong>Acceso restringido:</strong> solo el superadministrador
+                puede entrar. Los backups contienen credenciales sensibles.
+            `
+        },
+        {
+            heading: "Dónde se guardan los backups",
+            body: `
+                En la carpeta <code>backup/</code> dentro de la raíz del
+                proyecto. El path exacto se muestra en el banner superior.
+                <br><br>
+                <strong>Recomendación:</strong> copia periódicamente esta
+                carpeta a un disco externo, NAS o almacenamiento en la nube.
+                Los backups locales NO protegen contra fallo de disco.
+                <br><br>
+                La carpeta está excluida del control de versiones (<code>.gitignore</code>).
+            `
+        },
+        {
+            heading: "Backups manuales",
+            body: `
+                Tres botones disponibles:
+                <br><br>
+                <strong><i class="bi bi-database text-primary"></i> Respaldar BD</strong>
+                — genera un dump <code>.sql.gz</code> con estructura y datos
+                de todas las tablas. Incluye vistas, procedimientos, triggers
+                y eventos. Ideal para restaurar la BD completa.
+                <br><br>
+                <strong><i class="bi bi-file-earmark-code text-info"></i> Respaldar configs</strong>
+                — empaqueta <code>config.toml</code> y <code>system.toml</code>
+                en un <code>.zip</code>. Útil para migrar entre servidores.
+                <br><br>
+                <strong><i class="bi bi-box-seam text-success"></i> Respaldar todo</strong>
+                — combina BD + configs en un solo <code>.zip</code> con
+                manifest JSON. Recomendado para migraciones completas.
+            `
+        },
+        {
+            heading: "Backups automáticos",
+            body: `
+                Si <strong>"Activar backup automático diario"</strong> está
+                activo, el monitor ejecuta el backup a la hora indicada
+                (<code>HH:MM</code> en hora local).
+                <br><br>
+                <strong>¿Qué se respalda?</strong> Depende de los checkboxes
+                <em>"Incluir BD"</em> y <em>"Incluir configs"</em>. Si ambos
+                están activos, se crea un backup <code>full</code> (ZIP).
+                <br><br>
+                <strong>Si el servidor estaba apagado a esa hora:</strong>
+                el backup se ejecuta al reiniciar (siempre que no hayan
+                pasado más de 24h). Esto se logra con <code>coalesce</code>
+                y <code>misfire_grace_time=None</code> en el scheduler.
+                <br><br>
+                <strong>Los cambios se aplican en ≤60s</strong> sin reiniciar
+                el monitor (heartbeat).
+            `
+        },
+        {
+            heading: "Backup al iniciar el monitor",
+            body: `
+                Si <strong>"Ejecutar backup al iniciar el monitor"</strong>
+                está activo, se crea un backup <strong>60 segundos después</strong>
+                de que el proceso monitor arranca.
+                <br><br>
+                <strong>Anti-spam:</strong> si el último backup fue hace
+                menos de <strong>1 hora</strong>, se omite. Esto evita que
+                reinicios frecuentes (o crashes con auto-restart) generen
+                decenas de backups en pocas horas.
+                <br><br>
+                Útil para asegurar un respaldo antes de operaciones
+                riesgosas (migraciones, updates).
+            `
+        },
+        {
+            heading: "Retención automática",
+            body: `
+                El campo <strong>"Retención (días)"</strong> define cuántos
+                días se conservan los backups.
+                <br>
+                • <strong>30 días</strong> (default): guarda el mes completo.
+                <br>
+                • <strong>7 días</strong>: conserva la última semana.
+                <br>
+                • <strong>0</strong>: nunca eliminar (cuidado con el espacio).
+                <br><br>
+                La retención se aplica <strong>después de cada backup</strong>
+                (manual o automático). También puedes forzarla con el botón
+                <em>"Aplicar retención"</em> en el header de la lista.
+                <br><br>
+                <strong>Importante:</strong> la retención SOLO elimina
+                archivos dentro de la carpeta <code>backup/</code> que
+                coincidan con el patrón de nombre válido. No toca otros
+                archivos.
+            `
+        },
+        {
+            heading: "Ruta de mysqldump",
+            body: `
+                El sistema autodetecta <code>mysqldump</code> buscando en:
+                <br>
+                1. <strong>PATH del sistema</strong> (si está en las
+                variables de entorno).
+                <br>
+                2. Rutas comunes en Windows: <code>C:\xampp\mysql\bin</code>,
+                <code>C:\wamp64\bin\mysql</code>,
+                <code>C:\Program Files\MySQL\MySQL Server 8.0\bin</code>,
+                <code>C:\laragon\bin\mysql</code>.
+                <br>
+                3. Rutas comunes en Linux: <code>/usr/bin/mysqldump</code>,
+                <code>/usr/local/bin/mysqldump</code>.
+                <br><br>
+                <strong>Si la autodetección falla</strong> (verás un warning
+                rojo arriba), pega la ruta completa del ejecutable en el
+                campo <em>"Ruta de mysqldump"</em>.
+                <br><br>
+                En Windows, si usas XAMPP, la ruta típica es
+                <code>C:\xampp\mysql\bin\mysqldump.exe</code>.
+                <br><br>
+                <strong>Seguridad:</strong> las credenciales MySQL NUNCA
+                aparecen en la línea de comandos visible con <code>ps</code>.
+                Se pasan a través de un archivo temporal
+                (<code>--defaults-extra-file</code>) que se elimina tras
+                cada ejecución.
+            `
+        },
+        {
+            heading: "Django Admin",
+            body: `
+                El botón <strong>"Django Admin"</strong> abre el admin
+                de Django en una pestaña nueva.
+                <br><br>
+                Es una <strong>"puerta trasera"</strong> de solo superadmin
+                para diagnóstico y operaciones críticas sobre la BD:
+                <br>
+                • Corrección de datos corruptos.
+                • Importación/exportación masiva.
+                • Auditoría de cambios (<code>django_admin_log</code>).
+                <br><br>
+                <strong>URL:</strong> <code>/django-admin/</code>
+                (no <code>/admin/</code>, para reducir escaneo de bots).
+                <br><br>
+                <strong>Acceso:</strong> solo <code>is_superuser=True</code>.
+                Los "administradores" (rol Administrador) NO tienen acceso.
+            `
+        },
+        {
+            heading: "Restauración de un backup",
+            body: `
+                <strong>BD desde un .sql.gz:</strong>
+                <br>
+                <code>gunzip &lt; db_XXX.sql.gz | mysql -u USER -p DB_NAME</code>
+                <br><br>
+                <strong>Configs desde un .zip:</strong>
+                <br>
+                Descomprime el ZIP y copia <code>config.toml</code> y
+                <code>system.toml</code> a la raíz del proyecto.
+                <br><br>
+                <strong>Full desde un .zip:</strong>
+                <br>
+                1. Extrae el ZIP.
+                <br>
+                2. Restaura <code>db.sql.gz</code> con el comando anterior.
+                <br>
+                3. Copia los <code>.toml</code> a la raíz.
+                <br><br>
+                <strong>Después de restaurar:</strong> reinicia los servicios
+                con <code>restart_services.bat</code>.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Copia la carpeta <code>backup/</code> a un medio externo</strong>
+                (NAS, disco USB, cloud). Los backups locales no protegen
+                contra fallo de disco.
+                <br>
+                • <strong>Prueba la restauración</strong> al menos una vez
+                al mes en un entorno de test. Un backup que no se ha probado
+                no es un backup.
+                <br>
+                • <strong>Configura retención</strong> según el espacio
+                disponible. Con 30 días y una BD de 50 MB, ~1.5 GB por mes.
+                <br>
+                • <strong>El backup automático NO reemplaza</strong> un
+                backup externo. Es un complemento, no un sustituto.
+                <br>
+                • <strong>Antes de migraciones grandes</strong>, crea un
+                backup manual (full) y verifica su tamaño.
+                <br>
+                • <strong>Documenta el proceso de restauración</strong> en
+                un runbook para emergencias.
+                <br>
+                • <strong>Los .sql contienen credenciales</strong> de BD en
+                el dump. Trata los backups como información sensible.
+                <br>
+                • <strong>No compartas la carpeta <code>backup/</code></strong>
+                por red sin cifrado.
+            `
+        }
+    ]
+});
+
+// Confirmar al salir sin guardar la config
+(function() {
+    const form = document.getElementById('maintenance-form');
+    if (!form) return;
+    let dirty = false;
+    form.addEventListener('input', () => { dirty = true; });
+    form.addEventListener('change', () => { dirty = true; });
+    form.addEventListener('submit', () => { dirty = false; });
+    window.addEventListener('beforeunload', (e) => {
+        if (dirty) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+})();
+</script>
+{% endblock %}

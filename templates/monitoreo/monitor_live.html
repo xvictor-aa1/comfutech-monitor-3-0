@@ -1,0 +1,1994 @@
+{% extends "base.html" %}
+{% block title %}Monitoreo en vivo - Comfutech{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-broadcast"></i> Monitoreo en vivo</h2>
+        <p class="text-muted mb-0 small">
+            Métricas en tiempo real de <strong>{{ devices_count }}</strong> equipos activos
+            ({{ monitored_count }} con interfaces monitoreadas).
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'monitoreo:monitor_status' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-activity"></i> Estado del servicio
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Toolbar                                                      -->
+<!-- ============================================================ -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+
+        <!-- Fila 1: stats pills -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2 pb-2 border-bottom">
+            <span class="live-stat" id="stat-total">
+                <i class="bi bi-hdd-network text-primary"></i>
+                <strong id="stat-total-value">0</strong> equipos
+            </span>
+            <span class="live-stat" id="stat-alive">
+                <i class="bi bi-check-circle-fill text-success"></i>
+                <strong id="stat-alive-value">0</strong> en línea
+            </span>
+            <span class="live-stat" id="stat-down">
+                <i class="bi bi-x-circle-fill text-danger"></i>
+                <strong id="stat-down-value">0</strong> caídos
+            </span>
+            <span class="live-stat" id="stat-wireless">
+                <i class="bi bi-broadcast-pin text-info"></i>
+                <strong id="stat-wireless-value">0</strong> radioenlaces
+            </span>
+            <span class="live-stat" id="stat-stale">
+                <i class="bi bi-hourglass-split text-warning"></i>
+                <strong id="stat-stale-value">0</strong> sin datos
+            </span>
+            <small class="text-muted ms-auto">
+                <i class="bi bi-clock"></i>
+                Actualizado: <span id="last-update">—</span>
+            </small>
+        </div>
+
+        <!-- Fila 2: filtros -->
+        <div class="row g-2 align-items-center mb-2">
+
+            <div class="col-md-4 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="live-search" class="form-control"
+                           placeholder="Nombre, IP, modelo... ( / )"
+                           autocomplete="off">
+                    <button type="button" class="btn btn-outline-secondary"
+                            id="clear-search" style="display:none;"
+                            title="Limpiar búsqueda">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="col-md-2 col-lg-2">
+                <select id="filter-role" class="form-select form-select-sm">
+                    <option value="">Todos los roles</option>
+                    <option value="core">Core</option>
+                    <option value="distribution">Distribución</option>
+                    <option value="access">Acceso</option>
+                    <option value="cpe">CPE</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 col-lg-2">
+                <select id="filter-status" class="form-select form-select-sm">
+                    <option value="">Todos los estados</option>
+                    <option value="alive">En línea</option>
+                    <option value="down">Caídos</option>
+                    <option value="unknown">Sin datos</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 col-lg-2">
+                <select id="sort-by" class="form-select form-select-sm">
+                    <option value="role">Ordenar: rol</option>
+                    <option value="name">Ordenar: nombre</option>
+                    <option value="status">Ordenar: estado</option>
+                    <option value="signal">Ordenar: señal</option>
+                </select>
+            </div>
+
+            <div class="col-md-2 col-lg-3 d-flex justify-content-end align-items-center gap-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                    <label class="form-check-label small" for="auto-refresh">Auto</label>
+                </div>
+                <small id="countdown-display" class="text-muted">—</small>
+                {% if is_admin %}
+                <button type="button" class="btn btn-sm btn-success"
+                        id="btn-discovery-all"
+                        onclick="runDiscoveryAll()"
+                        title="Ejecutar discovery en todos los equipos">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span class="d-none d-md-inline">Discovery</span>
+                </button>
+                {% endif %}
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        id="btn-reload" onclick="loadLiveData(true)"
+                        title="Recargar ahora (R)">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Fila 3: modo + tamaño -->
+        <div class="row g-2 align-items-center">
+
+            <!-- Toggle modo vista -->
+            <div class="col-auto">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Modo de vista">
+                    <input type="radio" class="btn-check" name="view-mode"
+                           id="mode-static" value="static" autocomplete="off" checked>
+                    <label class="btn btn-outline-secondary" for="mode-static"
+                           title="Modo estático: números grandes sin gráficas">
+                        <i class="bi bi-list-ul"></i>
+                        <span class="d-none d-md-inline">Estático</span>
+                    </label>
+
+                    <input type="radio" class="btn-check" name="view-mode"
+                           id="mode-chart" value="chart" autocomplete="off">
+                    <label class="btn btn-outline-secondary" for="mode-chart"
+                           title="Modo gráfico: sparklines de tendencia">
+                        <i class="bi bi-graph-up"></i>
+                        <span class="d-none d-md-inline">Gráfico</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Slider de tamaño -->
+            <div class="col d-flex align-items-center gap-2">
+                <i class="bi bi-arrows-angle-contract text-muted" style="font-size: 0.8rem;"
+                   title="Cards más pequeños"></i>
+                <input type="range" class="form-range" id="card-size-slider"
+                       min="300" max="700" step="20" value="400"
+                       style="max-width: 200px;"
+                       title="Tamaño de los cards">
+                <i class="bi bi-arrows-angle-expand text-muted" style="font-size: 0.8rem;"
+                   title="Cards más grandes"></i>
+                <small id="size-label" class="text-muted ms-1">400px</small>
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                        onclick="resetCardSize()"
+                        title="Restablecer tamaño">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div>
+
+            <!-- Contador de visibles -->
+            <div class="col-auto">
+                <small id="visible-count" class="text-muted"></small>
+            </div>
+        </div>
+
+        <!-- Progress bar de refresh -->
+        <div class="refresh-progress" id="refresh-progress"></div>
+    </div>
+</div>
+
+<!-- Alerta de error de refresh -->
+<div id="refresh-error" class="alert alert-warning alert-dismissible fade show py-2 small mb-3"
+     style="display:none;" role="alert">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span id="refresh-error-msg"></span>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"
+            onclick="document.getElementById('refresh-error').style.display='none';"></button>
+</div>
+
+<!-- Contenedor de cards -->
+<div id="devices-container" class="devices-grid">
+    <div class="text-center text-muted py-5" style="grid-column: 1 / -1;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 mb-0">Cargando datos en vivo...</p>
+    </div>
+</div>
+
+<!-- Estado vacío -->
+<div id="empty-state" class="text-center text-muted py-5" style="display:none;">
+    <i class="bi bi-search" style="font-size: 3rem;"></i>
+    <p class="mt-3 mb-2" id="empty-state-msg">No hay equipos que coincidan con los filtros.</p>
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            onclick="resetFilters()">
+        <i class="bi bi-x-lg"></i> Limpiar filtros
+    </button>
+</div>
+
+<!-- Modal de confirmación Discovery -->
+<div class="modal fade" id="discoveryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-arrow-repeat"></i> Ejecutar Discovery
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Se ejecutará el descubrimiento de interfaces SNMP en
+                   <strong>todos los equipos activos</strong>.</p>
+                <div class="alert alert-warning small py-2 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Esta operación puede tardar varios segundos por equipo.
+                    Los equipos caídos serán saltados automáticamente.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success"
+                        onclick="confirmDiscovery()">
+                    <i class="bi bi-play-fill"></i> Ejecutar ahora
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Contenedor de toasts -->
+<div class="toast-container position-fixed top-0 end-0 p-3"
+     style="z-index: 1090; margin-top: 60px;" id="toast-container"></div>
+
+<style>
+    /* ============================================================
+       GRID AUTO-FIT DE CARDS
+       ============================================================ */
+    .devices-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(
+            auto-fit,
+            minmax(min(100%, var(--card-min-width, 400px)), 1fr)
+        );
+        transition: grid-template-columns 0.2s ease;
+    }
+
+    /* ============================================================
+       LIVE STAT PILLS
+       ============================================================ */
+    .live-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        background-color: var(--cf-hover-bg, #eef2f7);
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+    .live-stat strong { font-size: 0.85rem; }
+
+    /* ============================================================
+       REFRESH PROGRESS
+       ============================================================ */
+    .refresh-progress {
+        height: 2px;
+        background: linear-gradient(to right,
+            var(--cf-primary, #0d6efd) 0%,
+            var(--cf-primary, #0d6efd) 40%,
+            transparent 40%,
+            transparent 100%);
+        background-size: 200% 100%;
+        border-radius: 1px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        margin-top: 0.5rem;
+    }
+    .refresh-progress.active {
+        opacity: 1;
+        animation: loading-bar 1.2s linear infinite;
+    }
+    @keyframes loading-bar {
+        from { background-position: 200% 0; }
+        to   { background-position: -200% 0; }
+    }
+
+    /* ============================================================
+       DEVICE CARD
+       ============================================================ */
+    .device-live-card {
+        transition: box-shadow 0.15s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .device-live-card.device-down {
+        border-left: 3px solid var(--cf-danger, #dc3545) !important;
+    }
+    .device-live-card.device-stale {
+        border-left: 3px solid var(--cf-warning, #e67e00) !important;
+    }
+    .device-live-card .status-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .device-live-card .status-dot.alive {
+        background-color: #198754;
+        box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.7);
+        animation: pulse-green 2s infinite;
+    }
+    .device-live-card .status-dot.down {
+        background-color: #dc3545;
+        animation: pulse-red 2s infinite;
+    }
+    .device-live-card .status-dot.unknown {
+        background-color: #6c757d;
+    }
+    @keyframes pulse-green {
+        0%   { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.5); }
+        70%  { box-shadow: 0 0 0 8px rgba(25, 135, 84, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
+    }
+    @keyframes pulse-red {
+        0%   { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.5); }
+        70%  { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+
+    /* ============================================================
+       SPARKLINE
+       ============================================================ */
+    .sparkline-slot {
+        width: 100%;
+        min-height: 36px;
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .sparkline-slot svg {
+        width: 100%;
+        height: 36px;
+        display: block;
+    }
+    .sparkline-slot.sparkline-lg svg {
+        height: 50px;
+    }
+    .sparkline-slot .sparkline-loading {
+        width: 100%;
+        height: 36px;
+        background: linear-gradient(
+            90deg,
+            var(--cf-hover-bg, #eef2f7) 0%,
+            var(--cf-border-light, #f8f9fa) 50%,
+            var(--cf-hover-bg, #eef2f7) 100%
+        );
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.5s infinite;
+        border-radius: 4px;
+    }
+    .sparkline-slot.sparkline-lg .sparkline-loading {
+        height: 50px;
+    }
+    @keyframes skeleton-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* ============================================================
+       LIVE BLOCK (contenedor de cada métrica)
+       ============================================================ */
+    .live-block {
+        padding: 0.6rem 0;
+        border-bottom: 1px solid var(--cf-border-light, #eee);
+    }
+    .live-block:last-child { border-bottom: 0; }
+    .live-block-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--cf-text-muted, #6c757d);
+    }
+    .live-block-meta {
+        font-size: 0.7rem;
+        color: var(--cf-text-subtle, #999);
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+    .live-metric-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.78rem;
+        margin-bottom: 0.25rem;
+    }
+    .live-metric-row:last-child { margin-bottom: 0; }
+    .live-metric-label {
+        min-width: 52px;
+        color: var(--cf-text-muted, #6c757d);
+        font-size: 0.72rem;
+    }
+    .live-metric-chart {
+        flex: 1;
+        min-width: 0;
+    }
+    .live-metric-value {
+        min-width: 60px;
+        text-align: right;
+        font-weight: 600;
+        font-size: 0.78rem;
+        white-space: nowrap;
+    }
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Monitoreo en Vivo — Guía",
+    sections: [
+        {
+            heading: "¿Qué es el Monitoreo en Vivo?",
+            body: `
+                Es la vista <strong>en tiempo real</strong> de todos los
+                equipos activos del sistema. Cada equipo se muestra como
+                una card con sus métricas más relevantes.
+                <br><br>
+                Se actualiza automáticamente cada <strong>10 segundos</strong>.
+            `
+        },
+        {
+            heading: "Modo Estático vs Modo Gráfico",
+            body: `
+                El botón en el toolbar alterna entre dos modos:
+                <br><br>
+                <strong><i class="bi bi-list-ul"></i> Estático:</strong>
+                muestra los valores actuales como números grandes. Ideal
+                para ver el estado <em>ahora mismo</em>.
+                <br><br>
+                <strong><i class="bi bi-graph-up"></i> Gráfico:</strong>
+                muestra la tendencia de los últimos 10 minutos como
+                <em>sparklines</em>. Ideal para detectar patrones.
+                <br><br>
+                En modo gráfico, cada métrica tiene su propio chart:
+                <br>
+                • ICMP: latencia.
+                <br>
+                • Traffic (WAN): RX y TX por separado.
+                <br>
+                • Health: CPU, mem, temp.
+                <br>
+                • Radio: señal del enlace.
+                <br><br>
+                <strong>CCQ y pérdida de paquetes no se grafican</strong>
+                (son porcentajes que no aportan tendencia visual).
+            `
+        },
+        {
+            heading: "Tamaño de los cards",
+            body: `
+                La barra deslizante ajusta el ancho mínimo de cada card
+                (entre <code>300px</code> y <code>700px</code>).
+                <br><br>
+                El grid usa <strong>auto-fit</strong>: los cards se
+                redistribuyen automáticamente para llenar el espacio
+                disponible. Si reduces el tamaño, caben más cards por fila
+                sin dejar huecos.
+                <br><br>
+                El botón <i class="bi bi-arrow-counterclockwise"></i>
+                restablece el tamaño a <code>400px</code>.
+                <br><br>
+                <strong>La preferencia se guarda en el navegador</strong>
+                y se restaura al volver a la página.
+            `
+        },
+        {
+            heading: "Bloques por tipo de equipo",
+            body: `
+                Cada card contiene hasta 6 bloques según el tipo:
+                <br><br>
+                <strong>ICMP (todos):</strong> estado, latencia, pérdida.
+                <br>
+                <strong>Traffic SNMP (no-wireless):</strong> tabla con RX,
+                TX y utilización por interfaz.
+                <br>
+                <strong>Clientes AP (wireless):</strong> tabla de clientes
+                conectados (reemplaza a Traffic).
+                <br>
+                <strong>Radiofrecuencia (wireless):</strong> frecuencia,
+                señal, CCQ, tasas TX/RX.
+                <br>
+                <strong>Core Health (con OIDs chasis):</strong> CPU, mem,
+                temp, uptime.
+                <br>
+                <strong>TCP (con puertos):</strong> abiertos/cerrados.
+                <br><br>
+                <strong>Nota:</strong> en radioenlaces, el bloque
+                "Traffic SNMP" se reemplaza por "Clientes AP" porque las
+                interfaces IF-MIB no aportan información útil en esos equipos.
+            `
+        },
+        {
+            heading: "Filtros y búsqueda",
+            body: `
+                Puedes filtrar las cards por:
+                <br>
+                • <strong>Búsqueda:</strong> nombre, IP, modelo o ubicación.
+                <br>
+                • <strong>Rol:</strong> Core, Distribución, Acceso, CPE.
+                <br>
+                • <strong>Estado:</strong> en línea, caídos, sin datos.
+                <br>
+                • <strong>Orden:</strong> rol, nombre, estado, señal.
+                <br><br>
+                Los filtros se aplican en el cliente (sin recargar).
+            `
+        },
+        {
+            heading: "Atajos de teclado",
+            body: `Desde esta página:`,
+            list: [
+                "<kbd>R</kbd> — Recargar los datos inmediatamente.",
+                "<kbd>/</kbd> — Enfocar el campo de búsqueda.",
+                "<kbd>F1</kbd> o <kbd>Shift+?</kbd> — Abrir esta ayuda."
+            ]
+        },
+        {
+            heading: "Auto-refresh",
+            body: `
+                El switch "Auto" activa el polling cada 10s. Muestra un
+                countdown con los segundos restantes.
+                <br><br>
+                El polling se <strong>pausa</strong> cuando la pestaña del
+                navegador no está visible. Al volver, se reanuda
+                inmediatamente.
+                <br><br>
+                En modo gráfico, los sparklines se cargan bajo demanda
+                (solo los cards visibles) y se refrescan cada 30s para
+                no saturar InfluxDB.
+            `
+        },
+        {
+            heading: "Detección de datos obsoletos",
+            body: `
+                Los cards se colorean según la antigüedad de sus datos:
+                <br>
+                • <span class="text-success">Borde verde</span>: datos recientes (<5 min).
+                <br>
+                • <span class="text-warning">Borde amarillo</span>: 2-5 min.
+                <br>
+                • <span class="text-danger">Borde rojo</span>: >5 min o caído.
+                <br><br>
+                El timestamp "hace X" en cada bloque indica la última lectura
+                exitosa.
+            `
+        },
+        {
+            heading: "Rendimiento",
+            body: `
+                El endpoint usa caché de 5s en el servidor. Múltiples
+                usuarios con esta página abierta comparten el mismo snapshot
+                de InfluxDB.
+                <br><br>
+                Los sparklines (solo en modo gráfico) se cargan con
+                <em>IntersectionObserver</em>: solo se piden cuando el card
+                es visible. Cache cliente de 30s por métrica.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+const URLS = {
+    devicesLive: "{% url 'monitoreo:devices_live' %}",
+    discoverAll: "{% url 'monitoreo:discover_all' %}",
+    sparkline:   "{% url 'monitoreo:dashboard_sparkline' %}",
+    deviceDetail:   "{% url 'inventario:device_detail' 0 %}".replace(/\/0\/?$/, '/'),
+    deviceIfaces:   "{% url 'inventario:device_interfaces' 0 %}".replace(/\/0\/?$/, '/'),
+};
+
+const SPARKLINE_MINUTES = 10;
+const SPARKLINE_REFRESH_MS = 30000;
+const SPARKLINE_CACHE_MS = 25000;
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+const state = {
+    allDevices: [],
+    lastFetchOk: false,
+    filters: { search: '', role: '', status: '' },
+    sortBy: 'role',
+    autoRefresh: true,
+    refreshTimer: null,
+    countdown: 10,
+    refreshIntervalSec: 10,
+    viewMode: 'static',         // 'static' | 'chart'
+    cardMinWidth: 400,
+    // Sparklines
+    sparklineObserver: null,
+    sparklineCache: new Map(),   // key: "deviceId:metric" -> {points, ts}
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function formatBps(v) {
+    if (v === null || v === undefined) return '—';
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' Gbps';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + ' Mbps';
+    if (v >= 1e3) return (v / 1e3).toFixed(2) + ' Kbps';
+    return v.toFixed(0) + ' bps';
+}
+
+function formatUptime(seconds) {
+    if (seconds === null || seconds === undefined) return '—';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+}
+
+function relativeTime(isoTs) {
+    if (!isoTs) return '—';
+    const d = new Date(isoTs);
+    if (isNaN(d.getTime())) return '—';
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diff < 5) return 'ahora';
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
+    return `hace ${Math.floor(diff / 86400)}d`;
+}
+
+function lastSeen(device) {
+    const stamps = [];
+    if (device.icmp?.ts)    stamps.push(new Date(device.icmp.ts));
+    if (device.health?.ts)  stamps.push(new Date(device.health.ts));
+    if (device.radio?.ts)   stamps.push(new Date(device.radio.ts));
+    (device.traffic || []).forEach(t => { if (t.ts) stamps.push(new Date(t.ts)); });
+    if (stamps.length === 0) return null;
+    return new Date(Math.max(...stamps.map(d => d.getTime())));
+}
+
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function roleBadge(role) {
+    const classes = {
+        'core': 'bg-danger', 'distribution': 'bg-warning text-dark',
+        'access': 'bg-primary', 'cpe': 'bg-secondary',
+    };
+    const labels = {
+        'core': 'Core', 'distribution': 'Distribución',
+        'access': 'Acceso', 'cpe': 'CPE',
+    };
+    return `<span class="badge ${classes[role] || 'bg-secondary'}">
+                ${labels[role] || role}
+            </span>`;
+}
+
+function utilColor(pct) {
+    if (pct === null || pct === undefined) return 'bg-secondary';
+    if (pct > 85) return 'bg-danger';
+    if (pct > 70) return 'bg-warning';
+    if (pct > 40) return 'bg-info';
+    return 'bg-success';
+}
+
+function signalColor(signal) {
+    if (signal === null || signal === undefined) return '';
+    if (signal < -80) return 'text-danger';
+    if (signal < -70) return 'text-warning';
+    return 'text-success';
+}
+
+function deviceStatus(device) {
+    if (!device.icmp || device.icmp.alive === null || device.icmp.alive === undefined) {
+        return 'unknown';
+    }
+    return device.icmp.alive ? 'alive' : 'down';
+}
+
+// ============================================================
+// SPARKLINES — SVG + carga
+// ============================================================
+
+/**
+ * Genera un SVG de sparkline a partir de puntos.
+ * @param {Array} points - [{t, v}, ...]
+ * @param {string} color - color CSS del trazo
+ * @returns {string} HTML del SVG (o placeholder si sin datos)
+ */
+function renderSparklineSvg(points, color) {
+    if (!points || points.length < 2) {
+        return '<div class="text-muted small text-center" style="height:36px;line-height:36px;"><i class="bi bi-dash"></i></div>';
+    }
+
+    const values = points.map(p => p.v).filter(v => v !== null && !isNaN(v));
+    if (values.length < 2) return '';
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+
+    const W = 100;
+    const H = 36;
+    const pad = 2;
+    const stepX = W / (values.length - 1);
+
+    const points_str = values.map((v, i) => {
+        const x = i * stepX;
+        const y = H - ((v - min) / range) * (H - pad * 2) - pad;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(' ');
+
+    const area_path = `M0,${H} L${points_str.replace(/ /g, ' L')} L${W},${H} Z`;
+    const stroke = color || '#0d6efd';
+
+    return `
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+             xmlns="http://www.w3.org/2000/svg">
+            <path d="${area_path}" fill="${stroke}" opacity="0.15"></path>
+            <polyline points="${points_str}" fill="none"
+                      stroke="${stroke}" stroke-width="1.4"
+                      stroke-linejoin="round" stroke-linecap="round"></polyline>
+        </svg>
+    `;
+}
+
+function signalStrokeColor(signal) {
+    if (signal === null || signal === undefined) return '#0d6efd';
+    if (signal < -80) return '#dc3545';
+    if (signal < -70) return '#e67e00';
+    return '#198754';
+}
+
+/**
+ * Genera el HTML de un slot de sparkline vacío.
+ * @param {number} deviceId
+ * @param {string} metric - nombre de la métrica
+ * @param {string} color - color CSS del trazo
+ * @param {boolean} large - true para usar el tamaño grande
+ */
+function sparklineSlotHtml(deviceId, metric, color, large = false) {
+    const cls = large ? 'sparkline-lg' : '';
+    return `<div class="sparkline-slot ${cls}"
+                 data-device-id="${deviceId}"
+                 data-metric="${metric}"
+                 data-color="${color || '#0d6efd'}">
+        <div class="sparkline-loading"></div>
+    </div>`;
+}
+
+/**
+ * Carga el sparkline de un slot individual (con caché cliente).
+ */
+async function loadSparklineForSlot(slot) {
+    const deviceId = parseInt(slot.dataset.deviceId, 10);
+    const metric = slot.dataset.metric;
+    const color = slot.dataset.color || '#0d6efd';
+    if (!deviceId || !metric) return;
+
+    const cacheKey = `${deviceId}:${metric}`;
+    const cached = state.sparklineCache.get(cacheKey);
+    const now = Date.now();
+
+    // Caché válida
+    if (cached && (now - cached.ts) < SPARKLINE_CACHE_MS) {
+        slot.innerHTML = renderSparklineSvg(cached.points, color);
+        return;
+    }
+
+    // Fetch
+    try {
+        const url = `${URLS.sparkline}?device_id=${deviceId}&metric=${metric}&minutes=${SPARKLINE_MINUTES}`;
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const points = data.points || [];
+        state.sparklineCache.set(cacheKey, { points, ts: now });
+
+        // Auto-color para señal según último valor
+        let strokeColor = color;
+        if (metric === 'signal' && points.length > 0) {
+            strokeColor = signalStrokeColor(points[points.length - 1].v);
+        }
+
+        slot.innerHTML = renderSparklineSvg(points, strokeColor);
+    } catch (e) {
+        console.warn(`Sparkline error (${metric}):`, e);
+        slot.innerHTML = '<div class="text-muted small text-center" style="height:36px;line-height:36px;"><i class="bi bi-exclamation-triangle"></i></div>';
+    }
+}
+
+/**
+ * Adjunta IntersectionObserver a todos los slots en el DOM.
+ * Solo carga sparklines de slots visibles.
+ */
+function observeSparklines() {
+    if (!('IntersectionObserver' in window)) {
+        // Fallback: cargar todos
+        document.querySelectorAll('.sparkline-slot').forEach(loadSparklineForSlot);
+        return;
+    }
+
+    // Desconectar observer anterior
+    if (state.sparklineObserver) {
+        state.sparklineObserver.disconnect();
+    }
+
+    state.sparklineObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && !entry.target.dataset.loaded) {
+                entry.target.dataset.loaded = '1';
+                loadSparklineForSlot(entry.target);
+            }
+        });
+    }, {
+        rootMargin: '100px',
+        threshold: 0.01,
+    });
+
+    document.querySelectorAll('.sparkline-slot:not([data-loaded])').forEach(slot => {
+        state.sparklineObserver.observe(slot);
+    });
+}
+
+// ============================================================
+// RENDERIZADO DE BLOQUES (con soporte de modo gráfico)
+// ============================================================
+
+function renderWirelessBlock(wireless) {
+    if (!wireless) return '';
+    const utilNum = (wireless.utilization_pct !== null && wireless.utilization_pct !== undefined)
+        ? wireless.utilization_pct : null;
+    const utilPct = utilNum !== null ? utilNum.toFixed(1) : '—';
+    const barColor = utilColor(utilNum);
+    const barWidth = utilNum !== null ? Math.min(utilNum, 100) : 0;
+
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-broadcast-pin text-info"></i> Radioenlace</span>
+                <span class="live-block-meta">
+                    ${escapeHtmlJs(wireless.interface || '—')}
+                    ${wireless.alias ? '· ' + escapeHtmlJs(wireless.alias) : ''}
+                </span>
+            </div>
+            <div class="row g-2 small mb-2">
+                <div class="col-4">
+                    <div class="text-muted">Capacidad</div>
+                    <div class="fw-bold">${formatBps(wireless.capacity_bps)}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">RX</div>
+                    <div class="fw-bold text-success">↓ ${formatBps(wireless.in_bps)}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">TX</div>
+                    <div class="fw-bold text-warning">↑ ${formatBps(wireless.out_bps)}</div>
+                </div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <small class="text-muted">Utilización</small>
+                <small class="fw-bold">${utilPct}%</small>
+            </div>
+            <div class="progress" style="height: 8px;">
+                <div class="progress-bar ${barColor}" style="width: ${barWidth}%;"></div>
+            </div>
+        </div>
+    `;
+}
+
+function renderRadioBlock(device, chartMode) {
+    if (!device.has_radio_metrics) return '';
+    const radio = device.radio;
+
+    if (!radio) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-broadcast-pin text-info"></i> Radiofrecuencia</span>
+                </div>
+                <div class="text-muted small fst-italic">Sin datos recientes</div>
+            </div>
+        `;
+    }
+
+    const freq = radio.freq !== null && radio.freq !== undefined
+        ? radio.freq.toFixed(0) + ' MHz' : '—';
+    const txPower = radio.txpower !== null && radio.txpower !== undefined
+        ? radio.txpower.toFixed(0) + ' dBm' : '—';
+    const signal = radio.signal !== null && radio.signal !== undefined
+        ? radio.signal.toFixed(0) + ' dBm' : '—';
+    const noise = radio.noise !== null && radio.noise !== undefined
+        ? radio.noise.toFixed(0) + ' dBm' : '—';
+    const ccq = radio.ccq !== null && radio.ccq !== undefined
+        ? radio.ccq.toFixed(0) + '%' : '—';
+    const txRate = formatBps(radio.tx_rate);
+    const rxRate = formatBps(radio.rx_rate);
+    const chanWidth = radio.chan_width !== null && radio.chan_width !== undefined
+        ? radio.chan_width.toFixed(0) + ' MHz' : '—';
+
+    const signalCls = signalColor(radio.signal);
+    const noiseCls = radio.noise > -80 ? 'text-danger' : radio.noise > -90 ? 'text-warning' : '';
+    const ccqCls = radio.ccq < 50 ? 'text-danger' : radio.ccq < 80 ? 'text-warning' : 'text-success';
+
+    if (chartMode) {
+        // Modo gráfico: chart de señal + resto como texto
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-broadcast-pin text-info"></i> Radiofrecuencia</span>
+                    <span class="live-block-meta">${relativeTime(radio.ts)}</span>
+                </div>
+                <div class="live-metric-row">
+                    <span class="live-metric-label">Signal</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'signal', signalStrokeColor(radio.signal))}
+                    </div>
+                    <span class="live-metric-value ${signalCls}">${signal}</span>
+                </div>
+                <div class="row g-2 small mt-2">
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">Freq</div>
+                        <div class="fw-bold">${freq}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">Noise</div>
+                        <div class="fw-bold ${noiseCls}">${noise}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">CCQ</div>
+                        <div class="fw-bold ${ccqCls}">${ccq}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">TX Rate</div>
+                        <div class="fw-bold text-success">↓ ${txRate}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">RX Rate</div>
+                        <div class="fw-bold text-warning">↑ ${rxRate}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted" style="font-size: 0.7rem;">Canal</div>
+                        <div class="fw-bold">${chanWidth}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Modo estático (actual)
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-broadcast-pin text-info"></i> Radiofrecuencia</span>
+                <span class="live-block-meta">${relativeTime(radio.ts)}</span>
+            </div>
+            <div class="row g-2 small">
+                <div class="col-4">
+                    <div class="text-muted">Frecuencia</div>
+                    <div class="fw-bold">${freq}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">TX Power</div>
+                    <div class="fw-bold">${txPower}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Ancho canal</div>
+                    <div class="fw-bold">${chanWidth}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Signal</div>
+                    <div class="fw-bold ${signalCls}">${signal}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Noise</div>
+                    <div class="fw-bold ${noiseCls}">${noise}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">CCQ</div>
+                    <div class="fw-bold ${ccqCls}">${ccq}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">TX Rate</div>
+                    <div class="fw-bold text-success">↓ ${txRate}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">RX Rate</div>
+                    <div class="fw-bold text-warning">↑ ${rxRate}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">airMAX</div>
+                    <div class="fw-bold">Q:${radio.airmax_quality ?? '—'} C:${radio.airmax_capacity ?? '—'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderIcmpBlock(device, chartMode) {
+    const icmp = device.icmp;
+    if (!icmp) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-activity"></i> ICMP</span>
+                </div>
+                <div class="text-muted small fst-italic">Sin datos recientes</div>
+            </div>
+        `;
+    }
+
+    const aliveCls = icmp.alive ? 'text-success' : 'text-danger';
+    const aliveIcon = icmp.alive ? 'check-circle-fill' : 'x-circle-fill';
+    const aliveText = icmp.alive ? 'Vivo' : 'Caído';
+    const lossCls = icmp.loss > 5 ? 'text-danger' : icmp.loss > 0 ? 'text-warning' : '';
+    const rttVal = (icmp.rtt !== null && icmp.rtt !== undefined)
+        ? icmp.rtt.toFixed(1) + ' ms' : '—';
+    const lossVal = (icmp.loss !== null && icmp.loss !== undefined)
+        ? icmp.loss.toFixed(0) + '%' : '—';
+
+    if (chartMode) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-activity"></i> ICMP</span>
+                    <span class="live-block-meta">${relativeTime(icmp.ts)}</span>
+                </div>
+                <div class="mb-1">
+                    <span class="${aliveCls} fw-bold small">
+                        <i class="bi bi-${aliveIcon}"></i> ${aliveText}
+                    </span>
+                </div>
+                <div class="live-metric-row">
+                    <span class="live-metric-label">Latencia</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'latency', '#0d6efd')}
+                    </div>
+                    <span class="live-metric-value">${rttVal}</span>
+                </div>
+                <div class="live-metric-row">
+                    <span class="live-metric-label">Pérdida</span>
+                    <div class="live-metric-chart"></div>
+                    <span class="live-metric-value ${lossCls}">${lossVal}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-activity"></i> ICMP</span>
+                <span class="live-block-meta">${relativeTime(icmp.ts)}</span>
+            </div>
+            <div class="row g-2 small">
+                <div class="col-4">
+                    <div class="text-muted">Estado</div>
+                    <div class="${aliveCls} fw-bold">
+                        <i class="bi bi-${aliveIcon}"></i> ${aliveText}
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Latencia</div>
+                    <div class="fw-bold">${rttVal}</div>
+                </div>
+                <div class="col-4">
+                    <div class="text-muted">Pérdida</div>
+                    <div class="fw-bold ${lossCls}">${lossVal}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderTrafficBlock(device, chartMode) {
+    if (!device.has_interfaces_support) return '';
+    const traffic = device.traffic || [];
+
+    if (!device.has_traffic) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-graph-up"></i> SNMP Tráfico</span>
+                </div>
+                <div class="text-muted small fst-italic">Sin interfaces monitoreadas</div>
+            </div>
+        `;
+    }
+
+    if (chartMode) {
+        // Solo WAN: usar dashboard_traffic (fallback: primera interfaz)
+        const wan = device.dashboard_traffic || (traffic.length > 0 ? traffic[0] : null);
+
+        if (!wan) {
+            return `
+                <div class="live-block">
+                    <div class="live-block-header">
+                        <span><i class="bi bi-graph-up"></i> SNMP Tráfico (WAN)</span>
+                    </div>
+                    <div class="text-muted small fst-italic">Sin datos WAN</div>
+                </div>
+            `;
+        }
+
+        const util = wan.utilization;
+        const utilPct = util !== null && util !== undefined ? util.toFixed(1) : '—';
+        const utilCls = util > 85 ? 'text-danger' : util > 70 ? 'text-warning' : '';
+
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-graph-up"></i> SNMP Tráfico (WAN)</span>
+                    <span class="live-block-meta">
+                        ${escapeHtmlJs(wan.interface || '—')}
+                        ${wan.alias ? '· ' + escapeHtmlJs(wan.alias) : ''}
+                    </span>
+                </div>
+                <div class="live-metric-row">
+                    <span class="live-metric-label text-success">↓ RX</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'traffic_in', '#198754')}
+                    </div>
+                    <span class="live-metric-value text-success">${formatBps(wan.in_bps)}</span>
+                </div>
+                <div class="live-metric-row">
+                    <span class="live-metric-label text-warning">↑ TX</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'traffic_out', '#e67e00')}
+                    </div>
+                    <span class="live-metric-value text-warning">${formatBps(wan.out_bps)}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-1">
+                    <small class="text-muted">Utilización</small>
+                    <small class="fw-bold ${utilCls}">${utilPct}%</small>
+                </div>
+                ${util !== null && util !== undefined ? `
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar ${utilColor(util)}"
+                         style="width: ${Math.min(util, 100)}%;"></div>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    // Modo estático: tabla completa
+    if (traffic.length === 0) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-graph-up"></i> SNMP Tráfico</span>
+                </div>
+                <div class="text-muted small fst-italic">Sin datos recientes</div>
+            </div>
+        `;
+    }
+
+    const rows = traffic.map(t => `
+        <tr>
+            <td><code class="small">${escapeHtmlJs(t.interface || '—')}</code></td>
+            <td class="small text-muted">${escapeHtmlJs(t.alias) || '—'}</td>
+            <td class="text-end text-success small">↓ ${formatBps(t.in_bps)}</td>
+            <td class="text-end text-warning small">↑ ${formatBps(t.out_bps)}</td>
+            <td class="text-end small">
+                ${t.utilization !== null && t.utilization !== undefined
+                    ? t.utilization.toFixed(1) + '%' : '—'}
+            </td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-graph-up"></i> SNMP Tráfico</span>
+                <span class="live-block-meta">
+                    ${traffic.length} interfaz${traffic.length !== 1 ? 'es' : ''}
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-borderless mb-0">
+                    <thead>
+                        <tr class="small text-muted">
+                            <th>Interfaz</th>
+                            <th>Alias</th>
+                            <th class="text-end">RX</th>
+                            <th class="text-end">TX</th>
+                            <th class="text-end">Uso</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+function renderHealthBlock(device, chartMode) {
+    if (!device.has_health_metrics) return '';
+
+    const health = device.health;
+    const available = device.available_health_metrics || [];
+
+    if (!health) {
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-heart-pulse"></i> Core Health</span>
+                </div>
+                <div class="text-muted small fst-italic">Sin datos recientes</div>
+            </div>
+        `;
+    }
+
+    if (chartMode) {
+        const rows = [];
+
+        if (available.includes('cpu_pct')) {
+            const cpuCls = health.cpu > 90 ? 'text-danger' : health.cpu > 75 ? 'text-warning' : '';
+            const cpuVal = health.cpu !== null && health.cpu !== undefined
+                ? health.cpu.toFixed(0) + '%' : '—';
+            rows.push(`
+                <div class="live-metric-row">
+                    <span class="live-metric-label">CPU</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'cpu', '#0d6efd')}
+                    </div>
+                    <span class="live-metric-value ${cpuCls}">${cpuVal}</span>
+                </div>
+            `);
+        }
+
+        if (available.includes('mem_pct')) {
+            const memCls = health.mem > 92 ? 'text-danger' : health.mem > 80 ? 'text-warning' : '';
+            const memVal = health.mem !== null && health.mem !== undefined
+                ? health.mem.toFixed(0) + '%' : '—';
+            rows.push(`
+                <div class="live-metric-row">
+                    <span class="live-metric-label">Mem</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'mem', '#0dcaf0')}
+                    </div>
+                    <span class="live-metric-value ${memCls}">${memVal}</span>
+                </div>
+            `);
+        }
+
+        if (available.includes('temp_c')) {
+            const tempCls = health.temp > 85 ? 'text-danger' : health.temp > 70 ? 'text-warning' : '';
+            const tempVal = health.temp !== null && health.temp !== undefined
+                ? health.temp.toFixed(0) + '°C' : '—';
+            rows.push(`
+                <div class="live-metric-row">
+                    <span class="live-metric-label">Temp</span>
+                    <div class="live-metric-chart">
+                        ${sparklineSlotHtml(device.id, 'temp', '#dc3545')}
+                    </div>
+                    <span class="live-metric-value ${tempCls}">${tempVal}</span>
+                </div>
+            `);
+        }
+
+        return `
+            <div class="live-block">
+                <div class="live-block-header">
+                    <span><i class="bi bi-heart-pulse"></i> Core Health</span>
+                    <span class="live-block-meta">${relativeTime(health.ts)}</span>
+                </div>
+                ${rows.join('')}
+                <div class="live-metric-row mt-1">
+                    <span class="live-metric-label">Uptime</span>
+                    <span class="live-metric-value" style="flex:1;text-align:right;">
+                        ${formatUptime(health.uptime)}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+
+    // Modo estático
+    const cells = [];
+    if (available.includes('cpu_pct')) {
+        const cpuCls = health.cpu > 90 ? 'text-danger' : health.cpu > 75 ? 'text-warning' : '';
+        const cpuVal = health.cpu !== null && health.cpu !== undefined
+            ? health.cpu.toFixed(0) + '%' : '—';
+        cells.push(`<div class="col"><div class="text-muted">CPU</div><div class="fw-bold ${cpuCls}">${cpuVal}</div></div>`);
+    }
+    if (available.includes('mem_pct')) {
+        const memCls = health.mem > 92 ? 'text-danger' : health.mem > 80 ? 'text-warning' : '';
+        const memVal = health.mem !== null && health.mem !== undefined
+            ? health.mem.toFixed(0) + '%' : '—';
+        cells.push(`<div class="col"><div class="text-muted">Mem</div><div class="fw-bold ${memCls}">${memVal}</div></div>`);
+    }
+    if (available.includes('temp_c')) {
+        const tempCls = health.temp > 85 ? 'text-danger' : health.temp > 70 ? 'text-warning' : '';
+        const tempVal = health.temp !== null && health.temp !== undefined
+            ? health.temp.toFixed(0) + '°C' : '—';
+        cells.push(`<div class="col"><div class="text-muted">Temp</div><div class="fw-bold ${tempCls}">${tempVal}</div></div>`);
+    }
+
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-heart-pulse"></i> Core Health</span>
+                <span class="live-block-meta">${relativeTime(health.ts)}</span>
+            </div>
+            <div class="row g-2 small">
+                ${cells.join('')}
+                <div class="col">
+                    <div class="text-muted">Uptime</div>
+                    <div class="fw-bold small">${formatUptime(health.uptime)}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderTcpBlock(device) {
+    const tcp = device.tcp || [];
+    if (tcp.length === 0) return '';
+    const badges = tcp.map(t => {
+        const cls = t.is_open ? 'bg-success' : 'bg-danger';
+        const icon = t.is_open ? 'unlock-fill' : 'lock-fill';
+        return `<span class="badge ${cls} me-1 mb-1">
+                    <i class="bi bi-${icon}"></i> ${t.port}
+                </span>`;
+    }).join('');
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-hdd-network"></i> TCP</span>
+            </div>
+            <div class="small">${badges}</div>
+        </div>
+    `;
+}
+
+function renderApClientsBlock(device) {
+    if (!device.ap_clients || device.ap_clients.length === 0) return '';
+
+    const clients = device.ap_clients;
+    const onlineCount = clients.filter(c => c.online).length;
+    const total = clients.length;
+
+    const rows = clients.map(c => {
+        const online = c.online;
+        const rowCls = online ? '' : 'opacity-50';
+        const sigNum = c.signal;
+        const sigCls = sigNum === null || sigNum === undefined ? ''
+            : sigNum < -80 ? 'text-danger'
+            : sigNum < -70 ? 'text-warning' : 'text-success';
+        const ccqNum = c.ccq;
+        const ccqCls = ccqNum === null || ccqNum === undefined ? ''
+            : ccqNum < 50 ? 'text-danger'
+            : ccqNum < 80 ? 'text-warning' : 'text-success';
+
+        return `
+            <tr class="${rowCls}">
+                <td><code class="small">${escapeHtmlJs(c.mac)}</code></td>
+                <td class="small">${escapeHtmlJs(c.ip) || '—'}</td>
+                <td class="text-end ${sigCls} small">
+                    ${sigNum !== null && sigNum !== undefined ? sigNum.toFixed(0) + ' dBm' : '—'}
+                </td>
+                <td class="text-end ${ccqCls} small">
+                    ${ccqNum !== null && ccqNum !== undefined ? ccqNum.toFixed(0) + '%' : '—'}
+                </td>
+                <td class="text-end small">${formatBps(c.tx_rate)}</td>
+                <td class="text-end small">${formatBps(c.rx_rate)}</td>
+                <td class="text-center">
+                    ${online
+                        ? '<span class="badge bg-success" style="font-size:0.65rem;">Online</span>'
+                        : '<span class="badge bg-secondary" style="font-size:0.65rem;">Offline</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div class="live-block">
+            <div class="live-block-header">
+                <span><i class="bi bi-people-fill text-info"></i> Clientes AP</span>
+                <span class="live-block-meta">${onlineCount}/${total} en línea</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-borderless mb-0">
+                    <thead>
+                        <tr class="small text-muted">
+                            <th>MAC</th>
+                            <th>IP</th>
+                            <th class="text-end">Signal</th>
+                            <th class="text-end">CCQ</th>
+                            <th class="text-end">TX</th>
+                            <th class="text-end">RX</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// RENDERIZADO DE LA CARD
+// ============================================================
+
+/**
+ * Renderiza una card completa.
+ *
+ * Distribución de bloques:
+ *   wirelessBlock (radio only)  →  radio link utilization
+ *   radioBlock    (radio only)  →  RF metrics
+ *   icmpBlock     (TODOS)       →  availability
+ *   [apClientsBlock | trafficBlock]  →  wirelss vs no-wireless
+ *   healthBlock   (si aplica)   →  CPU/mem/temp
+ *   tcpBlock      (si aplica)   →  puertos
+ */
+function renderDeviceCard(device) {
+    const chartMode = state.viewMode === 'chart';
+    const status = deviceStatus(device);
+    const statusClass = `status-dot ${status}`;
+    const seen = lastSeen(device);
+    const seenText = seen ? relativeTime(seen.toISOString()) : '—';
+    const seenAge = seen ? (Date.now() - seen.getTime()) / 1000 : Infinity;
+    const seenCls = seenAge > 300 ? 'text-danger' : seenAge > 120 ? 'text-warning' : 'text-muted';
+    const cardCls = seenAge > 300 ? 'device-stale' : status === 'down' ? 'device-down' : '';
+
+    const wirelessBadge = device.is_wireless_link ? `
+        <span class="badge bg-info text-dark mt-1" title="Equipo de radio-enlace">
+            <i class="bi bi-broadcast-pin"></i> Radio
+        </span>
+    ` : '';
+
+    const wirelessBlock = renderWirelessBlock(device.wireless_info);
+    const radioBlock = renderRadioBlock(device, chartMode);
+    const icmpBlock = renderIcmpBlock(device, chartMode);
+    const healthBlock = renderHealthBlock(device, chartMode);
+    const tcpBlock = renderTcpBlock(device);
+
+    // ← FIX: AP Clients reemplaza a TRAFFIC (no a ICMP)
+    const networkBlock = device.is_wireless_link
+        ? renderApClientsBlock(device)
+        : renderTrafficBlock(device, chartMode);
+
+    return `
+        <div class="device-card-wrap" data-device-id="${device.id}">
+            <div class="card device-live-card ${cardCls}">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1" style="min-width: 0;">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="${statusClass}"></span>
+                            <a href="${URLS.deviceDetail}${device.id}/"
+                               class="fw-bold text-decoration-none text-truncate">
+                                ${escapeHtmlJs(device.name)}
+                            </a>
+                        </div>
+                        <small class="text-muted d-block text-truncate">
+                            <code>${escapeHtmlJs(device.ip)}</code>
+                            · ${escapeHtmlJs(device.vendor) || 'Genérico'}
+                            ${device.model ? '· ' + escapeHtmlJs(device.model) : ''}
+                            ${device.location ? '· ' + escapeHtmlJs(device.location) : ''}
+                        </small>
+                        <small class="${seenCls}" style="font-size: 0.72rem;">
+                            <i class="bi bi-clock-history"></i> ${seenText}
+                        </small>
+                    </div>
+                    <div class="ms-2 text-end">
+                        ${roleBadge(device.role)}
+                        ${wirelessBadge}
+                    </div>
+                </div>
+                <div class="card-body p-2">
+                    ${wirelessBlock}
+                    ${radioBlock}
+                    ${icmpBlock}
+                    ${networkBlock}
+                    ${healthBlock}
+                    ${tcpBlock}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// FILTROS Y ORDENAMIENTO
+// ============================================================
+function applyFilters(devices) {
+    const q = state.filters.search.toLowerCase().trim();
+    const role = state.filters.role;
+    const statusFilter = state.filters.status;
+
+    return devices.filter(d => {
+        if (q) {
+            const haystack = [d.name, d.ip, d.vendor, d.model, d.location]
+                .filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(q)) return false;
+        }
+        if (role && d.role !== role) return false;
+        if (statusFilter && deviceStatus(d) !== statusFilter) return false;
+        return true;
+    });
+}
+
+function applySort(devices) {
+    const roleOrder = { core: 4, distribution: 3, access: 2, cpe: 1 };
+    const statusOrder = { alive: 3, down: 2, unknown: 1 };
+    const copy = [...devices];
+
+    switch (state.sortBy) {
+        case 'name':
+            copy.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            break;
+        case 'status':
+            copy.sort((a, b) => {
+                const sa = statusOrder[deviceStatus(a)] || 0;
+                const sb = statusOrder[deviceStatus(b)] || 0;
+                if (sa !== sb) return sb - sa;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            break;
+        case 'signal':
+            copy.sort((a, b) => {
+                const sa = a.radio?.signal ?? -999;
+                const sb = b.radio?.signal ?? -999;
+                return sb - sa;
+            });
+            break;
+        case 'role':
+        default:
+            copy.sort((a, b) => {
+                const ra = roleOrder[a.role] || 0;
+                const rb = roleOrder[b.role] || 0;
+                if (ra !== rb) return rb - ra;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+            break;
+    }
+    return copy;
+}
+
+// ============================================================
+// RENDER GLOBAL
+// ============================================================
+function updateStats(devices) {
+    let alive = 0, down = 0, wireless = 0, stale = 0;
+    devices.forEach(d => {
+        const s = deviceStatus(d);
+        if (s === 'alive') alive++;
+        else if (s === 'down') down++;
+        if (d.is_wireless_link) wireless++;
+        const seen = lastSeen(d);
+        if (!seen || (Date.now() - seen.getTime()) / 1000 > 300) stale++;
+    });
+    document.getElementById('stat-total-value').textContent = devices.length;
+    document.getElementById('stat-alive-value').textContent = alive;
+    document.getElementById('stat-down-value').textContent = down;
+    document.getElementById('stat-wireless-value').textContent = wireless;
+    document.getElementById('stat-stale-value').textContent = stale;
+}
+
+function applyFiltersAndRender() {
+    const container = document.getElementById('devices-container');
+    const emptyState = document.getElementById('empty-state');
+
+    updateStats(state.allDevices);
+
+    const filtered = applySort(applyFilters(state.allDevices));
+
+    // Contador de visibles
+    const vc = document.getElementById('visible-count');
+    if (vc) {
+        const total = state.allDevices.length;
+        vc.textContent = filtered.length === total
+            ? `${total} equipo${total === 1 ? '' : 's'}`
+            : `${filtered.length} de ${total} visibles`;
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+        emptyState.style.display = 'block';
+        const hasFilters = state.filters.search || state.filters.role || state.filters.status;
+        document.getElementById('empty-state-msg').textContent = hasFilters
+            ? 'No hay equipos que coincidan con los filtros.'
+            : 'No hay equipos activos para monitorear.';
+        return;
+    }
+
+    container.style.display = '';
+    emptyState.style.display = 'none';
+    container.innerHTML = filtered.map(renderDeviceCard).join('');
+
+    // Cargar sparklines (solo en modo gráfico)
+    if (state.viewMode === 'chart') {
+        // Limpiar observer anterior, crear nuevo
+        observeSparklines();
+    }
+}
+
+// ============================================================
+// FETCH
+// ============================================================
+function showRefreshProgress() {
+    const el = document.getElementById('refresh-progress');
+    if (el) el.classList.add('active');
+}
+function hideRefreshProgress() {
+    const el = document.getElementById('refresh-progress');
+    if (el) el.classList.remove('active');
+}
+function showRefreshError(msg) {
+    const box = document.getElementById('refresh-error');
+    const text = document.getElementById('refresh-error-msg');
+    if (!box || !text) return;
+    text.textContent = msg;
+    box.style.display = 'block';
+}
+function hideRefreshError() {
+    const box = document.getElementById('refresh-error');
+    if (box) box.style.display = 'none';
+}
+
+async function loadLiveData(manual = false) {
+    if (manual) state.countdown = state.refreshIntervalSec;
+
+    const btn = document.getElementById('btn-reload');
+    if (manual && btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    showRefreshProgress();
+
+    try {
+        const response = await fetch(URLS.devicesLive, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+
+        state.allDevices = data.devices || [];
+        state.lastFetchOk = true;
+        hideRefreshError();
+
+        const ts = new Date(data.timestamp);
+        document.getElementById('last-update').textContent = ts.toLocaleTimeString('es-VE');
+
+        applyFiltersAndRender();
+
+    } catch (e) {
+        console.error('Error cargando datos:', e);
+        state.lastFetchOk = false;
+        showRefreshError(`No se pudieron cargar los datos: ${e.message}`);
+        document.getElementById('last-update').textContent = 'error';
+
+        if (state.allDevices.length === 0) {
+            document.getElementById('devices-container').innerHTML = `
+                <div class="text-center text-muted py-5" style="grid-column: 1 / -1;">
+                    <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <p class="mt-3">No se pudieron cargar los datos.</p>
+                    <button class="btn btn-sm btn-outline-primary" onclick="loadLiveData(true)">
+                        <i class="bi bi-arrow-clockwise"></i> Reintentar
+                    </button>
+                </div>
+            `;
+        }
+    } finally {
+        hideRefreshProgress();
+        if (manual && btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+        }
+    }
+}
+
+// ============================================================
+// AUTO-REFRESH
+// ============================================================
+function updateCountdownDisplay() {
+    const el = document.getElementById('countdown-display');
+    if (!el) return;
+    if (!state.autoRefresh) {
+        el.textContent = 'Auto: OFF';
+        el.className = 'text-muted';
+    } else {
+        el.textContent = `${state.countdown}s`;
+        el.className = 'text-success';
+    }
+}
+
+function startAutoRefresh() {
+    stopAutoRefresh();
+    state.autoRefresh = true;
+    state.countdown = state.refreshIntervalSec;
+    updateCountdownDisplay();
+    state.refreshTimer = setInterval(() => {
+        state.countdown--;
+        updateCountdownDisplay();
+        if (state.countdown <= 0) {
+            state.countdown = state.refreshIntervalSec;
+            loadLiveData(false);
+        }
+    }, 1000);
+}
+
+function stopAutoRefresh() {
+    if (state.refreshTimer) {
+        clearInterval(state.refreshTimer);
+        state.refreshTimer = null;
+    }
+    state.autoRefresh = false;
+    state.countdown = state.refreshIntervalSec;
+    updateCountdownDisplay();
+}
+
+// ============================================================
+// SPARKLINE REFRESH CYCLE (30s)
+// ============================================================
+setInterval(() => {
+    if (state.viewMode !== 'chart') return;
+    // Invalidar caché y recargar slots visibles
+    state.sparklineCache.clear();
+    document.querySelectorAll('.sparkline-slot').forEach(slot => {
+        const rect = slot.getBoundingClientRect();
+        if (rect.top < window.innerHeight && rect.bottom > 0) {
+            slot.dataset.loaded = '';
+            loadSparklineForSlot(slot);
+        }
+    });
+}, SPARKLINE_REFRESH_MS);
+
+// ============================================================
+// VIEW MODE + SIZE SLIDER
+// ============================================================
+function setViewMode(mode) {
+    if (mode !== 'static' && mode !== 'chart') return;
+    state.viewMode = mode;
+
+    // Actualizar radio
+    const radio = document.getElementById(mode === 'chart' ? 'mode-chart' : 'mode-static');
+    if (radio) radio.checked = true;
+
+    // Persistir
+    try { localStorage.setItem('cf-live-view-mode', mode); } catch (e) {}
+
+    // Re-render (para que los bloques cambien de estático a chart y viceversa)
+    applyFiltersAndRender();
+}
+
+function setCardMinWidth(px) {
+    px = Math.max(300, Math.min(700, px));
+    state.cardMinWidth = px;
+    document.documentElement.style.setProperty('--card-min-width', px + 'px');
+
+    const label = document.getElementById('size-label');
+    if (label) label.textContent = px + 'px';
+
+    const slider = document.getElementById('card-size-slider');
+    if (slider) slider.value = px;
+
+    try { localStorage.setItem('cf-live-card-size', String(px)); } catch (e) {}
+}
+
+function resetCardSize() {
+    setCardMinWidth(400);
+}
+
+// ============================================================
+// FILTROS
+// ============================================================
+function resetFilters() {
+    document.getElementById('live-search').value = '';
+    document.getElementById('filter-role').value = '';
+    document.getElementById('filter-status').value = '';
+    document.getElementById('sort-by').value = 'role';
+    document.getElementById('clear-search').style.display = 'none';
+
+    state.filters.search = '';
+    state.filters.role = '';
+    state.filters.status = '';
+    state.sortBy = 'role';
+
+    applyFiltersAndRender();
+}
+
+// ============================================================
+// DISCOVERY GLOBAL
+// ============================================================
+function runDiscoveryAll() {
+    new bootstrap.Modal(document.getElementById('discoveryModal')).show();
+}
+
+async function confirmDiscovery() {
+    const modalEl = document.getElementById('discoveryModal');
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    modal.hide();
+
+    const btn = document.getElementById('btn-discovery-all');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const csrfToken = getCookie('csrftoken');
+        const response = await fetch(URLS.discoverAll, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        let summary = `Discovery completado: ${data.success_count}/${data.total} equipos OK.\n\n`;
+        data.results.forEach(r => {
+            if (r.success) {
+                summary += `✅ ${r.device}: ${r.found} interfaces ` +
+                           `(+${r.created} nuevas, ${r.updated} act., -${r.deleted} elim.) ` +
+                           `[${r.duration_ms}ms]\n`;
+            } else {
+                summary += `❌ ${r.device}: ${r.error}\n`;
+            }
+            if (r.ap_clients) {
+                if (r.ap_clients.success) {
+                    summary += `   📡 AP: ${r.ap_clients.clients_found} clientes ` +
+                               `(+${r.ap_clients.added} nuevos, ${r.ap_clients.updated} act., ` +
+                               `${r.ap_clients.total} totales)\n`;
+                } else {
+                    summary += `   ⚠️ AP: ${r.ap_clients.error}\n`;
+                }
+            }
+        });
+        alert(summary);
+        loadLiveData(true);
+    } catch (e) {
+        console.error('Error en Discovery:', e);
+        alert(`Error ejecutando Discovery: ${e.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Discovery';
+    }
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+
+    // ---- Restaurar preferencias ----
+    try {
+        const savedMode = localStorage.getItem('cf-live-view-mode');
+        if (savedMode === 'chart' || savedMode === 'static') {
+            setViewMode(savedMode);
+        } else {
+            setViewMode('static');
+        }
+    } catch (e) { setViewMode('static'); }
+
+    try {
+        const savedSize = parseInt(localStorage.getItem('cf-live-card-size'), 10);
+        if (!isNaN(savedSize) && savedSize >= 300 && savedSize <= 700) {
+            setCardMinWidth(savedSize);
+        } else {
+            setCardMinWidth(400);
+        }
+    } catch (e) { setCardMinWidth(400); }
+
+    // ---- Toggle view mode ----
+    document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (radio.checked) setViewMode(radio.value);
+        });
+    });
+
+    // ---- Slider de tamaño ----
+    const slider = document.getElementById('card-size-slider');
+    if (slider) {
+        slider.addEventListener('input', () => {
+            setCardMinWidth(parseInt(slider.value, 10));
+        });
+    }
+
+    // ---- Búsqueda ----
+    const searchInput = document.getElementById('live-search');
+    const clearBtn = document.getElementById('clear-search');
+    searchInput.addEventListener('input', () => {
+        state.filters.search = searchInput.value;
+        clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        applyFiltersAndRender();
+    });
+    clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        state.filters.search = '';
+        clearBtn.style.display = 'none';
+        searchInput.focus();
+        applyFiltersAndRender();
+    });
+
+    // ---- Filtros y orden ----
+    document.getElementById('filter-role').addEventListener('change', (e) => {
+        state.filters.role = e.target.value;
+        applyFiltersAndRender();
+    });
+    document.getElementById('filter-status').addEventListener('change', (e) => {
+        state.filters.status = e.target.value;
+        applyFiltersAndRender();
+    });
+    document.getElementById('sort-by').addEventListener('change', (e) => {
+        state.sortBy = e.target.value;
+        applyFiltersAndRender();
+    });
+
+    // ---- Auto refresh ----
+    const autoToggle = document.getElementById('auto-refresh');
+    autoToggle.addEventListener('change', () => {
+        if (autoToggle.checked) {
+            startAutoRefresh();
+            loadLiveData(true);
+        } else {
+            stopAutoRefresh();
+        }
+    });
+
+    // ---- Pausar cuando la pestaña no está visible ----
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (state.autoRefresh) stopAutoRefresh();
+        } else {
+            if (autoToggle.checked) {
+                startAutoRefresh();
+                loadLiveData(true);
+            }
+        }
+    });
+
+    // ---- Atajos ----
+    document.addEventListener('keydown', (e) => {
+        const tag = (e.target.tagName || '').toUpperCase();
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+        if (e.key === 'r' || e.key === 'R') {
+            e.preventDefault();
+            loadLiveData(true);
+        } else if (e.key === '/') {
+            e.preventDefault();
+            searchInput.focus();
+        }
+    });
+
+    // ---- Carga inicial ----
+    loadLiveData(false);
+    if (autoToggle.checked) startAutoRefresh();
+});
+</script>
+{% endblock %}

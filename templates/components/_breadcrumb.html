@@ -1,0 +1,25 @@
+{# templates/components/_breadcrumb.html #}
+{% if items %}
+<nav aria-label="breadcrumb" class="cf-breadcrumb mb-3">
+    <ol class="breadcrumb mb-0 small">
+        <li class="breadcrumb-item">
+            <a href="{% url 'core:dashboard' %}" class="text-decoration-none">
+                <i class="bi bi-house-door"></i> Inicio
+            </a>
+        </li>
+        {% for item in items %}
+            {% if item.url and not forloop.last %}
+                <li class="breadcrumb-item">
+                    <a href="{{ item.url }}" class="text-decoration-none">
+                        {{ item.label }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{ item.label }}
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ol>
+</nav>
+{% endif %}

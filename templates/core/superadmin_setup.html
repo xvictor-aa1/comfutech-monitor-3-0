@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Configuración inicial - Comfutech{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-7 col-lg-6">
+        <div class="card shadow border-primary">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-shield-fill-check"></i>
+                    Configuración inicial
+                </h4>
+            </div>
+            <div class="card-body p-4">
+
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <strong>Bienvenido al sistema.</strong>
+                    No existe ningún Superadministrador. Crea la cuenta
+                    principal para comenzar a usar el sistema.
+                    Esta cuenta tendrá control total y no podrá ser eliminada
+                    desde la interfaz.
+                </div>
+
+                {% if messages %}
+                {% for msg in messages %}
+                <div class="alert alert-{{ msg.tags }} py-2 small">{{ msg }}</div>
+                {% endfor %}
+                {% endif %}
+
+                <form method="post" novalidate id="setup-form">
+                    {% csrf_token %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_username" class="form-label">
+                                Usuario <span class="text-danger">*</span>
+                            </label>
+                            <input type="text" name="username" id="id_username"
+                                   class="form-control" required
+                                   minlength="3" maxlength="10"
+                                   autofocus autocomplete="username">
+                            <div class="form-text">Solo letras, números, puntos, guiones.</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_email" class="form-label">
+                                Email <span class="text-danger">*</span>
+                            </label>
+                            <input type="email" name="email" id="id_email"
+                                   class="form-control" required
+                                   autocomplete="email">
+                            <div class="form-text">Necesario para recuperar contraseña.</div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="id_first_name" class="form-label">Nombre</label>
+                            <input type="text" name="first_name" id="id_first_name"
+                                   class="form-control" maxlength="20">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="id_last_name" class="form-label">Apellido</label>
+                            <input type="text" name="last_name" id="id_last_name"
+                                   class="form-control" maxlength="20">
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="mb-3">
+                        <label for="id_password1" class="form-label">
+                            Contraseña <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" name="password1" id="id_password1"
+                                   class="form-control" required minlength="8"
+                                   autocomplete="new-password">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="togglePassword('id_password1', this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+
+                        <div class="mt-2" id="strength-container" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <small class="text-muted">Seguridad:</small>
+                                <small id="strength-label" class="fw-bold"></small>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div id="strength-bar" class="progress-bar"
+                                     role="progressbar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-text">Mínimo 8 caracteres.</div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="id_password2" class="form-label">
+                            Repetir contraseña <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" name="password2" id="id_password2"
+                                   class="form-control" required minlength="8"
+                                   autocomplete="new-password">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="togglePassword('id_password2', this)">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text" id="match-feedback"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-person-plus-fill"></i>
+                        Crear Superadministrador
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePassword(id, btn) {
+    const input = document.getElementById(id);
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+
+const p1 = document.getElementById('id_password1');
+const p2 = document.getElementById('id_password2');
+const container = document.getElementById('strength-container');
+const bar = document.getElementById('strength-bar');
+const label = document.getElementById('strength-label');
+const feedback = document.getElementById('match-feedback');
+
+p1.addEventListener('input', () => {
+    const pw = p1.value;
+    if (!pw) { container.style.display = 'none'; return; }
+    container.style.display = 'block';
+
+    let score = 0;
+    if (pw.length >= 8) score += 1;
+    if (/[a-z]/.test(pw)) score += 1;
+    if (/[A-Z]/.test(pw)) score += 1;
+    if (/\d/.test(pw)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pw)) score += 1;
+    if (pw.length >= 12) score += 1;
+    score = Math.min(score, 5);
+
+    let color, width, text;
+    if (pw.length < 8) { color = 'bg-danger'; width = 20; text = 'Muy corta'; }
+    else if (score <= 2) { color = 'bg-danger'; width = 30; text = 'Débil'; }
+    else if (score === 3) { color = 'bg-warning'; width = 55; text = 'Aceptable'; }
+    else if (score === 4) { color = 'bg-info'; width = 75; text = 'Buena'; }
+    else { color = 'bg-success'; width = 100; text = 'Excelente'; }
+
+    bar.className = 'progress-bar ' + color;
+    bar.style.width = width + '%';
+    label.textContent = text;
+    label.className = 'fw-bold text-' +
+        (color === 'bg-danger' ? 'danger'
+         : color === 'bg-warning' ? 'warning'
+         : color === 'bg-info' ? 'info' : 'success');
+});
+
+function checkMatch() {
+    if (!p2.value) { feedback.textContent = ''; return; }
+    if (p1.value === p2.value) {
+        feedback.innerHTML =
+            '<i class="bi bi-check-circle-fill text-success"></i> Las contraseñas coinciden.';
+        feedback.className = 'form-text text-success';
+    } else {
+        feedback.innerHTML =
+            '<i class="bi bi-x-circle-fill text-danger"></i> Las contraseñas no coinciden.';
+        feedback.className = 'form-text text-danger';
+    }
+}
+p1.addEventListener('input', checkMatch);
+p2.addEventListener('input', checkMatch);
+</script>
+{% endblock %}

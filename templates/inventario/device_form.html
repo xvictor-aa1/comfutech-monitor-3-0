@@ -1,0 +1,1310 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">{{ title }}</h2>
+        <p class="text-muted mb-0 small">
+            {% if is_edit %}
+                Modifica la configuración del equipo.
+            {% else %}
+                Registra un nuevo equipo para monitorear sus métricas vía SNMP.
+            {% endif %}
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% if is_edit %}{% url 'inventario:device_detail' device.id %}{% else %}{% url 'inventario:device_list' %}{% endif %}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        {% if is_edit %}
+        <a href="{% url 'inventario:device_export' device.id %}"
+           class="btn btn-outline-success"
+           title="Descargar este equipo como JSON">
+            <i class="bi bi-download"></i> Exportar
+        </a>
+        {% endif %}
+        <button type="button" class="btn btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#importDeviceModal"
+                title="Importar configuración de un equipo desde JSON">
+            <i class="bi bi-upload"></i> Importar
+        </button>
+    </div>
+</div>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger">
+    {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<form method="post" id="device-form" novalidate>
+    {% csrf_token %}
+
+    <div class="row g-4">
+
+        <!-- ============================================================ -->
+        <!-- IDENTIFICACIÓN                                                -->
+        <!-- ============================================================ -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-tag text-primary"></i> Identificación
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <!-- Nombre -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Nombre <span class="text-danger">*</span>
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Un nombre descriptivo. Ej: <em>RB Güigüe</em>,
+                            <em>AP-Norte</em>, <em>LiteAP-GPS-01</em>.
+                        </div>
+                    </div>
+
+                    <!-- IP -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Dirección IP <span class="text-danger">*</span>
+                        </label>
+                        {{ form.ip }}
+                        {% if form.ip.errors %}
+                        <div class="text-danger small mt-1">{{ form.ip.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Dirección IPv4 o IPv6 única en el sistema.
+                        </div>
+                    </div>
+
+                    <!-- Tipo y Rol -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Tipo</label>
+                            {{ form.device_type }}
+                            {% if form.device_type.errors %}
+                            <div class="text-danger small mt-1">{{ form.device_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Rol</label>
+                            {{ form.device_role }}
+                            {% if form.device_role.errors %}
+                            <div class="text-danger small mt-1">{{ form.device_role.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Panel de ayuda: TIPO (accordion) -->
+                    <div class="accordion accordion-flush mb-2" id="help-tipo">
+                        <div class="accordion-item border rounded">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2" type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#help-tipo-body">
+                                    <i class="bi bi-info-circle text-primary me-2"></i>
+                                    <small>¿Qué significa cada Tipo?</small>
+                                </button>
+                            </h2>
+                            <div id="help-tipo-body" class="accordion-collapse collapse"
+                                 data-bs-parent="#help-tipo">
+                                <div class="accordion-body py-2 small">
+                                    <ul class="mb-0 ps-3">
+                                        <li class="mb-1">
+                                            <strong>Router:</strong> Dispositivo que
+                                            interconecta redes y decide la mejor ruta.
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>Switch:</strong> Conmutador de capa 2
+                                            que conecta dispositivos en una misma red.
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>CPE:</strong> Equipo en casa del
+                                            cliente (antena, router inalámbrico).
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>Firewall:</strong> Dispositivo de
+                                            seguridad que filtra el tráfico.
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>Access Point:</strong> Punto de
+                                            acceso WiFi/radio para clientes finales.
+                                        </li>
+                                        <li>
+                                            <strong>Otro:</strong> Cualquier otro
+                                            dispositivo no clasificado.
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de ayuda: ROL (accordion) -->
+                    <div class="accordion accordion-flush mb-3" id="help-rol">
+                        <div class="accordion-item border rounded">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed py-2" type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#help-rol-body">
+                                    <i class="bi bi-info-circle text-info me-2"></i>
+                                    <small>¿Qué significa cada Rol?</small>
+                                </button>
+                            </h2>
+                            <div id="help-rol-body" class="accordion-collapse collapse"
+                                 data-bs-parent="#help-rol">
+                                <div class="accordion-body py-2 small">
+                                    <ul class="mb-0 ps-3">
+                                        <li class="mb-1">
+                                            <strong>Core:</strong> Nodo principal.
+                                            Router que conecta con el ISP.
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>Distribución:</strong> Nodo
+                                            intermedio que redistribuye el tráfico.
+                                        </li>
+                                        <li class="mb-1">
+                                            <strong>Acceso:</strong> Equipo de acceso
+                                            a usuarios finales (switches, APs).
+                                        </li>
+                                        <li>
+                                            <strong>CPE:</strong> Equipo en casa del
+                                            cliente (solo disponibilidad).
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fabricante y Modelo -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Fabricante <span class="text-danger">*</span>
+                            </label>
+                            {{ form.vendor }}
+                            {% if form.vendor.errors %}
+                            <div class="text-danger small mt-1">{{ form.vendor.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Solo fabricantes con modelos activos.
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                Modelo <span class="text-danger">*</span>
+                            </label>
+                            {{ form.device_model }}
+                            {% if form.device_model.errors %}
+                            <div class="text-danger small mt-1">{{ form.device_model.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text" id="model-help">
+                                Selecciona primero un fabricante.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Ubicación -->
+                    <div class="mb-3">
+                        <label class="form-label">Ubicación</label>
+                        {{ form.location }}
+                        {% if form.location.errors %}
+                        <div class="text-danger small mt-1">{{ form.location.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Ubicación física. Ej: <em>Güigüe</em>, <em>Nodo Norte</em>.
+                        </div>
+                    </div>
+
+                    <!-- ==================================================== -->
+                    <!-- Checkboxes de monitoreo                             -->
+                    <!-- ==================================================== -->
+                    <div class="border-top pt-3 mt-2">
+                        <h6 class="text-muted mb-2" style="font-size: 0.8rem;">
+                            <i class="bi bi-toggles"></i> Control manual de monitoreo
+                        </h6>
+
+                        <!-- Activo -->
+                        <div class="form-check form-switch mb-2">
+                            {{ form.active }}
+                            <label class="form-check-label" for="{{ form.active.id_for_label }}">
+                                <strong>Equipo activo</strong>
+                                <span class="text-muted small d-block">
+                                    Si está desactivado, no se incluye en el polling.
+                                </span>
+                            </label>
+                        </div>
+
+                        <!-- Monitor Interfaces -->
+                        <div class="form-check form-switch mb-1" id="monitor-interfaces-wrapper">
+                            {{ form.monitor_interfaces }}
+                            <label class="form-check-label"
+                                   for="{{ form.monitor_interfaces.id_for_label }}">
+                                <strong>Permitir monitoreo de Interfaces</strong>
+                                <span class="text-muted small d-block" id="monitor-interfaces-help">
+                                    Habilita el bloque de <em>SNMP Tráfico</em> en el
+                                    monitor y el botón <em>Interfaces</em> en la
+                                    lista de equipos. Solo si el modelo soporta
+                                    interfaces SNMP.
+                                </span>
+                            </label>
+                        </div>
+                        <div id="monitor-interfaces-warning"
+                             class="alert alert-warning small py-2 mt-2 mb-2"
+                             style="display:none;">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            El modelo seleccionado no soporta interfaces SNMP.
+                            Campo deshabilitado automáticamente.
+                        </div>
+
+                        <!-- Monitor Health -->
+                        <div class="form-check form-switch mb-1" id="monitor-health-wrapper">
+                            {{ form.monitor_health }}
+                            <label class="form-check-label"
+                                   for="{{ form.monitor_health.id_for_label }}">
+                                <strong>Permitir monitoreo de CPU / Mem / Temp</strong>
+                                <span class="text-muted small d-block" id="monitor-health-help">
+                                    Habilita el bloque de <em>Core Health</em> en el
+                                    monitor. Solo si el modelo tiene OIDs de chasis
+                                    (CPU, memoria, temperatura).
+                                </span>
+                            </label>
+                        </div>
+                        <div id="monitor-health-warning"
+                             class="alert alert-warning small py-2 mt-2 mb-0"
+                             style="display:none;">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            El modelo seleccionado no tiene OIDs de chasis.
+                            Campo deshabilitado automáticamente.
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- CONFIGURACIÓN SNMP                                            -->
+        <!-- ============================================================ -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-shield-lock text-danger"></i> Configuración SNMP
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <!-- Versión SNMP -->
+                    <div class="mb-3">
+                        <label class="form-label">Versión SNMP</label>
+                        {{ form.snmp_version }}
+                        {% if form.snmp_version.errors %}
+                        <div class="text-danger small mt-1">{{ form.snmp_version.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <strong>v1/v2c:</strong> autenticación por community.
+                            <strong>v3:</strong> autenticación y cifrado.
+                        </div>
+                    </div>
+
+                    <!-- Bloque v1/v2c -->
+                    <div id="snmp-community-block">
+                        <div class="mb-3">
+                            <label class="form-label">Community</label>
+                            {{ form.snmp_community }}
+                            {% if form.snmp_community.errors %}
+                            <div class="text-danger small mt-1">{{ form.snmp_community.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Contraseña SNMP. Ej: <code>public</code>,
+                                <code>comfutech_monitor</code>.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bloque v3 -->
+                    <div id="snmp-v3-block" style="display:none;">
+                        <div class="alert alert-info small py-2 mb-3">
+                            <i class="bi bi-info-circle"></i>
+                            SNMPv3 requiere credenciales de autenticación.
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <label class="form-label">
+                                    Usuario SNMPv3 <span class="text-danger">*</span>
+                                </label>
+                                {{ form.snmp_user }}
+                                {% if form.snmp_user.errors %}
+                                <div class="text-danger small mt-1">{{ form.snmp_user.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">
+                                    Auth Key <span class="text-danger">*</span>
+                                </label>
+                                {{ form.snmp_auth }}
+                                {% if form.snmp_auth.errors %}
+                                <div class="text-danger small mt-1">{{ form.snmp_auth.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Priv Key</label>
+                                {{ form.snmp_priv }}
+                                {% if form.snmp_priv.errors %}
+                                <div class="text-danger small mt-1">{{ form.snmp_priv.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <!-- Puertos TCP -->
+                    <div class="mb-3">
+                        <label class="form-label">Puertos TCP a chequear</label>
+                        {{ form.tcp_ports }}
+                        {% if form.tcp_ports.errors %}
+                        <div class="text-danger small mt-1">{{ form.tcp_ports.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Separados por coma. Ej: <code>161,22,80</code>.
+                        </div>
+                    </div>
+
+                    <!-- Panel dinámico de recomendaciones -->
+                    <div class="alert alert-light border small mb-0">
+                        <strong><i class="bi bi-activity"></i> Recomendaciones por rol</strong>
+                        <table class="table table-sm table-borderless mb-0 mt-1">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th class="text-center">Core</th>
+                                    <th class="text-center">Dist.</th>
+                                    <th class="text-center">Acceso</th>
+                                    <th class="text-center">CPE</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recommendations-tbody">
+                                <!-- Contenido dinámico por JS -->
+                            </tbody>
+                        </table>
+                        <div class="text-muted mt-2" style="font-size: 0.72rem;">
+                            <i class="bi bi-info-circle"></i>
+                            ✓ = recomendado &nbsp;|&nbsp; — = opcional / no aplica.
+                            Las capacidades reales dependen del modelo y de los
+                            checkboxes de control manual.
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de acciones -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <a href="{% if is_edit %}{% url 'inventario:device_detail' device.id %}{% else %}{% url 'inventario:device_list' %}{% endif %}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Cancelar
+        </a>
+        <div>
+            {% if is_edit %}
+            <a href="{% url 'inventario:device_delete' device.id %}"
+               class="btn btn-outline-danger me-2">
+                <i class="bi bi-trash"></i> Eliminar
+            </a>
+            {% endif %}
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="bi bi-save"></i>
+                {% if is_edit %}Guardar cambios{% else %}Crear equipo{% endif %}
+            </button>
+        </div>
+    </div>
+
+</form>
+
+<!-- ============================================================ -->
+<!-- MODAL: Importar equipo desde JSON                            -->
+<!-- ============================================================ -->
+<div class="modal fade" id="importDeviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="bi bi-upload"></i> Importar configuración de un equipo
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Acepta <strong>UN SOLO equipo</strong> en formato JSON.
+                    Los valores cargados reemplazarán los campos del formulario.
+                    <br><br>
+                    El <strong>modelo del JSON</strong> debe existir en la base
+                    de datos (mismo fabricante y nombre). Si no existe, primero
+                    créalo en la
+                    <a href="{% url 'inventario:device_model_list' %}" target="_blank">
+                        lista de modelos <i class="bi bi-box-arrow-up-right"></i>
+                    </a>.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Archivo JSON</label>
+                    <input type="file" id="import-device-file"
+                           class="form-control form-control-sm"
+                           accept=".json,application/json">
+                </div>
+                <div id="import-device-error" class="alert alert-danger small py-2 mb-0"
+                     style="display:none;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm"
+                        id="import-device-btn" onclick="startDeviceImport()">
+                    <i class="bi bi-upload"></i> Cargar en el formulario
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Conflicto de equipo                                   -->
+<!-- ============================================================ -->
+<div class="modal fade" id="deviceConflictModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-warning bg-opacity-10">
+                <h6 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Conflictos detectados
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small mb-2" id="device-conflict-message"></p>
+                <div id="device-conflict-list" class="small"></div>
+                <p class="small text-muted mt-2 mb-0">
+                    Puedes cargar los datos igualmente. Si el conflicto persiste
+                    al guardar, Django mostrará el error de validación y podrás
+                    corregirlo manualmente.
+                </p>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-sm"
+                        onclick="populateDeviceFormAnyway()">
+                    <i class="bi bi-arrow-repeat"></i> Cargar igualmente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Formulario de Equipo — Guía",
+    sections: [
+        {
+            heading: "¿Qué es este formulario?",
+            body: `
+                Permite crear o editar un equipo de red monitoreado.
+                Cada equipo debe estar asociado a un <strong>modelo</strong>
+                registrado previamente en
+                <a href="/equipos/modelos/">Modelos de equipos</a>, porque
+                el modelo define qué OIDs SNMP se van a consultar
+                (CPU, memoria, interfaces, radiofrecuencia, etc.).
+            `
+        },
+        {
+            heading: "Identificación",
+            body: `Campos básicos del equipo:`,
+            list: [
+                "<strong>Nombre:</strong> identificador descriptivo único. Se recomienda nomenclatura consistente (ej. <code>RB-Güigüe-01</code>, <code>LiteAP-Norte</code>).",
+                "<strong>Dirección IP:</strong> IP única del equipo en la red. Debe ser alcanzable vía SNMP desde el servidor.",
+                "<strong>Tipo:</strong> clasificación funcional (Router, Switch, CPE, Firewall, AP, Otro).",
+                "<strong>Rol:</strong> determina las métricas recomendadas y la prioridad en el dashboard.",
+                "<strong>Ubicación:</strong> ubicación física (ej. Güigüe, Nodo Norte)."
+            ]
+        },
+        {
+            heading: "Tipo de equipo",
+            body: `
+                El <strong>tipo</strong> es una clasificación funcional del
+                dispositivo:
+                <br>
+                • <strong>Router:</strong> interconecta redes y decide rutas.
+                <br>
+                • <strong>Switch:</strong> conecta dispositivos en una misma red (capa 2).
+                <br>
+                • <strong>CPE:</strong> equipo en casa del cliente.
+                <br>
+                • <strong>Firewall:</strong> filtra tráfico con reglas de seguridad.
+                <br>
+                • <strong>Access Point:</strong> punto de acceso WiFi/radio.
+                <br>
+                • <strong>Otro:</strong> cualquier otro dispositivo no clasificado.
+            `
+        },
+        {
+            heading: "Rol del equipo",
+            body: `
+                El <strong>rol</strong> determina qué métricas son
+                prioritarias y cómo se comporta el sistema:
+                <br>
+                • <strong>Core:</strong> nodo principal (router del ISP).
+                <br>
+                • <strong>Distribución:</strong> nodo intermedio.
+                <br>
+                • <strong>Acceso:</strong> equipos de acceso a usuarios finales.
+                <br>
+                • <strong>CPE:</strong> equipos en casa del cliente.
+                <br><br>
+                Los roles Core y Distribución aparecen primero en el
+                dashboard por ser los más críticos.
+            `
+        },
+        {
+            heading: "Fabricante y modelo",
+            body: `
+                El <strong>fabricante</strong> solo muestra marcas que
+                tienen al menos un modelo activo registrado. Esto fuerza
+                a crear el modelo antes de crear el equipo.
+                <br><br>
+                El <strong>modelo</strong> se carga dinámicamente al
+                seleccionar un fabricante. Define qué OIDs se consultan
+                y qué capacidades tiene el equipo (interfaces, health,
+                radiofrecuencia).
+            `
+        },
+        {
+            heading: "Configuración SNMP",
+            body: `
+                Hay dos modos de autenticación:
+                <br><br>
+                <strong>SNMPv1 / SNMPv2c:</strong>
+                <br>
+                • Solo requiere <strong>Community</strong> (cadena de texto).
+                <br>
+                • Ej: <code>public</code>, <code>comfutech_monitor</code>.
+                <br>
+                • Menos seguro, más simple.
+                <br><br>
+                <strong>SNMPv3:</strong>
+                <br>
+                • Requiere <strong>Usuario</strong> + <strong>Auth Key</strong> (obligatorios).
+                <br>
+                • <strong>Priv Key</strong> opcional (si el equipo tiene cifrado).
+                <br>
+                • Recomendado para redes productivas.
+                <br><br>
+                <strong>Puertos TCP:</strong> separados por coma (ej.
+                <code>161,22,80</code>). Se hará un check TCP a cada puerto
+                en cada ciclo ICMP.
+            `
+        },
+        {
+            heading: "Control manual de monitoreo",
+            body: `
+                Estos checkboxes permiten <strong>override por equipo</strong>
+                las capacidades definidas en el modelo:
+                <br><br>
+                <strong>Equipo activo:</strong>
+                si está desactivado, el equipo no se incluye en el polling
+                ni en el monitoreo en vivo (pero se conserva su configuración).
+                <br><br>
+                <strong>Permitir monitoreo de Interfaces:</strong>
+                habilita el bloque "SNMP Tráfico" en el monitor y el botón
+                "Interfaces" en la lista. Solo si el modelo soporta IF-MIB.
+                <br><br>
+                <strong>Permitir monitoreo de CPU/Mem/Temp:</strong>
+                habilita el bloque "Core Health" en el monitor. Solo si el
+                modelo tiene OIDs de chasis (propias o del fabricante).
+                <br><br>
+                Los checkboxes se <strong>deshabilitan automáticamente</strong>
+                si el modelo seleccionado no soporta esa capacidad.
+            `
+        },
+        {
+            heading: "Importar / Exportar configuración",
+            body: `
+                El botón <strong>Exportar</strong> (solo en edición) descarga
+                la configuración del equipo en formato JSON. Útil para
+                respaldar o migrar configuraciones.
+                <br><br>
+                El botón <strong>Importar</strong> carga un JSON y rellena
+                el formulario con los datos. Puedes revisar y ajustar antes
+                de guardar.
+                <br><br>
+                <strong>Importante:</strong> el modelo referenciado en el
+                JSON debe existir (mismo fabricante + nombre). Si no existe,
+                primero debes crearlo en
+                <a href="/equipos/modelos/">Modelos de equipos</a>.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// CONFIGURACIÓN INICIAL
+// ============================================================
+const DEVICE_URLS = {
+    apiModels:   "{% url 'inventario:api_models' %}",
+    importCheck: "{% url 'inventario:device_import_check' %}",
+};
+const DEVICE_MAX_FILE_SIZE = 5 * 1024 * 1024;  // 5 MB
+const DEVICE_IS_EDIT = {% if is_edit %}true{% else %}false{% endif %};
+const DEVICE_CURRENT_ID = {% if is_edit %}{{ device.id }}{% else %}null{% endif %};
+const DEVICE_CURRENT_MODEL_ID = "{{ form.device_model.value|default:'' }}";
+
+let pendingDeviceImport = {
+    file: null,
+    parsed: null,
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ============================================================
+// IIFE: CARGA DINÁMICA DE MODELOS
+// ============================================================
+window.deviceFormModule = (function() {
+    const vendorSelect = document.getElementById("id_vendor");
+    const modelSelect = document.getElementById("id_device_model");
+    const modelHelp = document.getElementById("model-help");
+    const monitorIfacesCb = document.getElementById("id_monitor_interfaces");
+    const monitorIfacesWrapper = document.getElementById("monitor-interfaces-wrapper");
+    const monitorIfacesHelp = document.getElementById("monitor-interfaces-help");
+    const monitorIfacesWarning = document.getElementById("monitor-interfaces-warning");
+    const monitorHealthCb = document.getElementById("id_monitor_health");
+    const monitorHealthWrapper = document.getElementById("monitor-health-wrapper");
+    const monitorHealthHelp = document.getElementById("monitor-health-help");
+    const monitorHealthWarning = document.getElementById("monitor-health-warning");
+
+    if (!vendorSelect || !modelSelect) return {};
+
+    let modelsCache = {};  // {id: {name, has_interfaces, has_chassis_oids, is_wireless_link}}
+
+    /**
+     * Aplica el estado del checkbox "Permitir monitoreo de Interfaces".
+     * @param {boolean} supports
+     */
+    function applyInterfacesState(supports) {
+        if (!monitorIfacesCb) return;
+        if (supports) {
+            monitorIfacesCb.disabled = false;
+            monitorIfacesWrapper.classList.remove('opacity-50');
+            monitorIfacesHelp.innerHTML =
+                'Habilita el bloque de <em>SNMP Tráfico</em> en el monitor ' +
+                'y el botón <em>Interfaces</em> en la lista de equipos.';
+            monitorIfacesWarning.style.display = 'none';
+        } else {
+            monitorIfacesCb.checked = false;
+            monitorIfacesCb.disabled = true;
+            monitorIfacesWrapper.classList.add('opacity-50');
+            monitorIfacesHelp.innerHTML =
+                'El modelo no soporta interfaces SNMP.';
+            monitorIfacesWarning.style.display = 'block';
+        }
+    }
+
+    /**
+     * Aplica el estado del checkbox "Permitir monitoreo de CPU / Mem / Temp".
+     * @param {boolean} supports
+     */
+    function applyHealthState(supports) {
+        if (!monitorHealthCb) return;
+        if (supports) {
+            monitorHealthCb.disabled = false;
+            monitorHealthWrapper.classList.remove('opacity-50');
+            monitorHealthHelp.innerHTML =
+                'Habilita el bloque de <em>Core Health</em> en el monitor.';
+            monitorHealthWarning.style.display = 'none';
+        } else {
+            monitorHealthCb.checked = false;
+            monitorHealthCb.disabled = true;
+            monitorHealthWrapper.classList.add('opacity-50');
+            monitorHealthHelp.innerHTML =
+                'El modelo no tiene OIDs de chasis (CPU/Mem/Temp).';
+            monitorHealthWarning.style.display = 'block';
+        }
+    }
+
+    /**
+     * Actualiza el panel de recomendaciones según si el modelo es wireless.
+     * @param {boolean} isWireless
+     */
+    function updateRecommendations(isWireless) {
+        const tbody = document.getElementById('recommendations-tbody');
+        if (!tbody) return;
+
+        if (isWireless) {
+            tbody.innerHTML = `
+                <tr>
+                    <td>Interfaces Access Point</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                </tr>
+                <tr>
+                    <td>ICMP / TCP</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                </tr>
+                <tr>
+                    <td>CPU / Mem / Temp</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">—</td>
+                    <td class="text-center">—</td>
+                </tr>
+                <tr>
+                    <td>Radiofrecuencia</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML = `
+                <tr>
+                    <td>Tráfico SNMP</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                </tr>
+                <tr>
+                    <td>ICMP / TCP</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                </tr>
+                <tr>
+                    <td>CPU / Mem / Temp</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">✓</td>
+                    <td class="text-center">—</td>
+                    <td class="text-center">—</td>
+                </tr>
+            `;
+        }
+    }
+
+    /**
+     * Aplica los estados de checkboxes y recomendaciones según el modelo.
+     * @param {string|number} modelId
+     */
+    function applyModelCapabilities(modelId) {
+        const info = modelsCache[String(modelId)];
+        if (!info) {
+            applyInterfacesState(false);
+            applyHealthState(false);
+            updateRecommendations(false);
+            return;
+        }
+        applyInterfacesState(info.has_interfaces);
+        applyHealthState(info.has_chassis_oids);
+        updateRecommendations(info.is_wireless_link);
+    }
+
+    /**
+     * Carga los modelos activos de un vendor vía AJAX.
+     * @param {string} vendor
+     * @param {string|number|null} preselected
+     * @param {function} [onLoaded]
+     * @returns {Promise}
+     */
+    function loadModels(vendor, preselected, onLoaded) {
+        modelSelect.innerHTML = '<option value="">Cargando modelos...</option>';
+        modelSelect.disabled = true;
+        modelHelp.textContent = "Cargando modelos...";
+        modelsCache = {};
+
+        return fetch(DEVICE_URLS.apiModels + "?vendor=" + encodeURIComponent(vendor))
+            .then(r => r.json())
+            .then(data => {
+                modelSelect.innerHTML = '<option value="">— Seleccione un modelo —</option>';
+                modelSelect.disabled = false;
+
+                if (data.models.length === 0) {
+                    modelHelp.innerHTML =
+                        '<span class="text-warning">' +
+                        '<i class="bi bi-exclamation-triangle"></i> ' +
+                        'No hay modelos registrados para este fabricante.</span>';
+                    applyInterfacesState(false);
+                    applyHealthState(false);
+                    updateRecommendations(false);
+                    if (onLoaded) onLoaded();
+                    return;
+                }
+
+                data.models.forEach(m => {
+                    const opt = document.createElement("option");
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    if (preselected && String(m.id) === String(preselected)) {
+                        opt.selected = true;
+                    }
+                    modelSelect.appendChild(opt);
+                    modelsCache[String(m.id)] = m;
+                });
+
+                modelHelp.textContent = data.models.length + " modelo(s) disponible(s).";
+
+                if (preselected && modelsCache[String(preselected)]) {
+                    applyModelCapabilities(preselected);
+                } else {
+                    applyInterfacesState(false);
+                    applyHealthState(false);
+                    updateRecommendations(false);
+                }
+
+                if (onLoaded) onLoaded();
+            })
+            .catch(err => {
+                console.error("Error cargando modelos:", err);
+                modelSelect.innerHTML = '<option value="">Error al cargar</option>';
+                modelSelect.disabled = false;
+                modelHelp.innerHTML =
+                    '<span class="text-danger">Error al cargar modelos.</span>';
+                if (onLoaded) onLoaded();
+            });
+    }
+
+    /**
+     * Handler de cambio de vendor.
+     */
+    function onVendorChange() {
+        const vendor = vendorSelect.value;
+        if (!vendor) {
+            modelSelect.innerHTML = '<option value="">— Seleccione primero un fabricante —</option>';
+            modelSelect.disabled = true;
+            modelHelp.textContent = "Selecciona primero un fabricante.";
+            applyInterfacesState(false);
+            applyHealthState(false);
+            updateRecommendations(false);
+            return;
+        }
+        loadModels(vendor, null);
+    }
+
+    /**
+     * Handler de cambio de modelo.
+     */
+    function onModelChange() {
+        const mid = modelSelect.value;
+        if (!mid) {
+            applyInterfacesState(false);
+            applyHealthState(false);
+            updateRecommendations(false);
+            return;
+        }
+        applyModelCapabilities(mid);
+    }
+
+    vendorSelect.addEventListener("change", onVendorChange);
+    modelSelect.addEventListener("change", onModelChange);
+
+    // Precargar en edición
+    if (vendorSelect.value) {
+        loadModels(vendorSelect.value, DEVICE_CURRENT_MODEL_ID);
+    } else {
+        modelSelect.disabled = true;
+        updateRecommendations(false);
+    }
+
+    return {
+        loadModels: loadModels,
+        applyModelCapabilities: applyModelCapabilities,
+        getModelsCache: () => modelsCache,
+    };
+})();
+
+// ============================================================
+// IIFE: TOGGLE DE BLOQUES SNMP (v1/v2c vs v3)
+// ============================================================
+(function() {
+    const versionSelect = document.getElementById('id_snmp_version');
+    const communityBlock = document.getElementById('snmp-community-block');
+    const v3Block = document.getElementById('snmp-v3-block');
+    if (!versionSelect || !communityBlock || !v3Block) return;
+
+    function applySnmpVersion() {
+        const isV3 = versionSelect.value === '3';
+        communityBlock.style.display = isV3 ? 'none' : 'block';
+        v3Block.style.display = isV3 ? 'block' : 'none';
+    }
+
+    versionSelect.addEventListener('change', applySnmpVersion);
+    applySnmpVersion();
+})();
+
+// ============================================================
+// VALIDACIÓN DEL FORMULARIO
+// ============================================================
+(function() {
+    const form = document.getElementById('device-form');
+    if (!form) return;
+
+    form.addEventListener('submit', (e) => {
+        const vendor = document.getElementById('id_vendor')?.value;
+        const model = document.getElementById('id_device_model')?.value;
+        const snmpVersion = document.getElementById('id_snmp_version')?.value;
+
+        if (!vendor) {
+            e.preventDefault();
+            alert('Selecciona un fabricante.');
+            return false;
+        }
+        if (!model) {
+            e.preventDefault();
+            alert('Selecciona un modelo.');
+            return false;
+        }
+        if (snmpVersion === '3') {
+            const user = document.getElementById('id_snmp_user')?.value?.trim();
+            const auth = document.getElementById('id_snmp_auth')?.value?.trim();
+            if (!user || !auth) {
+                e.preventDefault();
+                alert('SNMPv3 requiere usuario y auth key.');
+                return false;
+            }
+        }
+    });
+})();
+
+// ============================================================
+// IMPORTACIÓN DE EQUIPO
+// ============================================================
+
+/**
+ * Inicia el proceso de importación.
+ */
+function startDeviceImport() {
+    const fileInput = document.getElementById('import-device-file');
+    const errorBox = document.getElementById('import-device-error');
+    const importBtn = document.getElementById('import-device-btn');
+
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        errorBox.textContent = 'Selecciona un archivo JSON.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    if (file.size > DEVICE_MAX_FILE_SIZE) {
+        errorBox.textContent =
+            `El archivo es demasiado grande (${Math.round(file.size / 1024)} KB). Máximo 5 MB.`;
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    pendingDeviceImport.file = file;
+    importBtn.disabled = true;
+    importBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Leyendo...';
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            _handleDeviceParsed(parsed);
+        } catch (err) {
+            errorBox.textContent = `JSON inválido: ${err.message}`;
+            errorBox.style.display = 'block';
+        } finally {
+            importBtn.disabled = false;
+            importBtn.innerHTML = '<i class="bi bi-upload"></i> Cargar en el formulario';
+        }
+    };
+    reader.onerror = () => {
+        errorBox.textContent = 'No se pudo leer el archivo.';
+        errorBox.style.display = 'block';
+        importBtn.disabled = false;
+        importBtn.innerHTML = '<i class="bi bi-upload"></i> Cargar en el formulario';
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
+/**
+ * Valida la estructura del JSON y llama al backend para validaciones finales.
+ */
+function _handleDeviceParsed(parsed) {
+    const errorBox = document.getElementById('import-device-error');
+
+    // Normalizar a objeto único
+    let item;
+    if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+            errorBox.textContent = 'El archivo está vacío.';
+            errorBox.style.display = 'block';
+            return;
+        }
+        if (parsed.length > 1) {
+            errorBox.innerHTML =
+                'Este formulario solo acepta <strong>UN</strong> equipo. ' +
+                'Para importación masiva usa la lista de equipos.';
+            errorBox.style.display = 'block';
+            return;
+        }
+        item = parsed[0];
+    } else if (parsed && typeof parsed === 'object') {
+        item = parsed;
+    } else {
+        errorBox.textContent = 'El JSON debe ser un objeto.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    // Validación mínima local
+    const required = ['name', 'ip', 'vendor', 'device_model_name'];
+    const missing = required.filter(k => !item[k]);
+    if (missing.length > 0) {
+        errorBox.textContent = `Faltan campos requeridos: ${missing.join(', ')}`;
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    pendingDeviceImport.parsed = item;
+    _checkDeviceImport(item);
+}
+
+/**
+ * Consulta al backend para validar el JSON (modelo existe, conflicts, etc).
+ */
+function _checkDeviceImport(item) {
+    const importBtn = document.getElementById('import-device-btn');
+    importBtn.disabled = true;
+    importBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Verificando...';
+
+    const csrfToken = getCookie('csrftoken');
+    fetch(DEVICE_URLS.importCheck, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            name: item.name,
+            ip: item.ip,
+            vendor: item.vendor,
+            device_model_name: item.device_model_name,
+            current_id: DEVICE_CURRENT_ID,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) {
+            const errorBox = document.getElementById('import-device-error');
+            errorBox.innerHTML = '<ul class="mb-0 ps-3">' +
+                data.errors.map(e => `<li>${escapeHtmlJs(e)}</li>`).join('') +
+                '</ul>';
+            errorBox.style.display = 'block';
+            return;
+        }
+
+        // Guardar model_info en el pendiente
+        pendingDeviceImport.parsed.model_info = data.model_info;
+
+        // ¿Hay conflictos?
+        if (Object.keys(data.conflicts).length > 0) {
+            _showDeviceConflict(data.conflicts);
+        } else {
+            _populateDeviceForm(item, data.model_info);
+        }
+    })
+    .catch(err => {
+        const errorBox = document.getElementById('import-device-error');
+        errorBox.textContent = `Error consultando al servidor: ${err.message}`;
+        errorBox.style.display = 'block';
+    })
+    .finally(() => {
+        importBtn.disabled = false;
+        importBtn.innerHTML = '<i class="bi bi-upload"></i> Cargar en el formulario';
+    });
+}
+
+/**
+ * Muestra el modal de conflicto (name e/o ip ya existen).
+ */
+function _showDeviceConflict(conflicts) {
+    const msg = document.getElementById('device-conflict-message');
+    const list = document.getElementById('device-conflict-list');
+
+    const parts = [];
+    if (conflicts.name) {
+        parts.push(
+            `Ya existe un equipo con el nombre <code>${escapeHtmlJs(conflicts.name.value)}</code> ` +
+            `(ID ${conflicts.name.other_id}).`
+        );
+    }
+    if (conflicts.ip) {
+        parts.push(
+            `Ya existe un equipo con la IP <code>${escapeHtmlJs(conflicts.ip.value)}</code> ` +
+            `(ID ${conflicts.ip.other_id}).`
+        );
+    }
+    msg.innerHTML = parts.join('<br>');
+
+    list.innerHTML = '';
+
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importDeviceModal'));
+    if (importModal) importModal.hide();
+
+    const conflictModal = new bootstrap.Modal(document.getElementById('deviceConflictModal'));
+    conflictModal.show();
+}
+
+/**
+ * Confirma el populate ignorando los conflictos.
+ */
+function populateDeviceFormAnyway() {
+    const conflictModal = bootstrap.Modal.getInstance(document.getElementById('deviceConflictModal'));
+    if (conflictModal) conflictModal.hide();
+
+    if (pendingDeviceImport.parsed && pendingDeviceImport.parsed.model_info) {
+        _populateDeviceForm(pendingDeviceImport.parsed, pendingDeviceImport.parsed.model_info);
+    }
+}
+
+/**
+ * Rellena el formulario con los datos del JSON.
+ */
+async function _populateDeviceForm(item, modelInfo) {
+    // ---- 1. Campos básicos (no dependen de AJAX) ----
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val !== undefined && val !== null ? val : '';
+    };
+    const setChk = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!val;
+    };
+
+    setVal('id_name', item.name);
+    setVal('id_ip', item.ip);
+    setVal('id_device_type', item.device_type || 'router');
+    setVal('id_device_role', item.device_role || 'access');
+    setVal('id_location', item.location || '');
+    setVal('id_snmp_version', item.snmp_version || '2c');
+    setVal('id_snmp_community', item.snmp_community || '');
+    setVal('id_snmp_user', item.snmp_user || '');
+    setVal('id_snmp_auth', item.snmp_auth || '');
+    setVal('id_snmp_priv', item.snmp_priv || '');
+    setVal('id_tcp_ports', item.tcp_ports || '161');
+
+    setChk('id_active', item.active !== false);
+
+    // ---- 2. Setear vendor + cargar modelos (async) ----
+    const vendorSelect = document.getElementById('id_vendor');
+    if (vendorSelect) {
+        vendorSelect.value = item.vendor;
+    }
+
+    // Cargar modelos y esperar
+    await new Promise((resolve) => {
+        if (vendorSelect && vendorSelect.value) {
+            window.deviceFormModule.loadModels(
+                vendorSelect.value,
+                modelInfo.id,
+                resolve
+            );
+        } else {
+            resolve();
+        }
+    });
+
+    // ---- 3. Setear checkboxes de monitoreo (respetando disable) ----
+    const monitorIfacesCb = document.getElementById('id_monitor_interfaces');
+    if (monitorIfacesCb && !monitorIfacesCb.disabled) {
+        monitorIfacesCb.checked = item.monitor_interfaces !== false;
+    }
+
+    const monitorHealthCb = document.getElementById('id_monitor_health');
+    if (monitorHealthCb && !monitorHealthCb.disabled) {
+        monitorHealthCb.checked = item.monitor_health !== false;
+    }
+
+    // ---- 4. Trigger change en SNMP version para mostrar bloques correctos ----
+    const versionSelect = document.getElementById('id_snmp_version');
+    if (versionSelect) {
+        versionSelect.dispatchEvent(new Event('change'));
+    }
+
+    // ---- 5. Cerrar modal ----
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importDeviceModal'));
+    if (importModal) importModal.hide();
+
+    // ---- 6. Feedback ----
+    alert(
+        `✓ Datos cargados en el formulario.\n\n` +
+        `Equipo: ${item.name} (${item.ip})\n` +
+        `Modelo: ${item.vendor} / ${item.device_model_name}\n\n` +
+        `${DEVICE_IS_EDIT ? 'Revisa y guarda para actualizar.' : 'Revisa y guarda para crear.'}`
+    );
+}
+
+// ============================================================
+// LIMPIEZA DEL ESTADO AL CERRAR MODALES
+// ============================================================
+document.getElementById('importDeviceModal')?.addEventListener('hidden.bs.modal', () => {
+    const fileInput = document.getElementById('import-device-file');
+    if (fileInput) fileInput.value = '';
+
+    const errorBox = document.getElementById('import-device-error');
+    if (errorBox) {
+        errorBox.style.display = 'none';
+        errorBox.textContent = '';
+    }
+
+    const btn = document.getElementById('import-device-btn');
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Cargar en el formulario';
+    }
+
+    pendingDeviceImport.file = null;
+    pendingDeviceImport.parsed = null;
+});
+</script>
+{% endblock %}

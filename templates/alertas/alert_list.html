@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+{% load sorting_tags %}
+{% block title %}Alertas - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-bell"></i> Alertas</h2>
+        <p class="text-muted mb-0 small">
+            Historial de alertas generadas por las reglas activas.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <a href="{% url 'alertas:rule_list' %}" class="btn btn-primary">
+            <i class="bi bi-shield-exclamation"></i> Ver reglas
+        </a>
+        <a href="{% url 'alertas:export_excel' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}"
+           class="btn btn-outline-success"
+           title="Exportar las alertas filtradas a Excel">
+            <i class="bi bi-file-earmark-excel"></i> Excel
+        </a>
+        <a href="{% url 'alertas:export_pdf' %}{% if request.GET.urlencode %}?{{ request.GET.urlencode }}{% endif %}"
+           class="btn btn-outline-danger"
+           title="Exportar las alertas filtradas a PDF">
+            <i class="bi bi-file-earmark-pdf"></i> PDF
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Aviso: no hay reglas                                         -->
+<!-- ============================================================ -->
+{% if not has_rules %}
+<div class="alert alert-warning d-flex align-items-center" role="alert">
+    <i class="bi bi-info-circle-fill me-2" style="font-size: 1.3rem;"></i>
+    <div class="flex-grow-1">
+        <strong>No tienes reglas de alerta configuradas.</strong>
+        Las alertas solo se generan cuando una <em>regla</em> detecta
+        una condición anómala. Te recomendamos crear al menos una regla
+        para empezar a recibir notificaciones.
+    </div>
+    <a href="{% url 'alertas:rule_create' %}" class="btn btn-sm btn-warning ms-2">
+        <i class="bi bi-plus-lg"></i> Crear mi primera regla
+    </a>
+</div>
+{% endif %}
+
+<!-- ============================================================ -->
+<!-- Ayuda breve                                                  -->
+<!-- ============================================================ -->
+<div class="alert alert-light border small mb-3">
+    <i class="bi bi-lightbulb text-warning"></i>
+    <strong>Consejo:</strong>
+    Las alertas se generan automáticamente cuando una regla cumple su
+    condición durante el tiempo configurado. Puedes reconocer, resolver
+    o eliminar cada alerta desde los botones de la derecha.
+    Usa el buscador avanzado para filtrar por estado, severidad,
+    equipo o fecha.
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats                                                        -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <a href="?status=" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-primary">{{ count_all }}</div>
+                        <div class="metric-label">Total</div>
+                    </div>
+                    <i class="bi bi-collection metric-icon text-primary"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?status=activa" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-danger">{{ count_activa }}</div>
+                        <div class="metric-label">Activas</div>
+                    </div>
+                    <i class="bi bi-exclamation-circle metric-icon text-danger"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?status=resuelta" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-success">{{ count_resolved_24h }}</div>
+                        <div class="metric-label">Resueltas 24h</div>
+                    </div>
+                    <i class="bi bi-check-circle metric-icon text-success"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?severity=critical" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-danger">{{ count_critical }}</div>
+                        <div class="metric-label">Críticas activas</div>
+                    </div>
+                    <i class="bi bi-fire metric-icon text-danger"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Buscador colapsable                                          -->
+<!-- ============================================================ -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         style="cursor: pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#search-panel">
+        <div>
+            <i class="bi bi-search"></i>
+            <strong>Buscador avanzado</strong>
+            {% if has_filters %}
+            <span class="badge bg-primary ms-2">
+                <i class="bi bi-funnel-fill"></i> Filtros activos
+            </span>
+            {% endif %}
+        </div>
+        <div>
+            {% if has_filters %}
+            <a href="{% url 'alertas:alert_list' %}"
+               class="btn btn-sm btn-outline-secondary me-2"
+               onclick="event.stopPropagation();">
+                <i class="bi bi-x-lg"></i> Limpiar
+            </a>
+            {% endif %}
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+
+    <div id="search-panel" class="collapse {% if has_filters %}show{% endif %}">
+        <div class="card-body">
+            <form method="get" class="row g-2">
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="order" value="{{ order }}">
+
+                <div class="col-md-4">
+                    <label class="form-label small">Buscar mensaje</label>
+                    <input type="text" name="q" value="{{ search }}"
+                           class="form-control"
+                           placeholder="Texto del mensaje...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Estado</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="activa" {% if status_filter == "activa" %}selected{% endif %}>
+                            Activas
+                        </option>
+                        <option value="reconocida" {% if status_filter == "reconocida" %}selected{% endif %}>
+                            Reconocidas
+                        </option>
+                        <option value="resuelta" {% if status_filter == "resuelta" %}selected{% endif %}>
+                            Resueltas
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Severidad</label>
+                    <select name="severity" class="form-select">
+                        <option value="">Todas</option>
+                        <option value="critical" {% if severity_filter == "critical" %}selected{% endif %}>
+                            Crítica
+                        </option>
+                        <option value="warning" {% if severity_filter == "warning" %}selected{% endif %}>
+                            Advertencia
+                        </option>
+                        <option value="info" {% if severity_filter == "info" %}selected{% endif %}>
+                            Info
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Equipo</label>
+                    <select name="device" class="form-select">
+                        <option value="">Todos</option>
+                        {% for d in devices %}
+                        <option value="{{ d.id }}"
+                                {% if device_filter == d.id|stringformat:"s" %}selected{% endif %}>
+                            {{ d.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label small">Desde</label>
+                    <input type="date" name="date_from" value="{{ date_from }}"
+                           class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Hasta</label>
+                    <input type="date" name="date_to" value="{{ date_to }}"
+                           class="form-control">
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="{% url 'alertas:alert_list' %}"
+                       class="btn btn-outline-secondary">
+                        Limpiar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Tabla de alertas                                             -->
+<!-- ============================================================ -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+            <i class="bi bi-list-check"></i>
+            Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
+            de {{ paginator.count }} alerta{{ paginator.count|pluralize:"s" }}
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    {% sortable_th "fecha" "Fecha" "130px" %}
+                    {% sortable_th "severidad" "Severidad" "120px" %}
+                    {% sortable_th "tipo" "Tipo" "150px" %}
+                    {% sortable_th "equipo" "Equipo" "140px" %}
+                    {% sortable_th "mensaje" "Mensaje" %}
+                    {% sortable_th "valor" "Valor" "90px" %}
+                    {% sortable_th "estado" "Estado" "120px" %}
+                    <th style="width: 140px;" class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr>
+                    <td>
+                        <small>{{ alert.created_at|date:"d/m/Y" }}</small><br>
+                        <small class="text-muted">{{ alert.created_at|date:"H:i:s" }}</small>
+                    </td>
+                    <td>
+                        <span class="badge
+                            {% if alert.severity == 'critical' %}bg-danger
+                            {% elif alert.severity == 'warning' %}bg-warning text-dark
+                            {% else %}bg-info{% endif %}">
+                            {{ alert.get_severity_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <code class="small">{{ alert.alert_type }}</code>
+                        {% if alert.rule %}
+                        <br><small class="text-muted"
+                                   title="{{ alert.rule.name }}">
+                            <i class="bi bi-shield-check"></i>
+                            {{ alert.rule.name|truncatechars:25 }}
+                        </small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if alert.device %}
+                        <a href="{% url 'inventario:device_detail' alert.device.id %}">
+                            {{ alert.device.name }}
+                        </a>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <div class="text-break">{{ alert.message }}</div>
+                    </td>
+                    <td class="text-end">
+                        {% if alert.value_observed is not None %}
+                        <code>{{ alert.value_observed|floatformat:2 }}</code>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        {% if alert.status == "activa" %}
+                        <span class="badge bg-danger">Activa</span>
+                        {% elif alert.status == "reconocida" %}
+                        <span class="badge bg-warning text-dark">Reconocida</span>
+                        {% else %}
+                        <span class="badge bg-success">Resuelta</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if is_admin %}
+                            {% if alert.status == "activa" %}
+                            <a href="{% url 'alertas:alert_acknowledge' alert.id %}"
+                               class="btn btn-sm btn-outline-warning"
+                               title="Marcar como reconocida">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% endif %}
+                            {% if alert.status != "resuelta" %}
+                            <a href="{% url 'alertas:alert_resolve' alert.id %}"
+                               class="btn btn-sm btn-outline-success"
+                               title="Marcar como resuelta">
+                                <i class="bi bi-check-lg"></i>
+                            </a>
+                            {% endif %}
+                            <a href="{% url 'alertas:alert_delete' alert.id %}"
+                               class="btn btn-sm btn-outline-danger"
+                               title="Eliminar alerta">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-2">
+                            No hay alertas que coincidan con los filtros.
+                        </p>
+                        {% if has_filters %}
+                        <a href="{% url 'alertas:alert_list' %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x-lg"></i> Limpiar filtros
+                        </a>
+                        {% elif not has_rules %}
+                        <a href="{% url 'alertas:rule_create' %}"
+                           class="btn btn-primary">
+                            <i class="bi bi-plus-lg"></i> Crear la primera regla
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Paginación                                                   -->
+    <!-- ============================================================ -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <!-- Primera -->
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page=1">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                <!-- Números -->
+                {% for num in page_obj.paginator.page_range %}
+                    {% if num == page_obj.number %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Siguiente -->
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Alertas — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Muestra el historial de <strong>alertas generadas</strong>
+                por las reglas activas. Cada alerta corresponde a un evento
+                detectado por el motor de reglas: un umbral superado, una
+                caída, una degradación, etc.
+                <br><br>
+                Las alertas se generan automáticamente cuando el monitor
+                evalúa las métricas de cada equipo y una regla coincide.
+            `
+        },
+        {
+            heading: "Estados de las alertas",
+            body: `
+                Cada alerta tiene uno de 3 estados:
+                <br>
+                • <span class="badge bg-danger">Activa</span>: la condición aún se cumple o no ha sido atendida.
+                <br>
+                • <span class="badge bg-warning text-dark">Reconocida</span>: un operador ya la vio pero aún no se resuelve.
+                <br>
+                • <span class="badge bg-success">Resuelta</span>: la condición dejó de cumplirse (o se resolvió manualmente).
+                <br><br>
+                Las alertas <strong>activas</strong> se auto-resuelven cuando
+                la condición deja de cumplirse. Las <strong>reconocidas</strong>
+                deben resolverse manualmente.
+            `
+        },
+        {
+            heading: "Severidades",
+            body: `Hay 3 niveles de severidad:`,
+            list: [
+                "<span class='badge bg-info'>Info</span> — Informativo, no urgente.",
+                "<span class='badge bg-warning text-dark'>Advertencia</span> — Requiere atención pronto.",
+                "<span class='badge bg-danger'>Crítica</span> — Requiere atención inmediata."
+            ]
+        },
+        {
+            heading: "Filtros y búsqueda",
+            body: `
+                Puedes filtrar por:
+                <br>
+                • <strong>Búsqueda de texto:</strong> en el mensaje de la alerta.
+                <br>
+                • <strong>Estado:</strong> activa, reconocida, resuelta.
+                <br>
+                • <strong>Severidad:</strong> info, advertencia, crítica.
+                <br>
+                • <strong>Equipo:</strong> alertas de un device específico.
+                <br>
+                • <strong>Rango de fechas:</strong> desde/hasta.
+                <br><br>
+                Los filtros se combinan con AND y se preservan al paginar
+                y ordenar.
+            `
+        },
+        {
+            heading: "Stats superiores",
+            body: `Los 4 cards muestran un resumen global:`,
+            list: [
+                "<strong>Total:</strong> todas las alertas registradas (incluyendo resueltas).",
+                "<strong>Activas:</strong> alertas sin resolver actualmente.",
+                "<strong>Resueltas 24h:</strong> cuántas se resolvieron en el último día.",
+                "<strong>Críticas activas:</strong> alertas críticas que requieren atención inmediata."
+            ]
+        },
+        {
+            heading: "Acciones por alerta",
+            body: `Según el rol del usuario:`,
+            list: [
+                "<i class='bi bi-eye'></i> <strong>Reconocer:</strong> marca la alerta como vista. Solo disponible en estado 'activa'.",
+                "<i class='bi bi-check-lg'></i> <strong>Resolver:</strong> marca como resuelta manualmente. Solo si no está ya resuelta.",
+                "<i class='bi bi-trash'></i> <strong>Eliminar:</strong> borra la alerta permanentemente. Solo admin."
+            ]
+        },
+        {
+            heading: "Exportar alertas",
+            body: `
+                El botón <strong>Excel</strong> descarga un XLSX con:
+                <br>
+                • Colores por severidad y estado.
+                <br>
+                • Panel congelado en encabezados.
+                <br>
+                • Filtros y orden actuales preservados.
+                <br><br>
+                El botón <strong>PDF</strong> descarga un reporte en A4 landscape con:
+                <br>
+                • Encabezados repetidos en cada página.
+                <br>
+                • Colores por severidad.
+                <br>
+                • Filtros aplicados visibles en el encabezado.
+                <br><br>
+                Ambos respetan los filtros activos. Si no hay filtros,
+                exportan todas las alertas.
+            `
+        },
+        {
+            heading: "Cuándo crear reglas",
+            body: `
+                Si no tienes reglas configuradas, aparece un aviso amarillo
+                invitándote a crear la primera. Las alertas solo se generan
+                cuando una regla detecta una condición anómala.
+                <br><br>
+                Ejemplos típicos de reglas:
+                <br>
+                • Equipo caído (sin ICMP por >2 min).
+                <br>
+                • CPU > 85% sostenido por 5 min.
+                <br>
+                • Señal de radioenlace < -80 dBm por 2 min.
+                <br>
+                • CCQ < 50% por 3 min.
+                <br>
+                • Utilización de enlace > 90% por 10 min.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                Consejos para gestionar alertas eficientemente:
+                <br>
+                • <strong>No dejes alertas activas sin atender.</strong>
+                Reconócelas o resuélvelas después de verificar.
+                <br>
+                • <strong>Usa filtros de fecha</strong> para análisis histórico.
+                <br>
+                • <strong>Exporta a Excel</strong> para reportes periódicos.
+                <br>
+                • Si una alerta se dispara constantemente sin ser un problema real, ajusta el umbral de la regla correspondiente.
+                <br>
+                • <strong>No elimines alertas históricas</strong> sin razón: sirven para auditoría y análisis de tendencias.
+            `
+        }
+    ]
+});
+</script>
+{% endblock %}

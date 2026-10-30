@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Eliminar equipo</h4>
+            </div>
+            <div class="card-body">
+                <p>¿Eliminar definitivamente el equipo?</p>
+                <ul>
+                    <li><strong>Nombre:</strong> {{ device.name }}</li>
+                    <li><strong>IP:</strong> {{ device.ip }}</li>
+                    <li><strong>Interfaces:</strong> {{ device.interfaces.count }}</li>
+                </ul>
+                <p class="text-danger"><strong>Se eliminarán también sus interfaces y alertas asociadas.</strong></p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'inventario:device_detail' device.id %}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-trash"></i> Eliminar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

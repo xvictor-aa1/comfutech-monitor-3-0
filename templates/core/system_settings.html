@@ -1,0 +1,1883 @@
+{% extends "base.html" %}
+{% block title %}Configuración del sistema - Comfutech{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-gear"></i> Configuración del sistema</h2>
+        <p class="text-muted mb-0 small">
+            Ajustes globales del monitor e integraciones.
+            Solo visible para superadministradores.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <a href="{% url 'monitoreo:monitor_status' %}" class="btn btn-outline-info">
+            <i class="bi bi-activity"></i> Estado monitor
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Banner compacto sobre config.toml                            -->
+<!-- ============================================================ -->
+<div class="settings-banner">
+    <i class="bi bi-shield-lock-fill"></i>
+    <div class="settings-banner-content">
+        <strong>Configuración guardada en <code>config.toml</code></strong>
+        <small>
+            Los valores sensibles (tokens, contraseñas) se guardan en un archivo
+            con permisos restringidos + backup automático.
+            Ruta: <code>{{ config_file_path }}</code>
+        </small>
+    </div>
+</div>
+
+<form method="post" id="settings-form" novalidate>
+    {% csrf_token %}
+
+    <div class="row g-4">
+
+        <!-- ============================================================ -->
+        <!-- SIDEBAR DE NAVEGACIÓN                                        -->
+        <!-- ============================================================ -->
+        <div class="col-lg-3">
+            <div class="settings-sidebar">
+
+                <nav class="settings-nav" role="tablist" aria-orientation="vertical">
+                    <!-- InfluxDB -->
+                    <button type="button" class="settings-nav-item active"
+                            data-bs-toggle="pill" data-bs-target="#tab-influx"
+                            role="tab" aria-selected="true">
+                        <i class="bi bi-database-fill"></i>
+                        <span class="settings-nav-text">
+                            <span class="settings-nav-title">InfluxDB</span>
+                            <small>Base de datos de métricas</small>
+                        </span>
+                        {% if not influx_token_set %}
+                        <span class="settings-nav-badge" title="API Token sin configurar">!</span>
+                        {% endif %}
+                    </button>
+
+                    <!-- Monitor -->
+                    <button type="button" class="settings-nav-item"
+                            data-bs-toggle="pill" data-bs-target="#tab-monitor"
+                            role="tab">
+                        <i class="bi bi-cpu-fill"></i>
+                        <span class="settings-nav-text">
+                            <span class="settings-nav-title">Monitor</span>
+                            <small>Pollers e intervalos</small>
+                        </span>
+                    </button>
+
+                    <!-- Telegram -->
+                    <button type="button" class="settings-nav-item"
+                            data-bs-toggle="pill" data-bs-target="#tab-telegram"
+                            role="tab">
+                        <i class="bi bi-telegram"></i>
+                        <span class="settings-nav-text">
+                            <span class="settings-nav-title">Telegram</span>
+                            <small>Notificaciones push</small>
+                        </span>
+                        {% if not telegram_token_set %}
+                        <span class="settings-nav-badge" title="Bot Token sin configurar">!</span>
+                        {% endif %}
+                    </button>
+
+                    <!-- Email -->
+                    <button type="button" class="settings-nav-item"
+                            data-bs-toggle="pill" data-bs-target="#tab-email"
+                            role="tab">
+                        <i class="bi bi-envelope-at-fill"></i>
+                        <span class="settings-nav-text">
+                            <span class="settings-nav-title">Email (SMTP)</span>
+                            <small>Verificación y recuperación</small>
+                        </span>
+                        {% if not email_password_set %}
+                        <span class="settings-nav-badge" title="Contraseña SMTP sin configurar">!</span>
+                        {% endif %}
+                    </button>
+
+                    <!-- Grafana -->
+                    <button type="button" class="settings-nav-item"
+                            data-bs-toggle="pill" data-bs-target="#tab-grafana"
+                            role="tab">
+                        <i class="bi bi-graph-up-arrow"></i>
+                        <span class="settings-nav-text">
+                            <span class="settings-nav-title">Grafana</span>
+                            <small>Dashboard externo</small>
+                        </span>
+                    </button>
+                </nav>
+
+                <!-- Card de estado (visible siempre) -->
+                <div class="settings-status">
+                    <div class="settings-status-header">
+                        <i class="bi bi-info-circle"></i> Estado
+                    </div>
+                    <div class="settings-status-row">
+                        <span>Última actualización</span>
+                        <strong>
+                            {% if cfg.updated_at %}
+                                {{ cfg.updated_at|date:"d/m H:i" }}
+                            {% else %}
+                                Nunca
+                            {% endif %}
+                        </strong>
+                    </div>
+                    {% if cfg.updated_by %}
+                    <div class="settings-status-row">
+                        <span>Por</span>
+                        <strong>{{ cfg.updated_by }}</strong>
+                    </div>
+                    {% endif %}
+                    <div class="settings-status-row">
+                        <span>Archivo</span>
+                        <code class="small">config.toml</code>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- CONTENIDO DE LOS TABS                                        -->
+        <!-- ============================================================ -->
+        <div class="col-lg-9">
+            <div class="tab-content">
+
+                <!-- ==================================================== -->
+                <!-- TAB: InfluxDB                                        -->
+                <!-- ==================================================== -->
+                <div class="tab-pane fade show active" id="tab-influx" role="tabpanel">
+
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <div class="settings-card-icon bg-danger-subtle text-danger">
+                                <i class="bi bi-database-fill"></i>
+                            </div>
+                            <div class="settings-card-heading">
+                                <h5 class="mb-1">InfluxDB</h5>
+                                <p class="text-muted small mb-0">
+                                    Base de datos de series temporales donde se
+                                    almacenan todas las métricas del sistema.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+
+                            <!-- Descripción completa visible -->
+                            <div class="alert alert-light border small mb-4">
+                                <i class="bi bi-info-circle text-primary"></i>
+                                <strong>¿Para qué se usa?</strong>
+                                InfluxDB almacena las métricas recolectadas por
+                                los pollers: tráfico SNMP, health del chasis,
+                                latencia ICMP, tasas de radioenlaces y clientes
+                                AP. <strong>Sin esta conexión</strong>, el
+                                sistema no puede guardar datos ni alimentar los
+                                dashboards de Grafana.
+                            </div>
+
+                            <!-- Campos -->
+                            <div class="row g-3">
+
+                                <div class="col-md-12">
+                                    <label class="form-label">
+                                        <i class="bi bi-link-45deg text-danger"></i>
+                                        URL del servidor <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="url" name="influx_url"
+                                           class="form-control"
+                                           value="{{ cfg.influx_url }}"
+                                           placeholder="http://localhost:8086">
+                                    <div class="form-text">
+                                        Dirección completa de InfluxDB.
+                                        Si corre en el mismo servidor:
+                                        <code>http://localhost:8086</code>.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-12">
+                                    <label class="form-label">
+                                        <i class="bi bi-key-fill text-danger"></i>
+                                        API Token
+                                        {% if influx_token_set %}
+                                        <span class="badge bg-success ms-1">Configurado</span>
+                                        {% else %}
+                                        <span class="badge bg-warning text-dark ms-1">Pendiente</span>
+                                        {% endif %}
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" name="influx_token"
+                                               id="influx_token" class="form-control"
+                                               placeholder="{% if influx_token_set %}•••••• Dejar vacío para conservar{% else %}Pega el token aquí{% endif %}"
+                                               autocomplete="new-password">
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                onclick="toggleVisibility('influx_token', this)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">
+                                        Token con permisos <strong>Read &amp; Write</strong>
+                                        sobre el bucket.
+                                        {% if influx_token_set %}
+                                        Déjalo vacío para mantener el actual.
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-building text-secondary"></i>
+                                        Organización
+                                    </label>
+                                    <input type="text" name="influx_org"
+                                           class="form-control"
+                                           value="{{ cfg.influx_org }}"
+                                           placeholder="comfutech">
+                                    <div class="form-text">
+                                        Nombre de la organización en InfluxDB.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-archive-fill text-secondary"></i>
+                                        Bucket
+                                    </label>
+                                    <input type="text" name="influx_bucket"
+                                           class="form-control"
+                                           value="{{ cfg.influx_bucket }}"
+                                           placeholder="metricas_red">
+                                    <div class="form-text">
+                                        Contenedor de métricas. Default: <code>metricas_red</code>.
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Recomendaciones VISIBLES -->
+                            <div class="settings-recommendation">
+                                <div class="settings-recommendation-title">
+                                    <i class="bi bi-lightbulb-fill"></i>
+                                    <strong>Recomendaciones</strong>
+                                </div>
+                                <ul class="settings-recommendation-list">
+                                    <li>
+                                        Crea un <strong>API Token dedicado</strong> para
+                                        el monitor con permisos <em>Read &amp; Write</em>
+                                        solo sobre el bucket <code>metricas_red</code>.
+                                        No uses el token de administrador.
+                                    </li>
+                                    <li>
+                                        Configura el bucket con <strong>retención de
+                                        90 días</strong>. Con intervalos de 60s, ocupa
+                                        aproximadamente 1-2 GB por equipo monitoreado.
+                                    </li>
+                                    <li>
+                                        Si InfluxDB está en otro servidor, verifica
+                                        que el puerto <code>8086</code> esté abierto
+                                        en el firewall.
+                                    </li>
+                                    <li>
+                                        Después de cambiar la URL o el token, pulsa
+                                        <strong>"Probar conexión"</strong> antes de
+                                        guardar.
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+
+                        <div class="settings-card-footer">
+                            <button type="submit"
+                                    formaction="{% url 'core:test_influx' %}"
+                                    formnovalidate
+                                    class="btn btn-outline-danger">
+                                <i class="bi bi-plug"></i> Probar conexión
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==================================================== -->
+                <!-- TAB: Monitor                                         -->
+                <!-- ==================================================== -->
+                <div class="tab-pane fade" id="tab-monitor" role="tabpanel">
+
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <div class="settings-card-icon bg-success-subtle text-success">
+                                <i class="bi bi-cpu-fill"></i>
+                            </div>
+                            <div class="settings-card-heading">
+                                <h5 class="mb-1">Monitor</h5>
+                                <p class="text-muted small mb-0">
+                                    Proceso en background que recolecta métricas
+                                    cada N segundos mediante 5 pollers independientes.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+
+                            <!-- Enable toggle destacado -->
+                            <div class="settings-toggle-primary">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="monitor_enabled" id="mon_on"
+                                           {% if cfg.monitor_enabled %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="mon_on">
+                                        Monitor activo
+                                    </label>
+                                </div>
+                                <div class="settings-toggle-hint">
+                                    Si está desactivado, los pollers no ejecutan
+                                    ciclos. Los datos existentes en InfluxDB se
+                                    conservan pero no se actualizan.
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <h6 class="settings-subheading">
+                                <i class="bi bi-stopwatch"></i>
+                                Intervalos de polling
+                            </h6>
+                            <p class="text-muted small mb-3">
+                                Frecuencia con la que cada poller consulta los
+                                equipos vía SNMP o ICMP. Valores más bajos =
+                                más datos pero más carga de red y CPU.
+                            </p>
+
+                            <div class="row g-3">
+
+                                <div class="col-md-4">
+                                    <div class="settings-poller-card">
+                                        <div class="settings-poller-icon text-primary">
+                                            <i class="bi bi-graph-up"></i>
+                                        </div>
+                                        <label class="form-label small mb-1">
+                                            SNMP Tráfico (s)
+                                        </label>
+                                        <input type="number" name="snmp_poll_interval"
+                                               class="form-control form-control-sm"
+                                               value="{{ cfg.snmp_poll_interval }}"
+                                               min="10" max="3600">
+                                        <div class="settings-poller-hint">
+                                            Contadores de tráfico por interfaz.<br>
+                                            <span class="text-success">Recomendado: 60s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="settings-poller-card">
+                                        <div class="settings-poller-icon text-success">
+                                            <i class="bi bi-heart-pulse"></i>
+                                        </div>
+                                        <label class="form-label small mb-1">
+                                            Core Health (s)
+                                        </label>
+                                        <input type="number" name="health_poll_interval"
+                                               class="form-control form-control-sm"
+                                               value="{{ cfg.health_poll_interval }}"
+                                               min="10" max="3600">
+                                        <div class="settings-poller-hint">
+                                            CPU, memoria, temperatura, uptime.<br>
+                                            <span class="text-success">Recomendado: 120s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="settings-poller-card">
+                                        <div class="settings-poller-icon text-warning">
+                                            <i class="bi bi-activity"></i>
+                                        </div>
+                                        <label class="form-label small mb-1">
+                                            ICMP / TCP (s)
+                                        </label>
+                                        <input type="number" name="icmp_poll_interval"
+                                               class="form-control form-control-sm"
+                                               value="{{ cfg.icmp_poll_interval }}"
+                                               min="10" max="3600">
+                                        <div class="settings-poller-hint">
+                                            Latencia, pérdida y puertos TCP.<br>
+                                            <span class="text-success">Recomendado: 120s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="settings-poller-card">
+                                        <div class="settings-poller-icon text-info">
+                                            <i class="bi bi-broadcast-pin"></i>
+                                        </div>
+                                        <label class="form-label small mb-1">
+                                            Radiofrecuencia (s)
+                                        </label>
+                                        <input type="number" name="radio_poll_interval"
+                                               class="form-control form-control-sm"
+                                               value="{{ cfg.radio_poll_interval }}"
+                                               min="10" max="3600">
+                                        <div class="settings-poller-hint">
+                                            Señal, CCQ y tasas TX/RX en radioenlaces.<br>
+                                            <span class="text-success">Recomendado: 120s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="settings-poller-card">
+                                        <div class="settings-poller-icon text-primary">
+                                            <i class="bi bi-people-fill"></i>
+                                        </div>
+                                        <label class="form-label small mb-1">
+                                            Clientes AP (s)
+                                        </label>
+                                        <input type="number" name="ap_clients_poll_interval"
+                                               class="form-control form-control-sm"
+                                               value="{{ cfg.ap_clients_poll_interval }}"
+                                               min="10" max="3600">
+                                        <div class="settings-poller-hint">
+                                            Clientes conectados a Access Points.<br>
+                                            <span class="text-success">Recomendado: 120s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Recomendaciones -->
+                            <div class="settings-recommendation mt-4">
+                                <div class="settings-recommendation-title">
+                                    <i class="bi bi-lightbulb-fill"></i>
+                                    <strong>Recomendaciones</strong>
+                                </div>
+                                <ul class="settings-recommendation-list">
+                                    <li>
+                                        <strong>No bajes de 30s</strong> en ningún
+                                        poller. Con intervalos menores, el servidor
+                                        satura la red y la CPU.
+                                    </li>
+                                    <li>
+                                        Los 3 pollers de health/RF/AP pueden usar
+                                        <strong>120s</strong> sin problema — las
+                                        métricas no cambian tan rápido.
+                                    </li>
+                                    <li>
+                                        Si tienes <strong>muchos equipos</strong>
+                                        (+30), considera subir SNMP Tráfico a
+                                        <code>90s</code> o <code>120s</code>.
+                                    </li>
+                                    <li>
+                                        Los cambios se aplican <strong>automáticamente
+                                        en ≤60 segundos</strong> sin reiniciar el
+                                        monitor.
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==================================================== -->
+                <!-- TAB: Telegram                                        -->
+                <!-- ==================================================== -->
+                <div class="tab-pane fade" id="tab-telegram" role="tabpanel">
+
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <div class="settings-card-icon bg-primary-subtle text-primary">
+                                <i class="bi bi-telegram"></i>
+                            </div>
+                            <div class="settings-card-heading">
+                                <h5 class="mb-1">Telegram</h5>
+                                <p class="text-muted small mb-0">
+                                    Notificaciones push cuando las reglas de
+                                    alerta disparan.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+
+                            <div class="alert alert-light border small mb-4">
+                                <i class="bi bi-info-circle text-primary"></i>
+                                <strong>¿Cómo funciona?</strong>
+                                Cuando una regla detecta una condición anómala,
+                                envía un mensaje al grupo de Telegram configurado.
+                                Cada regla tiene su propio <em>cooldown</em>
+                                para evitar spam.
+                            </div>
+
+                            <!-- Enable toggle -->
+                            <div class="settings-toggle-primary">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="telegram_enabled" id="tg_on"
+                                           {% if cfg.telegram_enabled %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="tg_on">
+                                        Notificaciones activas
+                                    </label>
+                                </div>
+                                <div class="settings-toggle-hint">
+                                    Si está desactivado, ninguna regla enviará
+                                    alertas a Telegram (seguirán creándose en el
+                                    sistema).
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <div class="row g-3">
+                                <div class="col-md-7">
+                                    <label class="form-label">
+                                        <i class="bi bi-key-fill text-primary"></i>
+                                        Bot Token
+                                        {% if telegram_token_set %}
+                                        <span class="badge bg-success ms-1">Configurado</span>
+                                        {% endif %}
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" name="telegram_bot_token"
+                                               id="telegram_bot_token" class="form-control"
+                                               placeholder="{% if telegram_token_set %}•••••• Dejar vacío para conservar{% else %}123456789:ABCdef...{% endif %}"
+                                               autocomplete="off">
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                onclick="toggleVisibility('telegram_bot_token', this)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">
+                                        Token del bot creado con <strong>@BotFather</strong>.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-5">
+                                    <label class="form-label">
+                                        <i class="bi bi-chat-dots text-primary"></i>
+                                        Chat ID
+                                    </label>
+                                    <input type="text" name="telegram_chat_id"
+                                           class="form-control"
+                                           value="{{ cfg.telegram_chat_id }}"
+                                           placeholder="-1001234567890">
+                                    <div class="form-text">
+                                        Debe empezar con <code>-</code> para grupos.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Guía paso a paso VISIBLE -->
+                            <div class="settings-guide">
+                                <div class="settings-guide-title">
+                                    <i class="bi bi-question-circle-fill"></i>
+                                    <strong>Cómo obtener el Bot Token y Chat ID</strong>
+                                </div>
+                                <ol class="settings-guide-steps">
+                                    <li>
+                                        Abre Telegram y busca
+                                        <strong>@BotFather</strong>.
+                                    </li>
+                                    <li>
+                                        Envía <code>/newbot</code>, elige un nombre
+                                        y copia el <strong>token</strong> que te
+                                        devuelve.
+                                    </li>
+                                    <li>
+                                        Crea un grupo de Telegram y añade el bot
+                                        como <strong>administrador</strong>.
+                                    </li>
+                                    <li>
+                                        Envía cualquier mensaje en el grupo
+                                        (ej. "hola").
+                                    </li>
+                                    <li>
+                                        Abre en el navegador:<br>
+                                        <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>
+                                    </li>
+                                    <li>
+                                        Busca el campo
+                                        <code>"chat": {"id": -1001234567890, ...}</code>
+                                        y copia el número con el
+                                        <strong>signo negativo</strong>.
+                                    </li>
+                                </ol>
+                            </div>
+
+                            <!-- Recomendaciones -->
+                            <div class="settings-recommendation">
+                                <div class="settings-recommendation-title">
+                                    <i class="bi bi-lightbulb-fill"></i>
+                                    <strong>Recomendaciones</strong>
+                                </div>
+                                <ul class="settings-recommendation-list">
+                                    <li>
+                                        Usa un <strong>grupo privado</strong>
+                                        (no un chat personal) para que varios
+                                        operadores reciban las alertas.
+                                    </li>
+                                    <li>
+                                        Configura el cooldown por regla en
+                                        <code>600s</code> (10 min) para evitar
+                                        saturación.
+                                    </li>
+                                    <li>
+                                        Después de guardar, pulsa
+                                        <strong>"Probar"</strong> para verificar
+                                        que llega el mensaje.
+                                    </li>
+                                    <li>
+                                        <strong>Si el bot deja de enviar</strong>,
+                                        verifica que siga siendo admin del grupo
+                                        (Telegram a veces lo expulsa tras
+                                        inactividad).
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+
+                        <div class="settings-card-footer">
+                            <button type="submit"
+                                    formaction="{% url 'core:test_telegram' %}"
+                                    formnovalidate
+                                    class="btn btn-outline-primary">
+                                <i class="bi bi-send"></i> Probar notificación
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==================================================== -->
+                <!-- TAB: Email                                           -->
+                <!-- ==================================================== -->
+                <div class="tab-pane fade" id="tab-email" role="tabpanel">
+
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <div class="settings-card-icon bg-success-subtle text-success">
+                                <i class="bi bi-envelope-at-fill"></i>
+                            </div>
+                            <div class="settings-card-heading">
+                                <h5 class="mb-1">Email (SMTP)</h5>
+                                <p class="text-muted small mb-0">
+                                    Servidor de correo para verificación de cuentas
+                                    y recuperación de contraseñas.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+
+                            <div class="alert alert-light border small mb-4">
+                                <i class="bi bi-info-circle text-primary"></i>
+                                <strong>¿Cuándo se usa?</strong>
+                                Al crear un usuario (envía enlace de verificación)
+                                y al recuperar contraseña (envía código de 8 dígitos).
+                                Si el SMTP no está configurado, los usuarios no
+                                podrán recuperar su cuenta.
+                            </div>
+
+                            <div class="row g-3">
+
+                                <div class="col-md-5">
+                                    <label class="form-label">
+                                        <i class="bi bi-server text-success"></i>
+                                        Servidor SMTP
+                                    </label>
+                                    <input type="text" name="email_host"
+                                           class="form-control"
+                                           value="{{ email_cfg.host }}"
+                                           placeholder="smtp.gmail.com">
+                                    <div class="form-text">
+                                        Ej: <code>smtp.gmail.com</code>,
+                                        <code>smtp.office365.com</code>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">
+                                        <i class="bi bi-signpost text-success"></i>
+                                        Puerto
+                                    </label>
+                                    <input type="number" name="email_port"
+                                           class="form-control"
+                                           value="{{ email_cfg.port }}"
+                                           placeholder="587">
+                                    <div class="form-text">
+                                        TLS: <code>587</code> · SSL: <code>465</code>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label d-block">
+                                        <i class="bi bi-shield-check text-success"></i>
+                                        Seguridad
+                                    </label>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox"
+                                               name="email_use_tls" id="email_tls"
+                                               {% if email_cfg.use_tls %}checked{% endif %}>
+                                        <label class="form-check-label small" for="email_tls">
+                                            TLS (587)
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox"
+                                               name="email_use_ssl" id="email_ssl"
+                                               {% if email_cfg.use_ssl %}checked{% endif %}>
+                                        <label class="form-check-label small" for="email_ssl">
+                                            SSL (465)
+                                        </label>
+                                    </div>
+                                    <div class="form-text">Mutuamente excluyentes.</div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-person-fill text-success"></i>
+                                        Usuario SMTP
+                                    </label>
+                                    <input type="email" name="email_host_user"
+                                           class="form-control"
+                                           value="{{ email_cfg.user }}"
+                                           placeholder="tu_correo@gmail.com">
+                                    <div class="form-text">
+                                        Generalmente tu dirección de correo completa.
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-key-fill text-success"></i>
+                                        Contraseña SMTP
+                                        {% if email_password_set %}
+                                        <span class="badge bg-success ms-1">Configurada</span>
+                                        {% endif %}
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="password" name="email_host_password"
+                                               id="email_host_password" class="form-control"
+                                               placeholder="{% if email_password_set %}•••••• Dejar vacío para conservar{% else %}Contraseña o app password{% endif %}"
+                                               autocomplete="new-password">
+                                        <button type="button" class="btn btn-outline-secondary"
+                                                onclick="toggleVisibility('email_host_password', this)">
+                                            <i class="bi bi-eye"></i>
+                                        </button>
+                                    </div>
+                                    <div class="form-text">
+                                        En Gmail, usa una <strong>contraseña de
+                                        aplicación</strong>.
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">
+                                        <i class="bi bi-envelope-fill text-success"></i>
+                                        Remitente por defecto
+                                    </label>
+                                    <input type="text" name="default_from_email"
+                                           class="form-control"
+                                           value="{{ email_cfg.from_email }}"
+                                           placeholder="Comfutech Monitor <noreply@comfutech.local>">
+                                    <div class="form-text">
+                                        Formato: <code>Nombre &lt;correo@dominio.com&gt;</code>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                            <!-- Guía de Gmail VISIBLE -->
+                            <div class="settings-guide">
+                                <div class="settings-guide-title">
+                                    <i class="bi bi-google"></i>
+                                    <strong>Cómo obtener contraseña de aplicación de Gmail</strong>
+                                </div>
+                                <ol class="settings-guide-steps">
+                                    <li>
+                                        Ve a <strong>myaccount.google.com</strong>
+                                        e inicia sesión.
+                                    </li>
+                                    <li>
+                                        En el menú lateral, ve a
+                                        <strong>Seguridad</strong>.
+                                    </li>
+                                    <li>
+                                        Activa la
+                                        <strong>Verificación en dos pasos</strong>.
+                                    </li>
+                                    <li>
+                                        Una vez activa, busca
+                                        <strong>"Contraseñas de aplicaciones"</strong>.
+                                    </li>
+                                    <li>
+                                        Genera una contraseña para "Correo"
+                                        o "Otro".
+                                    </li>
+                                    <li>
+                                        Copia el código de 16 caracteres y
+                                        pégalo en el campo de contraseña.
+                                    </li>
+                                </ol>
+                            </div>
+
+                            <!-- Recomendaciones -->
+                            <div class="settings-recommendation">
+                                <div class="settings-recommendation-title">
+                                    <i class="bi bi-lightbulb-fill"></i>
+                                    <strong>Recomendaciones</strong>
+                                </div>
+                                <ul class="settings-recommendation-list">
+                                    <li>
+                                        <strong>Nunca uses tu contraseña de Gmail
+                                        normal</strong>. Siempre contraseña de
+                                        aplicación.
+                                    </li>
+                                    <li>
+                                        Si el servidor SMTP no responde, prueba
+                                        primero con otro email de destino antes de
+                                        cambiar la configuración.
+                                    </li>
+                                    <li>
+                                        Después de guardar, pulsa
+                                        <strong>"Probar"</strong> para enviar un
+                                        email de prueba al destino que indiques.
+                                    </li>
+                                    <li>
+                                        Si usas Office365, activa
+                                        <strong>SMTP AUTH</strong> en la cuenta.
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+
+                        <div class="settings-card-footer">
+                            <button type="button"
+                                    class="btn btn-outline-success"
+                                    onclick="showTestEmail()">
+                                <i class="bi bi-send"></i> Probar envío
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ==================================================== -->
+                <!-- TAB: Grafana                                         -->
+                <!-- ==================================================== -->
+                <div class="tab-pane fade" id="tab-grafana" role="tabpanel">
+
+                    <div class="settings-card">
+                        <div class="settings-card-header">
+                            <div class="settings-card-icon bg-warning-subtle text-warning">
+                                <i class="bi bi-graph-up-arrow"></i>
+                            </div>
+                            <div class="settings-card-heading">
+                                <h5 class="mb-1">Grafana</h5>
+                                <p class="text-muted small mb-0">
+                                    Dashboard externo de visualización de métricas.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-card-body">
+
+                            <div class="alert alert-light border small mb-4">
+                                <i class="bi bi-info-circle text-primary"></i>
+                                <strong>¿Cómo se integra?</strong>
+                                Grafana consume los datos de InfluxDB y muestra
+                                gráficos históricos. La URL configurada aquí es
+                                el enlace que se abre desde el menú lateral del
+                                sistema.
+                            </div>
+
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">
+                                        <i class="bi bi-link-45deg text-warning"></i>
+                                        URL del dashboard
+                                    </label>
+                                    <input type="url" name="grafana_url"
+                                           class="form-control"
+                                           value="{{ cfg.grafana_url }}"
+                                           placeholder="http://localhost:3000/d/comfutech-red-guigue">
+                                    <div class="form-text">
+                                        Si Grafana corre en otra máquina,
+                                        reemplaza <code>localhost</code> por la
+                                        IP correspondiente.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ejemplos VISIBLES -->
+                            <div class="settings-guide">
+                                <div class="settings-guide-title">
+                                    <i class="bi bi-link-45deg"></i>
+                                    <strong>Ejemplos de URL válidas</strong>
+                                </div>
+                                <ul class="settings-guide-steps">
+                                    <li>
+                                        Servidor base:<br>
+                                        <code>http://localhost:3000</code>
+                                    </li>
+                                    <li>
+                                        Dashboard específico:<br>
+                                        <code>http://localhost:3000/d/comfutech-red-guigue</code>
+                                    </li>
+                                    <li>
+                                        Servidor remoto:<br>
+                                        <code>http://10.253.215.10:3000/d/abc123</code>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <!-- Recomendaciones -->
+                            <div class="settings-recommendation">
+                                <div class="settings-recommendation-title">
+                                    <i class="bi bi-lightbulb-fill"></i>
+                                    <strong>Recomendaciones</strong>
+                                </div>
+                                <ul class="settings-recommendation-list">
+                                    <li>
+                                        <strong>Si la URL no responde en 5s</strong>,
+                                        el botón "Grafana" del menú lateral se
+                                        oculta automáticamente (verificación
+                                        cacheada 5 min).
+                                    </li>
+                                    <li>
+                                        Usa la URL del <strong>dashboard
+                                        específico</strong> para que se abra
+                                        directamente en la vista que quieres.
+                                    </li>
+                                    <li>
+                                        Si usas Grafana Cloud, pega la URL
+                                        completa (con el subdominio y org ID).
+                                    </li>
+                                </ul>
+                            </div>
+
+                        </div>
+
+                        <div class="settings-card-footer">
+                            <button type="submit"
+                                    formaction="{% url 'core:test_grafana' %}"
+                                    formnovalidate
+                                    class="btn btn-outline-warning">
+                                <i class="bi bi-plug"></i> Probar conexión
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- STICKY SAVE BAR                                              -->
+    <!-- ============================================================ -->
+    <div class="settings-save-bar">
+        <div class="settings-save-info">
+            <i class="bi bi-{% if cfg.updated_at %}check-circle-fill text-success{% else %}info-circle text-muted{% endif %}"></i>
+            {% if cfg.updated_at %}
+                Última actualización:
+                <strong>{{ cfg.updated_at|date:"d/m/Y H:i" }}</strong>
+                {% if cfg.updated_by %}por <strong>{{ cfg.updated_by }}</strong>{% endif %}
+            {% else %}
+                <span class="text-muted">Configuración inicial — aún no guardada</span>
+            {% endif %}
+        </div>
+        <div class="settings-save-actions">
+            <button type="reset" class="btn btn-outline-secondary"
+                    onclick="return confirmReset()">
+                <i class="bi bi-arrow-counterclockwise"></i> Descartar
+            </button>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save"></i> Guardar configuración
+            </button>
+        </div>
+    </div>
+
+</form>
+
+<!-- ============================================================ -->
+<!-- MODAL: Test de email                                         -->
+<!-- ============================================================ -->
+<div class="modal fade" id="testEmailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'core:test_email' %}">
+                {% csrf_token %}
+                <input type="hidden" name="email_host" id="hidden_email_host">
+                <input type="hidden" name="email_port" id="hidden_email_port">
+                <input type="hidden" name="email_use_tls" id="hidden_email_use_tls">
+                <input type="hidden" name="email_use_ssl" id="hidden_email_use_ssl">
+                <input type="hidden" name="email_host_user" id="hidden_email_host_user">
+                <input type="hidden" name="email_host_password" id="hidden_email_host_password">
+                <input type="hidden" name="default_from_email" id="hidden_default_from_email">
+
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">
+                        <i class="bi bi-envelope-at"></i> Enviar email de prueba
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Se probarán los valores actuales del formulario
+                        (sin necesidad de guardarlos).
+                    </p>
+                    <div class="mb-0">
+                        <label class="form-label">Email de destino</label>
+                        <input type="email" name="test_email_to" class="form-control"
+                               placeholder="destino@ejemplo.com" required>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm"
+                            data-bs-dismiss="modal">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="bi bi-send"></i> Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA (expandida)
+// ============================================================
+registerHelpContent({
+    title: "Configuración del Sistema — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Centraliza todos los parámetros globales del sistema:
+                conexión a InfluxDB, intervalos del monitor, bot de Telegram,
+                servidor SMTP y URL de Grafana.
+                <br><br>
+                La configuración se guarda en <strong><code>config.toml</code></strong>,
+                no en la base de datos. Los valores sensibles (tokens,
+                contraseñas) están protegidos por los permisos del archivo.
+            `
+        },
+        {
+            heading: "Navegación del panel",
+            body: `
+                El panel se organiza en <strong>5 secciones</strong> accesibles
+                desde el menú lateral:
+                <br>
+                • <i class="bi bi-database-fill text-danger"></i> <strong>InfluxDB</strong> — base de datos de métricas.
+                <br>
+                • <i class="bi bi-cpu-fill text-success"></i> <strong>Monitor</strong> — pollers e intervalos.
+                <br>
+                • <i class="bi bi-telegram text-primary"></i> <strong>Telegram</strong> — notificaciones push.
+                <br>
+                • <i class="bi bi-envelope-at-fill text-success"></i> <strong>Email</strong> — SMTP para verificación y recuperación.
+                <br>
+                • <i class="bi bi-graph-up-arrow text-warning"></i> <strong>Grafana</strong> — dashboard externo.
+                <br><br>
+                El <strong>badge "!"</strong> en una sección indica que falta
+                configurar un valor crítico (token, contraseña).
+            `
+        },
+        {
+            heading: "Sobre el archivo config.toml",
+            body: `
+                Toda la configuración runtime vive en <code>config.toml</code>
+                en la raíz del proyecto.
+                <br><br>
+                <strong>Ventajas:</strong>
+                <br>
+                • Fácil de respaldar (copias un archivo).
+                <br>
+                • Portable entre instalaciones.
+                <br>
+                • No requiere migraciones de BD.
+                <br>
+                • Preserva comentarios y orden (TOML es legible por humanos).
+                <br><br>
+                <strong>Seguridad:</strong>
+                <br>
+                • El archivo se crea con permisos <code>0600</code>.
+                <br>
+                • Se hace un backup a <code>config.toml.bak</code> antes de
+                cada escritura.
+                <br>
+                • Está excluido del control de versiones (<code>.gitignore</code>).
+                <br>
+                • Los campos con <i class="bi bi-eye"></i> se envían
+                enmascarados y no se sobrescriben si los dejas vacíos.
+            `
+        },
+        {
+            heading: "Tab InfluxDB",
+            body: `
+                Configura la conexión a la base de datos de series temporales
+                donde se almacenan las métricas.
+                <br><br>
+                <strong>Campos:</strong>
+                <br>
+                • <strong>URL:</strong> normalmente <code>http://localhost:8086</code>.
+                <br>
+                • <strong>API Token:</strong> créalo en la UI de InfluxDB con
+                permisos <em>Read &amp; Write</em> sobre el bucket.
+                <br>
+                • <strong>Organización:</strong> el nombre de tu org (default <code>comfutech</code>).
+                <br>
+                • <strong>Bucket:</strong> el contenedor de métricas (default <code>metricas_red</code>).
+                <br><br>
+                <strong>"Probar conexión":</strong> verifica los 3 pasos —
+                servidor en <code>/health</code>, token válido, bucket existe.
+            `
+        },
+        {
+            heading: "Tab Monitor — Los 5 pollers",
+            body: `
+                El monitor ejecuta 5 pollers en paralelo:
+                <br><br>
+                <i class="bi bi-graph-up text-primary"></i>
+                <strong>SNMP Tráfico</strong> — contadores de tráfico por
+                interfaz. Default: <code>60s</code>.
+                <br>
+                <i class="bi bi-heart-pulse text-success"></i>
+                <strong>Core Health</strong> — CPU, memoria, temperatura,
+                uptime. Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-activity text-warning"></i>
+                <strong>ICMP/TCP</strong> — disponibilidad, latencia, pérdida,
+                puertos TCP. Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-broadcast-pin text-info"></i>
+                <strong>Radiofrecuencia</strong> — señal, CCQ, tasas TX/RX.
+                Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-people-fill text-primary"></i>
+                <strong>Clientes AP</strong> — clientes conectados a APs.
+                Default: <code>120s</code>.
+                <br><br>
+                Los cambios se aplican en <strong>≤60s</strong> sin reiniciar
+                el monitor (heartbeat).
+            `
+        },
+        {
+            heading: "Tab Telegram",
+            body: `
+                Configura el bot de Telegram para notificaciones push.
+                <br><br>
+                <strong>Requisitos:</strong>
+                <br>
+                1. Bot creado con <strong>@BotFather</strong>.
+                <br>
+                2. Grupo de Telegram con el bot como administrador.
+                <br>
+                3. Bot Token + Chat ID del grupo.
+                <br><br>
+                El <strong>Chat ID</strong> debe empezar con <code>-</code>
+                para grupos/supergrupos.
+                <br><br>
+                <strong>"Probar":</strong> envía un mensaje al chat configurado
+                para verificar que todo funcione.
+            `
+        },
+        {
+            heading: "Tab Email (SMTP)",
+            body: `
+                Servidor SMTP usado para verificación de cuentas y recuperación
+                de contraseñas.
+                <br><br>
+                <strong>Servidores comunes:</strong>
+                <br>
+                • Gmail: <code>smtp.gmail.com:587</code> + contraseña de aplicación.
+                <br>
+                • Office365: <code>smtp.office365.com:587</code> + SMTP AUTH activo.
+                <br>
+                • Otros: consulta la documentación del proveedor.
+                <br><br>
+                <strong>TLS vs SSL:</strong> mutuamente excluyentes.
+                TLS = puerto 587, SSL = puerto 465.
+                <br><br>
+                <strong>"Probar envío":</strong> abre un modal para enviar un
+                email de prueba al destino que indiques.
+            `
+        },
+        {
+            heading: "Tab Grafana",
+            body: `
+                URL del dashboard que se abre desde el menú lateral.
+                <br><br>
+                <strong>Comportamiento:</strong> si la URL no responde en
+                5 segundos, el botón <strong>Grafana</strong> del menú
+                lateral se oculta automáticamente. La verificación se
+                cachea por 5 minutos.
+                <br><br>
+                Usa <strong>"Probar conexión"</strong> para verificar que
+                responde antes de guardar.
+            `
+        },
+        {
+            heading: "Guardar y descartar",
+            body: `
+                La barra inferior (<strong>sticky save bar</strong>) siempre
+                está visible mientras te mueves por las secciones.
+                <br><br>
+                <strong>Guardar configuración:</strong> envía todos los valores
+                (de los 5 tabs) de una vez. Se escribe en <code>config.toml</code>
+                de forma atómica (con backup previo).
+                <br><br>
+                <strong>Descartar:</strong> restaura el formulario al último
+                estado guardado. Requiere confirmación.
+                <br><br>
+                <strong>Si intentas salir sin guardar,</strong> aparece un
+                warning del navegador (beforeunload).
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Probar siempre</strong> las conexiones antes de
+                guardar cambios importantes.
+                <br>
+                • <strong>No compartas</strong> el archivo <code>config.toml</code>
+                fuera del servidor.
+                <br>
+                • <strong>Respalda <code>config.toml</code></strong> junto con
+                la BD (son los 2 archivos que necesitas para restaurar una
+                instalación completa).
+                <br>
+                • <strong>Restringe permisos</strong> del archivo a solo tu
+                usuario.
+                <br>
+                • <strong>No lo subas a git</strong> — está en <code>.gitignore</code>.
+                <br>
+                • <strong>Cambia tokens y contraseñas</strong> periódicamente.
+                <br>
+                • <strong>Usa contraseñas de aplicación</strong> para Gmail.
+                <br>
+                • <strong>Si migras de servidor</strong>, copia
+                <code>config.toml</code> + <code>system.toml</code>.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function toggleVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+
+function confirmReset() {
+    return confirm('¿Descartar todos los cambios sin guardar?');
+}
+
+// ============================================================
+// MODAL: TEST EMAIL
+// ============================================================
+function showTestEmail() {
+    const map = [
+        ['email_host', 'hidden_email_host'],
+        ['email_port', 'hidden_email_port'],
+        ['email_use_tls', 'hidden_email_use_tls'],
+        ['email_use_ssl', 'hidden_email_use_ssl'],
+        ['email_host_user', 'hidden_email_host_user'],
+        ['email_host_password', 'hidden_email_host_password'],
+        ['default_from_email', 'hidden_default_from_email'],
+    ];
+    map.forEach(([srcName, dstId]) => {
+        const src = document.querySelector(`[name="${srcName}"]`);
+        const dst = document.getElementById(dstId);
+        if (!src || !dst) return;
+        if (src.type === 'checkbox') {
+            dst.value = src.checked ? 'on' : '';
+        } else {
+            dst.value = src.value;
+        }
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('testEmailModal'));
+    modal.show();
+}
+
+// ============================================================
+// TLS/SSL mutuamente excluyentes
+// ============================================================
+(function() {
+    const tls = document.getElementById('email_tls');
+    const ssl = document.getElementById('email_ssl');
+    if (tls && ssl) {
+        tls.addEventListener('change', () => {
+            if (tls.checked) ssl.checked = false;
+        });
+        ssl.addEventListener('change', () => {
+            if (ssl.checked) tls.checked = false;
+        });
+    }
+})();
+
+// ============================================================
+// Warning si el usuario sale sin guardar
+// ============================================================
+(function() {
+    const form = document.getElementById('settings-form');
+    if (!form) return;
+    let dirty = false;
+    form.addEventListener('input', () => { dirty = true; });
+    form.addEventListener('change', () => { dirty = true; });
+    form.addEventListener('submit', (e) => {
+        const submitter = e.submitter || document.activeElement;
+        if (submitter && submitter.hasAttribute('formaction')) return;
+        dirty = false;
+    });
+    window.addEventListener('beforeunload', (e) => {
+        if (dirty) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+})();
+
+// ============================================================
+// Persistir el tab activo en localStorage
+// ============================================================
+(function() {
+    const tabBtns = document.querySelectorAll('[data-bs-toggle="pill"]');
+    if (!tabBtns.length) return;
+
+    // Restaurar el último tab activo
+    try {
+        const lastTab = localStorage.getItem('cf-settings-tab-v2');
+        if (lastTab) {
+            const btn = document.querySelector(`[data-bs-target="${lastTab}"]`);
+            if (btn) new bootstrap.Tab(btn).show();
+        }
+    } catch (e) {}
+
+    // Guardar al cambiar
+    tabBtns.forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (e) => {
+            try {
+                localStorage.setItem('cf-settings-tab-v2', e.target.dataset.bsTarget);
+            } catch (err) {}
+        });
+    });
+})();
+</script>
+
+<style>
+/* ============================================================
+   BANNER compacto sobre config.toml
+   ============================================================ */
+.settings-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bs-secondary-bg, #f8f9fa);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-left: 4px solid var(--bs-primary, #0d6efd);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.85rem;
+}
+
+.settings-banner > i {
+    font-size: 1.3rem;
+    color: var(--bs-primary, #0d6efd);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.settings-banner-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-banner-content strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.settings-banner-content small {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.78rem;
+    display: block;
+    line-height: 1.4;
+}
+
+.settings-banner-content code {
+    font-size: 0.75rem;
+    background: var(--bs-tertiary-bg, #e9ecef);
+    padding: 1px 5px;
+    border-radius: 3px;
+    word-break: break-all;
+}
+
+/* ============================================================
+   SIDEBAR de navegación (vertical en desktop, horizontal en móvil)
+   ============================================================ */
+.settings-sidebar {
+    position: sticky;
+    top: 20px;
+}
+
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 10px;
+}
+
+.settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    color: var(--bs-body-color, #212529);
+    cursor: pointer;
+    text-align: left;
+    position: relative;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    width: 100%;
+}
+
+.settings-nav-item:hover {
+    background: var(--bs-tertiary-bg, #e9ecef);
+}
+
+.settings-nav-item.active {
+    background: var(--bs-primary, #0d6efd);
+    color: white;
+}
+
+.settings-nav-item > i {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 22px;
+    text-align: center;
+}
+
+.settings-nav-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-nav-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    line-height: 1.2;
+}
+
+.settings-nav-text small {
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 2px;
+    line-height: 1.2;
+}
+
+.settings-nav-item.active small {
+    color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.settings-nav-badge {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--bs-warning, #ffc107);
+    color: var(--bs-dark, #212529);
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.settings-nav-item.active .settings-nav-badge {
+    background: white;
+    color: var(--bs-primary, #0d6efd);
+}
+
+/* ============================================================
+   Card de estado en el sidebar
+   ============================================================ */
+.settings-status {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border-radius: 10px;
+    font-size: 0.78rem;
+}
+
+.settings-status-header {
+    font-weight: 600;
+    font-size: 0.82rem;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.settings-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    gap: 8px;
+}
+
+.settings-status-row span {
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.72rem;
+}
+
+.settings-status-row strong,
+.settings-status-row code {
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+/* ============================================================
+   CARD de contenido
+   ============================================================ */
+.settings-card {
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+    background: var(--bs-secondary-bg, #f8f9fa);
+}
+
+.settings-card-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+
+.settings-card-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-card-heading h5 {
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.settings-card-body {
+    padding: 24px;
+    flex: 1;
+}
+
+.settings-card-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--bs-border-color, #dee2e6);
+    background: var(--bs-secondary-bg, #f8f9fa);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ============================================================
+   Toggle destacado (monitor enabled, telegram enabled)
+   ============================================================ */
+.settings-toggle-primary {
+    padding: 16px 18px;
+    background: var(--bs-tertiary-bg, #f8f9fa);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 10px;
+}
+
+.settings-toggle-primary .form-check-label {
+    font-size: 0.95rem;
+}
+
+.settings-toggle-hint {
+    font-size: 0.78rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 6px;
+    margin-left: 44px;
+    line-height: 1.4;
+}
+
+/* ============================================================
+   Subheadings internos
+   ============================================================ */
+.settings-subheading {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+    margin-bottom: 4px;
+}
+
+/* ============================================================
+   Tarjeta de cada poller
+   ============================================================ */
+.settings-poller-card {
+    padding: 14px;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 8px;
+    height: 100%;
+}
+
+.settings-poller-icon {
+    font-size: 1.3rem;
+    margin-bottom: 6px;
+}
+
+.settings-poller-hint {
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+/* ============================================================
+   Bloque de recomendaciones (VISIBLE, no colapsable)
+   ============================================================ */
+.settings-recommendation {
+    margin-top: 20px;
+    padding: 16px 18px;
+    background: rgba(var(--bs-info-rgb, 13, 202, 240), 0.08);
+    border-left: 4px solid var(--bs-info, #0dcaf0);
+    border-radius: 6px;
+}
+
+.settings-recommendation-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bs-info-text-emphasis, #055160);
+}
+
+.settings-recommendation-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.settings-recommendation-list li {
+    padding-left: 20px;
+    position: relative;
+    margin-bottom: 6px;
+}
+
+.settings-recommendation-list li::before {
+    content: "→";
+    position: absolute;
+    left: 4px;
+    color: var(--bs-info, #0dcaf0);
+    font-weight: 700;
+}
+
+.settings-recommendation-list li:last-child {
+    margin-bottom: 0;
+}
+
+/* ============================================================
+   Bloque de guía paso a paso (VISIBLE, no colapsable)
+   ============================================================ */
+.settings-guide {
+    margin-top: 20px;
+    padding: 16px 18px;
+    background: rgba(var(--bs-primary-rgb, 13, 110, 253), 0.06);
+    border-left: 4px solid var(--bs-primary, #0d6efd);
+    border-radius: 6px;
+}
+
+.settings-guide-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bs-primary, #0d6efd);
+}
+
+.settings-guide-steps {
+    font-size: 0.8rem;
+    line-height: 1.6;
+    padding-left: 20px;
+    margin: 0;
+}
+
+.settings-guide-steps li {
+    margin-bottom: 8px;
+}
+
+.settings-guide-steps li:last-child {
+    margin-bottom: 0;
+}
+
+.settings-guide-steps code {
+    font-size: 0.72rem;
+    background: var(--bs-tertiary-bg, #e9ecef);
+    padding: 1px 5px;
+    border-radius: 3px;
+    word-break: break-all;
+}
+
+/* ============================================================
+   STICKY SAVE BAR
+   ============================================================ */
+.settings-save-bar {
+    position: sticky;
+    bottom: 16px;
+    z-index: 100;
+    margin-top: 24px;
+    padding: 14px 20px;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.settings-save-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.settings-save-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ============================================================
+   MÓVIL
+   ============================================================ */
+@media (max-width: 991.98px) {
+    .settings-sidebar {
+        position: static;
+    }
+
+    /* Nav horizontal scrollable */
+    .settings-nav {
+        flex-direction: row;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: thin;
+        padding: 6px;
+    }
+
+    .settings-nav-item {
+        flex-shrink: 0;
+        padding: 8px 12px;
+    }
+
+    .settings-nav-text small {
+        display: none;
+    }
+
+    .settings-status {
+        margin-top: 8px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .settings-save-bar {
+        bottom: 8px;
+        padding: 10px 14px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .settings-save-actions {
+        width: 100%;
+    }
+
+    .settings-save-actions .btn {
+        flex: 1;
+    }
+
+    .settings-card-header {
+        padding: 16px 18px;
+    }
+
+    .settings-card-body {
+        padding: 18px;
+    }
+
+    .settings-card-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+}
+</style>
+{% endblock %}

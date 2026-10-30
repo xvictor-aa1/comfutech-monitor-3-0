@@ -1,0 +1,1957 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">{{ title }}</h2>
+        <p class="text-muted mb-0 small">
+            {% if is_edit %}
+                Modifica la regla existente. Los cambios se aplican en el próximo
+                ciclo de evaluación.
+            {% else %}
+                Define una nueva regla con grupos de condicionales lógicos.
+            {% endif %}
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'alertas:rule_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger">
+    {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<form method="post" id="rule-form" novalidate>
+    {% csrf_token %}
+
+    <div class="row g-4">
+
+        <!-- FILA 1: Identificación (8) + Notificación (4) -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-tag text-primary"></i> Identificación
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label" for="{{ form.name.id_for_label }}">
+                                {{ form.name.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                            <div class="text-danger small mt-1">{{ form.name.errors.0 }}</div>
+                            {% endif %}
+                            <div class="form-text">
+                                Sé descriptivo. Ej: <em>Alerta de saturación Core</em>.
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label" for="{{ form.severity.id_for_label }}">
+                                {{ form.severity.label }}
+                            </label>
+                            {{ form.severity }}
+                            {% if form.severity.errors %}
+                            <div class="text-danger small mt-1">{{ form.severity.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.description.id_for_label }}">
+                            {{ form.description.label }}
+                        </label>
+                        {{ form.description }}
+                        <div class="form-text">Notas opcionales para documentar la regla.</div>
+                    </div>
+
+                    <hr class="my-3">
+
+                    <div class="form-check form-switch mb-2">
+                        {{ form.enabled }}
+                        <label class="form-check-label" for="{{ form.enabled.id_for_label }}">
+                            <strong>Regla activa</strong>
+                            <span class="text-muted small d-block">
+                                Si está desactivada, no se evalúa y no dispara alertas.
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                        {{ form.fire_once }}
+                        <label class="form-check-label" for="{{ form.fire_once.id_for_label }}">
+                            <strong>Disparar solo una vez</strong>
+                            <span class="text-muted small d-block">
+                                La regla solo disparará <strong>una vez</strong> por
+                                periodo de violación. Útil para notificaciones de
+                                <em>"vuelta en línea"</em>.
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        {{ form.skip_on_startup }}
+                        <label class="form-check-label" for="{{ form.skip_on_startup.id_for_label }}">
+                            <strong>Omitir al iniciar el monitor</strong>
+                            <span class="text-muted small d-block">
+                                No se evalúa durante los primeros 120s tras
+                                arrancar el monitor.
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-telegram text-primary"></i> Notificación
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="form-check form-switch mb-3">
+                        {{ form.telegram_enabled }}
+                        <label class="form-check-label" for="{{ form.telegram_enabled.id_for_label }}">
+                            <strong>Enviar por Telegram</strong>
+                        </label>
+                    </div>
+
+                    <div id="telegram-cooldown-group">
+                        <label class="form-label" for="{{ form.telegram_cooldown_sec.id_for_label }}">
+                            {{ form.telegram_cooldown_sec.label }}
+                        </label>
+                        {{ form.telegram_cooldown_sec }}
+                        {% if form.telegram_cooldown_sec.errors %}
+                        <div class="text-danger small mt-1">{{ form.telegram_cooldown_sec.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Tiempo mínimo entre notificaciones de esta regla
+                            (mín. 60s).
+                        </div>
+                    </div>
+
+                    <div class="mt-auto pt-3 border-top small text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Telegram debe estar configurado en
+                        <a href="{% url 'core:system_settings' %}">Configuración del sistema</a>
+                        (bot_token, chat_id, enabled).
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FILA 2: Condicionales (8) + Resumen (4) -->
+        <div class="col-lg-8">
+            <div class="card h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-diagram-3 text-warning"></i> Condicionales
+                    </h5>
+                    <button type="button" class="btn btn-sm btn-primary"
+                            id="btn-configure-conditions"
+                            onclick="openConditionsModal()">
+                        <i class="bi bi-gear"></i> Configurar Condicionales
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if form.conditionals_json.errors %}
+                    <div class="alert alert-danger small py-2 mb-3">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        <strong>Error en los condicionales:</strong>
+                        {% for err in form.conditionals_json.errors %}
+                        <div class="mt-1">{{ err }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div id="conditions-summary">
+                        <em class="text-muted small">
+                            Sin condicionales. Pulsa <strong>Configurar Condicionales</strong> para empezar.
+                        </em>
+                    </div>
+
+                    <input type="hidden" name="conditionals_json"
+                           id="id_conditionals_json" value="">
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100 border-info">
+                <div class="card-header bg-info bg-opacity-10">
+                    <h5 class="mb-0">
+                        <i class="bi bi-eye text-info"></i> Resumen
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="mb-3">
+                        <span class="badge bg-primary" id="stat-groups">0 grupos</span>
+                        <span class="badge bg-info text-dark" id="stat-conds">0 condicionales</span>
+                        <span class="badge bg-secondary" id="stat-devices">0 equipos</span>
+                    </div>
+                    <div id="summary-content" class="flex-grow-1">
+                        <em class="text-muted small">
+                            Configura condicionales para ver el resumen.
+                        </em>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FILA 3: Mensaje personalizado -->
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-chat-left-text text-info"></i> Mensaje personalizado
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-lg-6">
+                            <p class="text-muted small mb-2">
+                                Si lo dejas vacío, se genera un mensaje automático
+                                mostrando la estructura de grupos.
+                            </p>
+
+                            {{ form.custom_message }}
+                            {% if form.custom_message.errors %}
+                            <div class="text-danger small mt-1">{{ form.custom_message.errors.0 }}</div>
+                            {% endif %}
+
+                            <div class="mt-3">
+                                <label class="form-label small text-muted">Vista previa:</label>
+                                <div class="alert alert-light border mb-0 py-2 px-3">
+                                    <small id="message-preview" class="text-break">
+                                        <em class="text-muted">
+                                            [Se generará automáticamente al dispararse]
+                                        </em>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6">
+                            <label class="form-label small text-muted mb-1">
+                                <i class="bi bi-braces"></i> Placeholders disponibles
+                                (clic para insertar):
+                            </label>
+                            <div class="d-flex flex-wrap gap-1" id="placeholders-list"
+                                 style="max-height: 260px; overflow-y: auto; padding: 4px;
+                                        border: 1px dashed var(--cf-border, #dee2e6); border-radius: 6px;">
+                                <!-- JS llena -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones -->
+    <div class="d-flex justify-content-between align-items-center mt-4">
+        <a href="{% url 'alertas:rule_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Cancelar
+        </a>
+        <div>
+            {% if is_edit %}
+            <a href="{% url 'alertas:rule_delete' rule.id %}"
+               class="btn btn-outline-danger me-2">
+                <i class="bi bi-trash"></i> Eliminar
+            </a>
+            {% endif %}
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="bi bi-save"></i>
+                {% if is_edit %}Guardar cambios{% else %}Crear regla{% endif %}
+            </button>
+        </div>
+    </div>
+
+</form>
+
+<!-- MODAL: Configurar Condicionales -->
+<div class="modal fade" id="conditionsModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-diagram-3 text-warning"></i>
+                    Configurar Condicionales
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Estructura:</strong>
+                    una regla tiene <strong>grupos</strong>. Cada grupo
+                    contiene <strong>1-N condicionales</strong> conectados
+                    por un operador <strong>independiente por gap</strong>
+                    (AND/OR/XOR). Los grupos se conectan entre sí con otro
+                    operador. Puedes negar grupos completos o condicionales
+                    individuales con NOT.
+                    <br><br>
+                    <strong>Ejemplos:</strong>
+                    <code>(c1 AND c2) OR (c3 XOR c4)</code> |
+                    <code>NOT (c1 AND c2 AND c3) OR c4</code>
+                </div>
+
+                <div id="conditions-editor"></div>
+
+                <div class="text-center mt-3" id="no-groups-msg" style="display:none;">
+                    <button type="button" class="btn btn-primary" onclick="addGroup()">
+                        <i class="bi bi-plus-lg"></i> Agregar Primer Grupo
+                    </button>
+                </div>
+
+                <div class="text-center mt-3" id="add-group-btn-container" style="display:none;">
+                    <button type="button" class="btn btn-outline-primary"
+                            onclick="addGroup()">
+                        <i class="bi bi-plus-lg"></i> Agregar Grupo
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary"
+                        onclick="applyConditions()">
+                    <i class="bi bi-check-lg"></i> Aplicar Condicionales
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ============================================================
+       CONECTORES (badge pill con select) — entre grupos
+       ============================================================ */
+    .connector-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 10px;
+        background: var(--cf-hover-bg, #eef2f7);
+        border: 1px solid var(--cf-border, #ccc);
+        border-radius: 16px;
+        font-size: 0.72rem;
+        white-space: nowrap;
+    }
+    .connector-badge select {
+        width: auto;
+        min-width: 70px;
+        border: none;
+        background: transparent;
+        font-size: 0.72rem;
+        padding: 1px 2px;
+        color: var(--cf-primary, #0d6efd);
+        font-weight: 700;
+        cursor: pointer;
+        outline: none;
+        box-shadow: none;
+    }
+    [data-bs-theme="dark"] .connector-badge select option {
+        color: #e8eef5;
+        background: #1e252e;
+    }
+    [data-bs-theme="light"] .connector-badge select option {
+        color: #000;
+        background: #fff;
+    }
+
+    /* ============================================================
+       OPERADOR INTERNO (entre condicionales del mismo grupo)
+       Cada gap tiene su propio select independiente
+       ============================================================ */
+    .inner-operator-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        background: var(--cf-hover-bg, #eef2f7);
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+    .inner-operator-badge select {
+        border: none;
+        background: transparent;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--cf-primary, #0d6efd);
+        padding: 0 4px;
+        cursor: pointer;
+        outline: none;
+        box-shadow: none;
+    }
+    [data-bs-theme="dark"] .inner-operator-badge select option {
+        color: #e8eef5;
+        background: #1e252e;
+    }
+
+    /* ============================================================
+       GROUP CARD — background adaptado al tema
+       ============================================================ */
+    .group-card {
+        border: 2px solid var(--cf-border, #dee2e6);
+        border-radius: 8px;
+        background: var(--cf-card-bg, #fff);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    .group-card:hover {
+        border-color: var(--cf-primary, #0d6efd);
+        box-shadow: 0 2px 8px rgba(13, 110, 253, 0.08);
+    }
+    .group-card .group-header {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--cf-border-light, #eee);
+        background: var(--cf-hover-bg, #f8f9fa);
+        border-radius: 6px 6px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .group-card .group-body {
+        padding: 10px;
+        flex-grow: 1;
+    }
+
+    /* ============================================================
+       FILA DE 2 GRUPOS (side by side en desktop, stacked en móvil)
+       ============================================================ */
+    .row-two-groups {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 8px;
+        align-items: stretch;
+        margin-bottom: 1rem;
+    }
+    .row-two-groups .mid-connector {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .row-full-width {
+        margin-bottom: 1rem;
+    }
+    .row-full-width .full-connector {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 8px;
+    }
+
+    .row-single-group {
+        margin-bottom: 1rem;
+    }
+    .row-single-group .single-wrapper {
+        max-width: calc(50% - 30px);
+    }
+
+    /* ============================================================
+       CONDICIONALES DENTRO DE UN GRUPO
+       ------------------------------------------------------------
+       Reglas:
+         • N=1: 1 card ocupa todo el ancho
+         • N par: pares de 2 cards con operador entre ellos
+         • N impar (>=3): pares de 2 + último con ancho de media columna
+         • Entre filas: línea dashed arriba + operador alineado sobre el
+           card izquierdo de la fila siguiente
+         • Todos los cards misma altura (align-items: stretch)
+         • gap entre cards y operador
+       ============================================================ */
+    .cond-row-pair {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: stretch;
+    }
+
+    .cond-row-full {
+        margin-bottom: 10px;
+    }
+
+    .cond-op {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 56px;
+    }
+
+    /* Separador entre filas de condicionales:
+       - Línea dashed en el TOPE (ancho completo)
+       - Operador debajo, alineado sobre el centro del card izquierdo
+         de la fila siguiente (columna 1 del grid `1fr 56px 1fr`)
+       Mantiene la coherencia visual de que el operador NO está entre
+       la línea sino debajo de ella. */
+    .cond-row-op {
+        display: grid;
+        grid-template-columns: 1fr 56px 1fr;
+        gap: 10px;
+        padding-top: 8px;
+        margin-top: 6px;
+        margin-bottom: 10px;
+        border-top: 1px dashed var(--cf-border-light, #e9ecef);
+    }
+    .cond-row-op .op-cell {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
+
+    /* ============================================================
+       CELDA DE CONDICIONAL — background adaptado al tema
+       ============================================================ */
+    .conditional-cell {
+        background: var(--cf-hover-bg, #f8f9fa);
+        border: 1px solid var(--cf-border-light, #eee);
+        border-radius: 6px;
+        padding: 10px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    /* Inputs compactos */
+    .conditional-fields .form-label {
+        font-size: 0.68rem;
+        margin-bottom: 1px;
+        color: var(--cf-text-muted, #6c757d);
+        font-weight: 500;
+    }
+    .conditional-fields .form-control-sm,
+    .conditional-fields .form-select-sm {
+        font-size: 0.78rem;
+        padding: 0.2rem 0.4rem;
+        height: auto;
+        min-height: 28px;
+    }
+
+    /* ============================================================
+       RESPONSIVE — MÓVIL: 1 sola columna en todo
+       ============================================================ */
+    @media (max-width: 991.98px) {
+        .row-single-group .single-wrapper {
+            max-width: 100%;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        /* Todos los grupos a 1 columna */
+        .row-two-groups {
+            grid-template-columns: 1fr;
+        }
+        .row-two-groups .mid-connector {
+            padding: 4px 0;
+        }
+
+        /* Todos los condicionales a 1 columna */
+        .cond-row-pair {
+            grid-template-columns: 1fr;
+            gap: 6px;
+        }
+        .cond-op {
+            padding: 4px 0;
+            min-width: 0;
+        }
+        .cond-row-op {
+            grid-template-columns: 1fr;
+            padding-top: 6px;
+            margin-top: 4px;
+            margin-bottom: 8px;
+        }
+        .cond-row-op .op-cell {
+            justify-content: center;
+        }
+    }
+
+    /* Modal más ancho en pantallas grandes */
+    @media (min-width: 1400px) {
+        #conditionsModal .modal-dialog {
+            max-width: 1320px;
+        }
+    }
+</style>
+
+{% endblock %}
+
+{% block extra_js %}
+{{ existing_conditionals|json_script:"rule-conditionals-data" }}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA (expandida)
+// ============================================================
+registerHelpContent({
+    title: "Configurar Regla de Alerta — Guía",
+    sections: [
+        {
+            heading: "¿Qué es una regla de alerta?",
+            body: `
+                Una regla define las <strong>condiciones</strong> que disparan
+                una alerta. Cuando las métricas de los equipos cumplen esas
+                condiciones durante el tiempo configurado, se genera una
+                alerta y (opcionalmente) se notifica por Telegram.
+            `
+        },
+        {
+            heading: "Cómo crear una regla paso a paso",
+            body: `
+                1. <strong>Nombre y prioridad:</strong> identifica la regla y elige
+                cuán urgente es.
+                <br>
+                2. <strong>Configurar Condicionales:</strong> pulsa el botón para abrir
+                el editor de grupos.
+                <br>
+                3. <strong>Añadir grupos:</strong> cada grupo contiene 1-5 condicionales
+                unidos por un operador independiente por gap.
+                <br>
+                4. <strong>Añadir condicionales:</strong> dentro de cada grupo, elige
+                equipo, métrica, operador, umbral y duración.
+                <br>
+                5. <strong>Conectar grupos:</strong> entre cada par de grupos aparece
+                un conector con el operador (AND/OR/XOR).
+                <br>
+                6. <strong>Mensaje personalizado (opcional):</strong> usa placeholders
+                para que la notificación sea informativa.
+                <br>
+                7. <strong>Notificación Telegram:</strong> activa si quieres push.
+                <br>
+                8. <strong>Guardar:</strong> pulsa el botón inferior.
+                <br><br>
+                La regla se evalúa automáticamente en cada ciclo del monitor.
+            `
+        },
+        {
+            heading: "Prioridades de las alertas",
+            body: `
+                Al elegir la <strong>prioridad</strong> defines qué tan urgente
+                es la alerta:
+                <br><br>
+                <span class="badge bg-info">Info</span> — Informativo, no urgente.
+                <br>
+                <span class="badge bg-warning text-dark">Advertencia</span> — Requiere atención pronto.
+                <br>
+                <span class="badge bg-danger">Crítica</span> — Requiere atención inmediata.
+                <br><br>
+                <strong>Recomendación:</strong> reserva "Crítica" para eventos
+                que afectan disponibilidad o seguridad. Usa "Advertencia"
+                para degradaciones y "Info" para eventos informativos.
+            `
+        },
+        {
+            heading: "Estructura de grupos y condicionales",
+            body: `
+                Cada regla tiene <strong>1-5 grupos</strong>. Cada grupo tiene
+                <strong>1-5 condicionales</strong>. Total máximo:
+                <strong>10 condicionales</strong>.
+                <br><br>
+                <strong>Dentro de un grupo</strong>, los condicionales se
+                combinan con un operador <strong>independiente por gap</strong>
+                (AND/OR/XOR). Esto permite expresiones como
+                <code>c1 AND c2 OR c3</code> dentro del mismo grupo, donde el
+                primer gap es AND y el segundo es OR.
+                <br><br>
+                <strong>Entre grupos</strong>, también se combinan con
+                AND/OR/XOR, evaluados de izquierda a derecha. El operador
+                se muestra en el conector entre los grupos.
+                <br><br>
+                <strong>Negación (NOT):</strong> puedes negar un grupo entero
+                (checkbox <em>NOT</em> en el header del grupo) o un
+                condicional individual (checkbox <em>NOT</em> dentro del
+                condicional).
+            `
+        },
+        {
+            heading: "Ejemplos prácticos",
+            body: `
+                <strong>AND simple:</strong>
+                <code>CPU &gt; 85% AND Mem &gt; 90%</code>
+                <br>
+                Un grupo con 2 condicionales.
+                <br><br>
+                <strong>AND + OR dentro de un grupo:</strong>
+                <code>CPU &gt; 85% AND Mem &gt; 90% OR Loss &gt; 10%</code>
+                <br>
+                Mismo grupo con operadores AND y OR por gap.
+                <br><br>
+                <strong>AND + OR entre grupos:</strong>
+                <code>(CPU &gt; 85% AND Mem &gt; 90%) OR Loss &gt; 10%</code>
+                <br>
+                Grupo 1 (AND) + Grupo 2 (OR).
+                <br><br>
+                <strong>NOT de grupo:</strong>
+                <code>NOT (CPU &gt; 90% AND Temp &gt; 80°C) OR Down</code>
+                <br>
+                Grupo 1 negado, Grupo 2 normal.
+                <br><br>
+                <strong>XOR:</strong>
+                <code>Signal &lt; -80 XOR CCQ &lt; 50</code>
+                <br>
+                Dispara si exactamente uno se cumple.
+                <br><br>
+                <strong>NOT de condicional:</strong>
+                <code>NOT CPU &gt; 90% AND Signal &lt; -85</code>
+                <br>
+                Un grupo donde solo el primer condicional está negado.
+            `
+        },
+        {
+            heading: "Duración, cooldown y fire_once — diferencias",
+            body: `
+                Son 3 parámetros que suenan similares pero controlan cosas
+                distintas:
+                <br><br>
+                <strong>Duración (por condicional):</strong>
+                cuánto tiempo debe sostenerse la condición para considerarse
+                "cumplida". Si dice 60s, la condición debe mantenerse
+                verdadera 60s seguidos. Si se rompe un instante, el contador
+                se resetea.
+                <br>
+                • Útil para evitar falsos positivos por fluctuaciones.
+                <br>
+                • Recomendado: 60s (mínimo) a 300s (para métricas ruidosas).
+                <br><br>
+                <strong>Fire_once (por regla):</strong>
+                la regla dispara una sola vez por periodo de violación.
+                No vuelve a disparar hasta que la condición deje de cumplirse
+                y vuelva a cumplirse.
+                <br>
+                • Útil para notificaciones de "vuelta en línea".
+                <br>
+                • Sin fire_once, dispara en cada ciclo mientras la
+                condición se cumpla (sujeto a anti-duplicados y cooldown).
+                <br><br>
+                <strong>Cooldown de Telegram (por regla):</strong>
+                tiempo mínimo entre notificaciones de la misma regla+equipo.
+                Si la regla dispara 3 veces en 5 min pero el cooldown es
+                600s, solo la primera se envía por Telegram.
+                <br>
+                • Mínimo: 60s. Recomendado: 600s (10 min).
+                <br>
+                • Aplica solo a Telegram, no a la creación de alertas en BD.
+            `
+        },
+        {
+            heading: "Cómo se evalúan las reglas en el tiempo",
+            body: `
+                El motor de alertas evalúa las reglas en cada ciclo del
+                monitor (cuando los pollers recolectan métricas frescas).
+                <br><br>
+                <strong>Ciclo de evaluación:</strong>
+                <br>
+                1. El poller recolecta métricas de un equipo.
+                <br>
+                2. Para cada regla activa que contiene ese equipo:
+                <br>
+                &nbsp;&nbsp;&nbsp; a. Verifica cada condicional (valor vs umbral).
+                <br>
+                &nbsp;&nbsp;&nbsp; b. Actualiza el estado de duración del condicional.
+                <br>
+                &nbsp;&nbsp;&nbsp; c. Aplica operadores internos del grupo (uno por gap).
+                <br>
+                &nbsp;&nbsp;&nbsp; d. Aplica NOT del grupo (si aplica).
+                <br>
+                &nbsp;&nbsp;&nbsp; e. Combina grupos con sus operadores.
+                <br>
+                &nbsp;&nbsp;&nbsp; f. Si el resultado es True → dispara alerta.
+                <br>
+                &nbsp;&nbsp;&nbsp; g. Si el resultado es False → auto-resuelve.
+                <br><br>
+                <strong>Importante:</strong> si una regla tiene 3 grupos y el
+                equipo actual solo aparece en el grupo 1, los valores de los
+                condicionales de los grupos 2 y 3 se leen del caché del
+                último ciclo. Esto permite combinar equipos distintos.
+            `
+        },
+        {
+            heading: "Ciclo de vida de una alerta",
+            body: `
+                Cuando una regla dispara, se crea una alerta con estado
+                <span class="badge bg-danger">Activa</span>.
+                <br><br>
+                <strong>Estados:</strong>
+                <br>
+                • <strong>Activa:</strong> la condición se cumple o aún no
+                se ha atendido.
+                <br>
+                • <strong>Reconocida:</strong> un operador la vio pero no
+                se ha resuelto (requiere acción manual).
+                <br>
+                • <strong>Resuelta:</strong> la condición dejó de cumplirse
+                (auto) o se resolvió manualmente.
+                <br><br>
+                <strong>Auto-resolución:</strong>
+                cuando la combinación de grupos deja de ser True, todas las
+                alertas activas de esa regla para ese equipo se marcan como
+                resueltas automáticamente.
+                <br><br>
+                <strong>Anti-duplicados:</strong>
+                no se crean 2 alertas activas idénticas (misma regla + equipo).
+                Si ya hay una activa, no se duplica.
+            `
+        },
+        {
+            heading: "Guía de métricas — Disponibilidad",
+            body: `
+                <strong><i class="bi bi-power"></i> Caída del dispositivo (device_down):</strong>
+                Detecta cuando el equipo deja de responder a ICMP.
+                <br>
+                • <span class="text-success">Valor 0</span> = alerta cuando el equipo está <em>caído</em> (caso típico).
+                <br>
+                • <span class="text-info">Valor 1</span> = alerta cuando el equipo está <em>vivo</em>. Útil para notificaciones de "vuelta en línea" combinado con <em>Disparar solo una vez</em>.
+                <br><br>
+                <strong><i class="bi bi-stopwatch"></i> Latencia ICMP (latency_ms):</strong>
+                Mide el tiempo de respuesta ICMP en milisegundos.
+                <br>
+                • Valores típicos: <code>1-20 ms</code> (LAN), <code>20-80 ms</code> (WAN normal).
+                <br>
+                • Recomendado: alertar si supera <strong>80 ms</strong> (warning) o <strong>150 ms</strong> (critical).
+                <br><br>
+                <strong><i class="bi bi-wifi-off"></i> Pérdida de paquetes (packet_loss_pct):</strong>
+                Porcentaje de paquetes ICMP perdidos en el ciclo de polling.
+                <br>
+                • Valores típicos: <code>0%</code> (perfecto), <code>&lt;1%</code> (normal en WAN).
+                <br>
+                • Recomendado: alertar si supera <strong>2%</strong> (warning) o <strong>5%</strong> (critical).
+            `
+        },
+        {
+            heading: "Guía de métricas — Tráfico",
+            body: `
+                <strong><i class="bi bi-speedometer"></i> Utilización de enlace (utilization_pct):</strong>
+                Porcentaje de uso del enlace calculado sobre la capacidad de la interfaz.
+                <br>
+                • Recomendado: alertar si supera <strong>70%</strong> (warning) o <strong>85%</strong> (critical).
+                <br>
+                • Requiere tener una o más interfaces marcadas como <em>monitoreadas</em> en el equipo.
+            `
+        },
+        {
+            heading: "Guía de métricas — Chasis",
+            body: `
+                <strong><i class="bi bi-cpu"></i> CPU (cpu_pct):</strong>
+                Uso del procesador del equipo (medido vía SNMP).
+                <br>
+                • Valores típicos: <code>5-40%</code> (operación normal).
+                <br>
+                • Recomendado: alertar si supera <strong>75%</strong> (warning) o <strong>90%</strong> (critical) sostenidamente.
+                <br>
+                • Solo disponible para equipos cuyo modelo tenga OIDs de chasis.
+                <br><br>
+                <strong><i class="bi bi-memory"></i> Memoria RAM (mem_pct):</strong>
+                Uso de memoria RAM del equipo.
+                <br>
+                • Valores típicos: <code>30-70%</code> (operación normal).
+                <br>
+                • Recomendado: alertar si supera <strong>80%</strong> (warning) o <strong>92%</strong> (critical).
+                <br><br>
+                <strong><i class="bi bi-thermometer-half"></i> Temperatura (temp_c):</strong>
+                Temperatura del chasis del equipo en grados Celsius.
+                <br>
+                • Valores típicos: <code>30-50 °C</code> (ambiente normal), <code>50-65 °C</code> (bajo carga).
+                <br>
+                • Recomendado: alertar si supera <strong>70 °C</strong> (warning) o <strong>85 °C</strong> (critical).
+                <br>
+                • Solo disponible en equipos con sensor de temperatura (algunos modelos).
+            `
+        },
+        {
+            heading: "Guía de métricas — Radiofrecuencia",
+            body: `
+                Solo disponible en equipos con modelo marcado como radioenlace.
+                <br><br>
+                <strong>Señal (wl_signal, dBm):</strong>
+                Nivel de señal recibida. Más cercano a 0 es mejor (valores negativos).
+                <br>
+                • Valores típicos: <code>-40 a -60</code> (excelente), <code>-60 a -70</code> (bueno), <code>-70 a -80</code> (regular).
+                <br>
+                • Recomendado: warning &lt; <strong>-75 dBm</strong>, critical &lt; <strong>-85 dBm</strong>.
+                <br><br>
+                <strong>Piso de ruido (wl_noise_floor, dBm):</strong>
+                Nivel de ruido/interferencia en el canal. Más negativo es mejor.
+                <br>
+                • Valores típicos: <code>-95</code> (limpio), <code>-90 a -85</code> (moderado), <code>&gt; -85</code> (ruidoso).
+                <br>
+                • Recomendado: warning &gt; <strong>-85 dBm</strong>, critical &gt; <strong>-80 dBm</strong>.
+                <br><br>
+                <strong>CCQ (wl_ccq, %):</strong>
+                Calidad de enlace. Más alto es mejor.
+                <br>
+                • Valores típicos: <code>&gt; 90%</code> (excelente), <code>70-90%</code> (bueno), <code>50-70%</code> (regular).
+                <br>
+                • Recomendado: warning &lt; <strong>70%</strong>, critical &lt; <strong>50%</strong>.
+                <br><br>
+                <strong>Tasas TX/RX (wl_tx_rate, wl_rx_rate, bps):</strong>
+                Velocidad actual del radio. Más alto es mejor.
+                <br>
+                • Varía según modulación y condiciones del enlace.
+                <br>
+                • Recomendado: alertar si caen por debajo del <strong>50%</strong> de la capacidad nominal del enlace.
+                <br><br>
+                <strong>airMAX Quality / Capacity (%):</strong>
+                Métricas propias de Ubiquiti airMAX. Más alto es mejor.
+                <br>
+                • Quality: calidad global del enlace.
+                <br>
+                • Capacity: capacidad estimada disponible.
+                <br>
+                • Recomendado: warning &lt; <strong>60%</strong>, critical &lt; <strong>40%</strong>.
+            `
+        },
+        {
+            heading: "Mensaje personalizado",
+            body: `
+                Si lo dejas vacío, se genera un mensaje automático mostrando
+                la estructura de grupos.
+                <br><br>
+                Placeholders disponibles:
+                <br>
+                <strong>Globales:</strong> <code>{rule_name}</code>, <code>{severity}</code>, <code>{timestamp}</code>, <code>{conditionals_count}</code>, <code>{groups_count}</code>.
+                <br>
+                <strong>Del primer condicional:</strong> <code>{device}</code>, <code>{ip}</code>, <code>{metric}</code>, <code>{value}</code>, <code>{threshold}</code>.
+                <br>
+                <strong>Numerados (1-N):</strong> <code>{device1}</code>...<code>{device10}</code>, <code>{value1}</code>...<code>{value10}</code>, etc.
+                <br><br>
+                <strong>Ejemplos:</strong>
+                <br>
+                • Simple: <code>🔥 {rule_name}: {device1} CPU {value1}%</code>
+                <br>
+                • Multi-equipo: <code>⚠️ {rule_name}: {device1} y {device2} con problemas</code>
+                <br>
+                • Con severidad: <code>[{severity}] {rule_name} en {device1} a las {timestamp}</code>
+            `
+        },
+        {
+            heading: "Solución de problemas comunes",
+            body: `
+                <strong>La regla no dispara:</strong>
+                <br>
+                1. Verifica que esté <strong>activa</strong> (switch).
+                <br>
+                2. Verifica que la duración no sea mayor que el tiempo que
+                la condición se mantiene.
+                <br>
+                3. Verifica que el equipo esté generando esas métricas
+                (ej. cpu_pct requiere que el modelo tenga OIDs de chasis).
+                <br>
+                4. Verifica que no esté en warm-up (primeros 120s tras
+                arrancar el monitor si tiene skip_on_startup).
+                <br>
+                5. Si tiene fire_once, verifica que no haya disparado ya.
+                <br><br>
+                <strong>Telegram no llega:</strong>
+                <br>
+                1. Verifica que el bot esté configurado en Configuración del sistema.
+                <br>
+                2. Verifica que telegram_enabled esté activo en la regla.
+                <br>
+                3. Verifica que el cooldown no esté bloqueando (espera
+                el tiempo configurado).
+                <br>
+                4. Envía un mensaje de prueba desde Configuración.
+                <br><br>
+                <strong>La alerta se auto-resuelve demasiado rápido:</strong>
+                <br>
+                La métrica está oscilando alrededor del umbral. Aumenta la
+                duración del condicional o acerca el umbral.
+                <br><br>
+                <strong>Muchas alertas duplicadas:</strong>
+                <br>
+                Activa fire_once o aumenta el cooldown de Telegram.
+            `
+        },
+        {
+            heading: "Ejemplos avanzados",
+            body: `
+                <strong>Caso 1: Core con CPU alta sostenida</strong>
+                <br>
+                <code>CPU &gt; 85% durante 300s AND Mem &gt; 80% durante 300s</code>
+                <br>
+                Detecta saturación real (no picos puntuales).
+                <br><br>
+                <strong>Caso 2: CPE caído</strong>
+                <code>device_down = 0 durante 120s</code>
+                <br>
+                Con fire_once=True → notifica solo cuando se cae, no en cada ciclo.
+                <br><br>
+                <strong>Caso 3: Vuelta en línea</strong>
+                <code>device_down = 1 durante 60s</code>
+                <br>
+                Con fire_once=True → notifica cuando se recupera.
+                <br><br>
+                <strong>Caso 4: Enlace radio degradado</strong>
+                <code>NOT (Signal &gt; -70 AND CCQ &gt; 80) durante 180s</code>
+                <br>
+                Detecta cualquier degradación (o señal baja o CCQ bajo).
+                <br><br>
+                <strong>Caso 5: Equipo saturado en múltiples dimensiones</strong>
+                <code>(CPU &gt; 90 OR Mem &gt; 90) AND Temp &gt; 70 durante 300s</code>
+                <br>
+                Detecta estrés combinado.
+                <br><br>
+                <strong>Caso 6: Ventana horaria de mantenimiento</strong>
+                <code>NOT device_down AND NOT latency_ms &gt; 100</code>
+                <br>
+                Con fire_once → verifica que el enlace está estable durante
+                el mantenimiento.
+            `
+        },
+        {
+            heading: "Flags especiales",
+            body: `
+                <strong>Disparar solo una vez (fire_once):</strong>
+                la regla dispara una sola vez por periodo de violación. Si la
+                condición deja de cumplirse y vuelve a cumplirse, dispara de
+                nuevo. Útil para notificaciones de "vuelta en línea".
+                <br><br>
+                <strong>Omitir al iniciar el monitor (skip_on_startup):</strong>
+                no se evalúa durante los primeros 120s tras arrancar el
+                monitor. Evita alertas espurias al reiniciar el servicio.
+                <br><br>
+                <strong>Cooldown de Telegram:</strong>
+                tiempo mínimo entre notificaciones de la misma regla+equipo.
+                Recomendado: <strong>600s</strong> (10 min). Mínimo: <code>60s</code>.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>No alertes en cada fluctuación.</strong> Usa duración mínima 60-300s para evitar falsos positivos.
+                <br>
+                • <strong>Usa grupos para relaciones complejas:</strong> <code>(A AND B) OR C</code> es más expresivo que A AND B OR C por separado.
+                <br>
+                • <strong>Usa NOT con cuidado.</strong> <code>NOT A</code> con <code>fire_once</code> es útil para "vuelta en línea". Sin fire_once, notificará todo el tiempo que A no se cumpla.
+                <br>
+                • <strong>Prueba primero con severidad Info</strong> y ajusta después.
+                <br>
+                • <strong>Documenta el propósito</strong> en la descripción.
+                <br>
+                • <strong>Empieza simple:</strong> una regla con 1 grupo y 1 condicional, verifica que dispare, y luego añade complejidad.
+                <br>
+                • <strong>Usa duraciones más altas para métricas ruidosas</strong> (señal RF, CPU) y más bajas para eventos discretos (device_down).
+            `
+        }
+    ]
+});
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+const CF_DEVICES = [
+    {% for d in devices %}
+    { id: {{ d.id }}, name: "{{ d.name|escapejs }}", ip: "{{ d.ip|escapejs }}" },
+    {% endfor %}
+];
+
+const CF_METRICS = [
+    {% for value, label in metrics %}
+    { value: "{{ value }}", label: "{{ label|escapejs }}" },
+    {% endfor %}
+];
+
+const CF_OPERATORS = [
+    {% for value, label in operators %}
+    { value: "{{ value }}", label: "{{ label|escapejs }}" },
+    {% endfor %}
+];
+
+const CF_LOGICS = [
+    {% for value, label in logics %}
+    { value: "{{ value }}", label: "{{ label|escapejs }}" },
+    {% endfor %}
+];
+
+const CF_MAX_GROUPS = 5;
+const CF_MAX_CONDS_PER_GROUP = 5;
+const CF_MAX_TOTAL_CONDS = 10;
+
+const CF_VALID_OPERATORS = {
+    "device_down":      ["eq"],
+    "latency_ms":       ["gte", "gt"],
+    "packet_loss_pct":  ["gte", "gt"],
+    "utilization_pct":  ["gte", "gt"],
+    "cpu_pct":          ["gte", "gt"],
+    "mem_pct":          ["gte", "gt"],
+    "temp_c":           ["gte", "gt"],
+    "wl_signal":        ["lte", "lt"],
+    "wl_noise_floor":   ["gte", "gt"],
+    "wl_ccq":           ["lte", "lt"],
+    "wl_tx_rate":       ["lte", "lt"],
+    "wl_rx_rate":       ["lte", "lt"],
+    "airmax_quality":   ["lte", "lt"],
+    "airmax_capacity":  ["lte", "lt"],
+};
+
+const CF_METRIC_UNITS = {
+    "device_down": "", "latency_ms": "ms", "packet_loss_pct": "%",
+    "utilization_pct": "%", "cpu_pct": "%", "mem_pct": "%", "temp_c": "°C",
+    "wl_signal": "dBm", "wl_noise_floor": "dBm", "wl_ccq": "%",
+    "wl_tx_rate": "bps", "wl_rx_rate": "bps",
+    "airmax_quality": "%", "airmax_capacity": "%",
+};
+
+const CF_METRIC_HELP_SHORT = {
+    "device_down": "0 = caído, 1 = vivo",
+    "latency_ms": "≥ 80 ms (warning) o 150 ms (critical)",
+    "packet_loss_pct": "≥ 2 % (warning) o 5 % (critical)",
+    "utilization_pct": "≥ 70 % (warning) o 85 % (critical)",
+    "cpu_pct": "≥ 75 % (warning) o 90 % (critical)",
+    "mem_pct": "≥ 80 % (warning) o 92 % (critical)",
+    "temp_c": "≥ 70 °C (warning) o 85 °C (critical)",
+    "wl_signal": "< -75 dBm (warning) o -85 dBm (critical)",
+    "wl_noise_floor": "> -85 dBm (warning) o -80 dBm (critical)",
+    "wl_ccq": "< 70 % (warning) o 50 % (critical)",
+    "wl_tx_rate": "cae bajo 50% de la capacidad",
+    "wl_rx_rate": "cae bajo 50% de la capacidad",
+    "airmax_quality": "< 60 % (warning) o 40 % (critical)",
+    "airmax_capacity": "< 60 % (warning) o 40 % (critical)",
+};
+
+// ============================================================
+// ESTADO GLOBAL
+// ============================================================
+const state = {
+    groups: [],
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function getDeviceById(id) {
+    return CF_DEVICES.find(d => d.id === id) || null;
+}
+
+function totalConditionals() {
+    return state.groups.reduce((sum, g) => sum + g.conditionals.length, 0);
+}
+
+function uniqueDevicesCount() {
+    const ids = new Set();
+    state.groups.forEach(g => {
+        g.conditionals.forEach(c => {
+            if (c.device_id) ids.add(c.device_id);
+        });
+    });
+    return ids.size;
+}
+
+function newConditional() {
+    return {
+        device_id: null,
+        metric: "cpu_pct",
+        operator: "gte",
+        threshold: 75,
+        duration_sec: 60,
+        negate: false,
+    };
+}
+
+/**
+ * Normaliza la lista `operators` de un grupo para que tenga
+ * exactamente N-1 elementos (uno por gap entre condicionales).
+ *
+ * @param {object} group
+ */
+function normalizeGroupOperators(group) {
+    const expected = Math.max(0, (group.conditionals || []).length - 1);
+    if (!Array.isArray(group.operators)) group.operators = [];
+    while (group.operators.length < expected) group.operators.push("AND");
+    if (group.operators.length > expected) {
+        group.operators = group.operators.slice(0, expected);
+    }
+}
+
+// ============================================================
+// GESTIÓN DE GRUPOS
+// ============================================================
+function addGroup() {
+    if (state.groups.length >= CF_MAX_GROUPS) {
+        alert(`Máximo ${CF_MAX_GROUPS} grupos.`);
+        return;
+    }
+    if (totalConditionals() >= CF_MAX_TOTAL_CONDS) {
+        alert(`Máximo ${CF_MAX_TOTAL_CONDS} condicionales en total.`);
+        return;
+    }
+    state.groups.push({
+        logic: state.groups.length === 0 ? null : "AND",
+        negate: false,
+        operators: [],   // ← N-1 elementos, uno por gap
+        conditionals: [newConditional()],
+    });
+    renderEditor();
+}
+
+function removeGroup(gi) {
+    if (state.groups.length <= 1) {
+        alert("Debe haber al menos 1 grupo.");
+        return;
+    }
+    if (!confirm("¿Eliminar este grupo completo (con sus condicionales)?")) return;
+    state.groups.splice(gi, 1);
+    if (state.groups.length > 0) state.groups[0].logic = null;
+    renderEditor();
+}
+
+function addConditional(gi) {
+    const group = state.groups[gi];
+    if (group.conditionals.length >= CF_MAX_CONDS_PER_GROUP) {
+        alert(`Máximo ${CF_MAX_CONDS_PER_GROUP} condicionales por grupo.`);
+        return;
+    }
+    if (totalConditionals() >= CF_MAX_TOTAL_CONDS) {
+        alert(`Máximo ${CF_MAX_TOTAL_CONDS} condicionales en total.`);
+        return;
+    }
+    group.conditionals.push(newConditional());
+    normalizeGroupOperators(group);   // añade un nuevo gap con "AND" por defecto
+    renderEditor();
+}
+
+function removeConditional(gi, ci) {
+    const group = state.groups[gi];
+    if (group.conditionals.length <= 1) {
+        alert("Cada grupo debe tener al menos 1 condicional.");
+        return;
+    }
+    group.conditionals.splice(ci, 1);
+    normalizeGroupOperators(group);   // reajusta la lista de operadores
+    renderEditor();
+}
+
+function updateConditional(gi, ci, field, value) {
+    state.groups[gi].conditionals[ci][field] = value;
+    if (field === "metric") {
+        const valid = CF_VALID_OPERATORS[value] || ["gte"];
+        state.groups[gi].conditionals[ci].operator = valid[0];
+        if (value === "device_down") {
+            state.groups[gi].conditionals[ci].threshold = 0;
+        }
+    }
+    renderEditor();
+}
+
+function updateGroupField(gi, field, value) {
+    state.groups[gi][field] = value;
+    renderEditor();
+}
+
+/**
+ * Actualiza un operador de gap específico (independiente).
+ * No re-renderiza el editor completo para no perder el foco del select.
+ *
+ * @param {number} gi - índice del grupo.
+ * @param {number} gapIndex - índice del gap (0 = entre cond[0] y cond[1]).
+ * @param {string} value - "AND" | "OR" | "XOR".
+ */
+function updateGapOperator(gi, gapIndex, value) {
+    const group = state.groups[gi];
+    if (!Array.isArray(group.operators)) group.operators = [];
+    while (group.operators.length <= gapIndex) group.operators.push("AND");
+    group.operators[gapIndex] = value;
+    // No re-renderizamos el editor (perdería el foco del select).
+    // Solo actualizamos el resumen para reflejar el cambio.
+    updateSummary();
+}
+
+// ============================================================
+// COMPUTAR FILAS
+// ============================================================
+function computeRows() {
+    const rows = [];
+    let currentRow = [];
+
+    state.groups.forEach((group, gi) => {
+        const isMulti = group.conditionals.length > 1;
+        if (isMulti) {
+            if (currentRow.length > 0) {
+                rows.push(currentRow);
+                currentRow = [];
+            }
+            rows.push([{ gi, group, isMulti: true }]);
+        } else {
+            currentRow.push({ gi, group, isMulti: false });
+            if (currentRow.length === 2) {
+                rows.push(currentRow);
+                currentRow = [];
+            }
+        }
+    });
+
+    if (currentRow.length > 0) {
+        rows.push(currentRow);
+    }
+    return rows;
+}
+
+// ============================================================
+// RENDERIZADO DEL EDITOR
+// ============================================================
+function renderEditor() {
+    const container = document.getElementById("conditions-editor");
+    const noGroups = document.getElementById("no-groups-msg");
+    const addBtn = document.getElementById("add-group-btn-container");
+
+    if (state.groups.length === 0) {
+        container.innerHTML = "";
+        noGroups.style.display = "block";
+        addBtn.style.display = "none";
+        return;
+    }
+
+    noGroups.style.display = "none";
+    addBtn.style.display = "block";
+
+    container.innerHTML = renderRows();
+}
+
+function renderRows() {
+    const rows = computeRows();
+
+    return rows.map(row => {
+        const isFullWidth = row.length === 1 && row[0].isMulti;
+
+        if (isFullWidth) {
+            const { gi, group } = row[0];
+            const connector = gi > 0 ? renderConnector(gi) : '';
+            return `
+                <div class="row-full-width">
+                    ${connector ? `<div class="full-connector">${connector}</div>` : ''}
+                    ${renderGroupCard(group, gi)}
+                </div>
+            `;
+        }
+
+        if (row.length === 1) {
+            const { gi, group } = row[0];
+            const connector = gi > 0 ? renderConnector(gi) : '';
+            return `
+                <div class="row-single-group">
+                    ${connector ? `<div class="full-connector">${connector}</div>` : ''}
+                    <div class="single-wrapper">
+                        ${renderGroupCard(group, gi)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // row.length === 2
+        const [g1, g2] = row;
+        const topConnector = g1.gi > 0 ? renderConnector(g1.gi) : '';
+        const midConnector = renderConnector(g2.gi);
+
+        return `
+            <div>
+                ${topConnector ? `<div class="full-connector">${topConnector}</div>` : ''}
+                <div class="row-two-groups">
+                    <div>${renderGroupCard(g1.group, g1.gi)}</div>
+                    <div class="mid-connector">${midConnector}</div>
+                    <div>${renderGroupCard(g2.group, g2.gi)}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderConnector(gi) {
+    const group = state.groups[gi];
+    return `
+        <div class="connector-badge" title="Operador lógico entre el grupo anterior y este">
+            <i class="bi bi-link-45deg"></i>
+            <select onchange="updateGroupField(${gi}, 'logic', this.value)">
+                ${CF_LOGICS.map(l => `
+                    <option value="${l.value}" ${group.logic === l.value ? 'selected' : ''}>
+                        ${l.value}
+                    </option>
+                `).join('')}
+            </select>
+        </div>
+    `;
+}
+
+function renderGroupCard(group, gi) {
+    const pairsHtml = renderConditionalPairs(group, gi);
+
+    return `
+        <div class="group-card">
+            <div class="group-header">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <strong class="text-primary small">
+                        <i class="bi bi-collection"></i> Grupo ${gi + 1}
+                    </strong>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               id="group-negate-${gi}"
+                               ${group.negate ? 'checked' : ''}
+                               onchange="updateGroupField(${gi}, 'negate', this.checked)"
+                               style="margin-top: 0;">
+                        <label class="form-check-label" for="group-negate-${gi}"
+                               style="font-size: 0.72rem;">
+                            <strong>NOT</strong>
+                        </label>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                        onclick="removeGroup(${gi})"
+                        title="Eliminar grupo"
+                        style="font-size: 0.72rem;">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="group-body">
+                ${pairsHtml}
+                <div class="text-center mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            onclick="addConditional(${gi})"
+                            style="font-size: 0.75rem;">
+                        <i class="bi bi-plus-lg"></i> Condicional
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Renderiza los condicionales de un grupo en filas de 2 en 2.
+ *
+ * Reglas de layout:
+ *   - N=1: 1 card full width (único caso de full width).
+ *   - N>=2: pares de 2 cards del MISMO tamaño.
+ *          · Si el último queda impar (N>=3), ocupa solo la mitad
+ *            izquierda de su fila, conservando el ancho de los demás.
+ *   - Entre filas: línea dashed arriba + operador alineado sobre el
+ *     card izquierdo de la fila siguiente.
+ *   - Todos los cards con la misma altura (align-items: stretch).
+ *
+ * IMPORTANTE — operadores independientes por gap:
+ *   Cada gap entre condicionales consecutivos del grupo tiene su
+ *   PROPIO operador, almacenado en `group.operators[gapIndex]`.
+ *   Esto permite expresiones como `c1 AND c2 OR c3` dentro de un
+ *   mismo grupo.
+ *
+ * @param {object} group - grupo con {conditionals: [...], operators: [...]}.
+ * @param {number} gi - índice global del grupo.
+ * @returns {string} HTML de la lista de condicionales.
+ */
+function renderConditionalPairs(group, gi) {
+    const conds = group.conditionals;
+    const n = conds.length;
+    const blocks = [];
+
+    // Asegurar que operators tenga la longitud correcta
+    normalizeGroupOperators(group);
+
+    // ---- N = 1: único caso donde el card hace full width ----
+    if (n === 1) {
+        blocks.push(`
+            <div class="cond-row-full">
+                <div class="conditional-cell">
+                    ${renderConditionalFields(conds[0], gi, 0)}
+                </div>
+            </div>
+        `);
+        return blocks.join('');
+    }
+
+    for (let i = 0; i < n; i += 2) {
+        const left = conds[i];
+        const right = (i + 1 < n) ? conds[i + 1] : null;
+
+        // ---- Transición entre filas (solo si no es la primera fila) ----
+        // Operador entre cond[i-1] y cond[i] = operators[i-1].
+        // Se renderiza alineado sobre el centro del card izquierdo
+        // (columna 1 del grid `1fr 56px 1fr`).
+        if (i > 0) {
+            blocks.push(`
+                <div class="cond-row-op">
+                    <div class="op-cell">
+                        ${renderGapOperatorSelect(group, gi, i - 1)}
+                    </div>
+                    <div class="cond-op"></div>
+                    <div></div>
+                </div>
+            `);
+        }
+
+        if (right) {
+            // ---- Par completo: [Card izq] [OP] [Card der] ----
+            // El gap interno entre cond[i] y cond[i+1] es operators[i].
+            blocks.push(`
+                <div class="cond-row-pair">
+                    <div class="conditional-cell">
+                        ${renderConditionalFields(left, gi, i)}
+                    </div>
+                    <div class="cond-op">
+                        ${renderGapOperatorSelect(group, gi, i)}
+                    </div>
+                    <div class="conditional-cell">
+                        ${renderConditionalFields(right, gi, i + 1)}
+                    </div>
+                </div>
+            `);
+        } else {
+            // ---- Último impar: mismo ancho que los demás ----
+            // Columnas 2 y 3 vacías para preservar el grid `1fr auto 1fr`.
+            blocks.push(`
+                <div class="cond-row-pair">
+                    <div class="conditional-cell">
+                        ${renderConditionalFields(left, gi, i)}
+                    </div>
+                    <div class="cond-op"></div>
+                    <div></div>
+                </div>
+            `);
+        }
+    }
+
+    return blocks.join('');
+}
+
+/**
+ * Renderiza el select editable para un gap específico.
+ *
+ * Cada gap (entre dos condicionales consecutivos del grupo) tiene
+ * su PROPIO operador independiente, almacenado en
+ * `group.operators[gapIndex]`. Esto permite que cada par de
+ * condicionales use un operador distinto (ej: c1 AND c2 OR c3).
+ *
+ * @param {object} group - el grupo.
+ * @param {number} gi - índice del grupo.
+ * @param {number} gapIndex - índice del gap (0 = entre cond[0] y cond[1]).
+ * @returns {string} HTML del select.
+ */
+function renderGapOperatorSelect(group, gi, gapIndex) {
+    const ops = Array.isArray(group.operators) ? group.operators : [];
+    const currentOp = ops[gapIndex] || "AND";
+
+    return `
+        <span class="inner-operator-badge"
+              title="Operador entre estos dos condicionales">
+            <select onchange="updateGapOperator(${gi}, ${gapIndex}, this.value)">
+                ${CF_LOGICS.map(l => `
+                    <option value="${l.value}" ${currentOp === l.value ? 'selected' : ''}>
+                        ${l.value}
+                    </option>
+                `).join('')}
+            </select>
+        </span>
+    `;
+}
+
+function renderConditionalFields(c, gi, ci) {
+    const deviceOptions = CF_DEVICES.map(d => `
+        <option value="${d.id}" ${c.device_id === d.id ? 'selected' : ''}>
+            ${escapeHtmlJs(d.name)} (${escapeHtmlJs(d.ip)})
+        </option>
+    `).join('');
+
+    const metricOptions = CF_METRICS.map(m => `
+        <option value="${m.value}" ${c.metric === m.value ? 'selected' : ''}>
+            ${escapeHtmlJs(m.label)}
+        </option>
+    `).join('');
+
+    const validOps = CF_VALID_OPERATORS[c.metric] || [];
+    const operatorOptions = validOps.map(op => {
+        const label = CF_OPERATORS.find(o => o.value === op)?.label || op;
+        return `<option value="${op}" ${c.operator === op ? 'selected' : ''}>${label}</option>`;
+    }).join('');
+
+    const unit = CF_METRIC_UNITS[c.metric] || '';
+    const help = CF_METRIC_HELP_SHORT[c.metric] || '';
+
+    return `
+        <div class="conditional-fields">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           id="cond-negate-${gi}-${ci}"
+                           ${c.negate ? 'checked' : ''}
+                           onchange="updateConditional(${gi}, ${ci}, 'negate', this.checked)">
+                    <label class="form-check-label fw-bold"
+                           for="cond-negate-${gi}-${ci}"
+                           style="font-size: 0.72rem;"
+                           title="Negar este condicional (NOT)">
+                        NOT
+                    </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-1"
+                        onclick="removeConditional(${gi}, ${ci})"
+                        title="Eliminar condicional"
+                        style="font-size: 0.68rem;">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <div class="row g-1">
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Equipo</label>
+                    <select class="form-select form-select-sm"
+                            onchange="updateConditional(${gi}, ${ci}, 'device_id', parseInt(this.value) || null)">
+                        <option value="">—</option>
+                        ${deviceOptions}
+                    </select>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label">Métrica</label>
+                    <select class="form-select form-select-sm"
+                            onchange="updateConditional(${gi}, ${ci}, 'metric', this.value)">
+                        ${metricOptions}
+                    </select>
+                </div>
+                <div class="col-4">
+                    <label class="form-label">Operador</label>
+                    <select class="form-select form-select-sm"
+                            onchange="updateConditional(${gi}, ${ci}, 'operator', this.value)"
+                            ${c.metric === 'device_down' ? 'disabled' : ''}>
+                        ${operatorOptions}
+                    </select>
+                </div>
+                <div class="col-4">
+                    <label class="form-label">Umbral ${unit ? `(${unit})` : ''}</label>
+                    <input type="number" class="form-control form-control-sm"
+                           value="${c.threshold}"
+                           step="${c.metric === 'device_down' ? '1' : '0.01'}"
+                           min="${c.metric === 'device_down' ? '0' : ''}"
+                           max="${c.metric === 'device_down' ? '1' : ''}"
+                           onchange="updateConditional(${gi}, ${ci}, 'threshold', parseFloat(this.value) || 0)">
+                </div>
+                <div class="col-4">
+                    <label class="form-label">Duración (s)</label>
+                    <input type="number" class="form-control form-control-sm"
+                           value="${c.duration_sec}"
+                           min="0" max="86400"
+                           onchange="updateConditional(${gi}, ${ci}, 'duration_sec', parseInt(this.value) || 60)">
+                </div>
+            </div>
+            <div class="mt-1">
+                <small class="text-muted" style="font-size: 0.66rem;">
+                    <i class="bi bi-lightbulb"></i> ${help}
+                </small>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openConditionsModal() {
+    if (state.groups.length === 0) {
+        state.groups.push({
+            logic: null, negate: false, operators: [],
+            conditionals: [newConditional()],
+        });
+    }
+    renderEditor();
+    new bootstrap.Modal(document.getElementById("conditionsModal")).show();
+}
+
+function applyConditions() {
+    if (state.groups.length === 0) {
+        alert("Debe agregar al menos 1 grupo.");
+        return;
+    }
+    for (let gi = 0; gi < state.groups.length; gi++) {
+        const g = state.groups[gi];
+        if (g.conditionals.length === 0) {
+            alert(`Grupo ${gi+1} no tiene condicionales.`);
+            return;
+        }
+        for (let ci = 0; ci < g.conditionals.length; ci++) {
+            if (!g.conditionals[ci].device_id) {
+                alert(`Grupo ${gi+1}, Condicional ${ci+1}: debe seleccionar un equipo.`);
+                return;
+            }
+        }
+        // Normalizar operators al aplicar
+        normalizeGroupOperators(g);
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById("conditionsModal")).hide();
+    updateConditionsSummary();
+    updatePlaceholdersList();
+    updateSummary();
+    updateMessagePreview();
+}
+
+// ============================================================
+// ACTUALIZAR VISTAS
+// ============================================================
+function updateConditionsSummary() {
+    const el = document.getElementById("conditions-summary");
+    if (state.groups.length === 0) {
+        el.innerHTML = `<em class="text-muted small">Sin condicionales.</em>`;
+        return;
+    }
+
+    const html = state.groups.map((g, gi) => {
+        const ops = g.operators || [];
+        const condsHtml = g.conditionals.map((c, ci) => {
+            const device = getDeviceById(c.device_id);
+            const metricLabel = CF_METRICS.find(m => m.value === c.metric)?.label || c.metric;
+            const operatorLabel = CF_OPERATORS.find(o => o.value === c.operator)?.label || c.operator;
+            const negatePrefix = c.negate ? '<span class="badge bg-danger me-1" style="font-size:0.6rem;">NOT</span>' : '';
+            const opBefore = ops[ci - 1] || "AND";
+            return `
+                ${ci > 0 ? `<div class="text-center text-muted small my-1"><strong>${opBefore}</strong></div>` : ''}
+                <div class="small">
+                    ${negatePrefix}
+                    <strong>${escapeHtmlJs(device?.name || '—')}</strong>
+                    <code>${escapeHtmlJs(metricLabel)} ${escapeHtmlJs(operatorLabel)} ${c.threshold} (${c.duration_sec}s)</code>
+                </div>
+            `;
+        }).join('');
+
+        const groupBadge = `<span class="badge bg-primary me-1" style="font-size:0.65rem;">G${gi+1}</span>`;
+        const groupNegate = g.negate ? '<span class="badge bg-danger me-1" style="font-size:0.65rem;">NOT</span>' : '';
+        const logicToPrev = gi > 0
+            ? `<div class="text-center text-primary small my-1"><strong>${g.logic}</strong></div>`
+            : '';
+
+        return `
+            ${logicToPrev}
+            <div class="border rounded p-2 mb-2 bg-light">
+                <div class="mb-1">${groupBadge}${groupNegate}</div>
+                ${condsHtml}
+            </div>
+        `;
+    }).join('');
+
+    el.innerHTML = html;
+}
+
+function updatePlaceholdersList() {
+    const container = document.getElementById("placeholders-list");
+    const n = totalConditionals();
+
+    const placeholders = [
+        "{rule_name}", "{severity}", "{timestamp}",
+        "{conditionals_count}", "{groups_count}",
+    ];
+
+    if (n >= 1) {
+        placeholders.push("{device}", "{ip}", "{metric}", "{value}", "{threshold}");
+    }
+
+    for (let i = 1; i <= n; i++) {
+        placeholders.push(`{device${i}}`);
+        placeholders.push(`{ip${i}}`);
+        placeholders.push(`{metric${i}}`);
+        placeholders.push(`{value${i}}`);
+        placeholders.push(`{threshold${i}}`);
+    }
+
+    container.innerHTML = placeholders.map(p =>
+        `<button type="button" class="btn btn-sm btn-outline-secondary placeholder-btn"
+                 data-ph="${p}" style="font-family: monospace; font-size: 0.72rem;">
+            ${p}
+        </button>`
+    ).join("");
+
+    container.querySelectorAll(".placeholder-btn").forEach(btn => {
+        btn.addEventListener("click", () => insertPlaceholder(btn.dataset.ph));
+    });
+}
+
+function insertPlaceholder(ph) {
+    const textarea = document.getElementById("id_custom_message");
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    textarea.value = text.substring(0, start) + ph + text.substring(end);
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = start + ph.length;
+    updateMessagePreview();
+}
+
+function updateMessagePreview() {
+    const textarea = document.getElementById("id_custom_message");
+    const preview = document.getElementById("message-preview");
+    if (!textarea || !preview) return;
+
+    const custom = textarea.value.trim();
+    if (!custom) {
+        preview.innerHTML = '<em class="text-muted">[Se generará automáticamente al dispararse]</em>';
+        return;
+    }
+
+    const values = {};
+    let globalIdx = 0;
+    state.groups.forEach(g => {
+        g.conditionals.forEach(c => {
+            globalIdx++;
+            const device = getDeviceById(c.device_id);
+            const metricLabel = CF_METRICS.find(m => m.value === c.metric)?.label || c.metric;
+            values[`device${globalIdx}`] = device?.name || `{device${globalIdx}}`;
+            values[`ip${globalIdx}`] = device?.ip || `{ip${globalIdx}}`;
+            values[`metric${globalIdx}`] = metricLabel;
+            values[`value${globalIdx}`] = "0.00";
+            values[`threshold${globalIdx}`] = c.threshold;
+
+            if (globalIdx === 1) {
+                values["device"] = device?.name || "{device}";
+                values["ip"] = device?.ip || "{ip}";
+                values["metric"] = metricLabel;
+                values["value"] = "0.00";
+                values["threshold"] = c.threshold;
+            }
+        });
+    });
+
+    values["rule_name"] = document.getElementById("id_name")?.value || "{rule_name}";
+    values["severity"] = document.getElementById("id_severity")?.value || "{severity}";
+    values["timestamp"] = new Date().toLocaleString();
+    values["conditionals_count"] = String(totalConditionals());
+    values["groups_count"] = String(state.groups.length);
+
+    const text = custom.replace(/\{(\w+)\}/g, (m, key) =>
+        values[key] !== undefined ? values[key] : m
+    );
+
+    preview.textContent = text;
+}
+
+function updateSummary() {
+    document.getElementById("stat-groups").textContent =
+        `${state.groups.length} grupo${state.groups.length !== 1 ? 's' : ''}`;
+    document.getElementById("stat-conds").textContent =
+        `${totalConditionals()} cond.`;
+    document.getElementById("stat-devices").textContent =
+        `${uniqueDevicesCount()} equipo${uniqueDevicesCount() !== 1 ? 's' : ''}`;
+
+    const container = document.getElementById("summary-content");
+    if (state.groups.length === 0) {
+        container.innerHTML = '<em class="text-muted small">Configura condicionales para ver el resumen.</em>';
+        return;
+    }
+
+    const html = state.groups.map((g, gi) => {
+        const ops = g.operators || [];
+        const parts = g.conditionals.map((c) => {
+            const device = getDeviceById(c.device_id);
+            const metricLabel = CF_METRICS.find(m => m.value === c.metric)?.label || c.metric;
+            const operatorLabel = CF_OPERATORS.find(o => o.value === c.operator)?.label || c.operator;
+            const prefix = c.negate ? 'NOT ' : '';
+            return `${prefix}<strong>${escapeHtmlJs(device?.name || '—')}</strong> ${escapeHtmlJs(metricLabel)} ${escapeHtmlJs(operatorLabel)} ${c.threshold}`;
+        });
+
+        // Combinar condicionales del grupo con operadores independientes por gap
+        let groupStr = parts[0] || "";
+        for (let i = 1; i < parts.length; i++) {
+            const op = ops[i - 1] || "AND";
+            groupStr += ` <code>${op}</code> ${parts[i]}`;
+        }
+        if (g.negate) groupStr = `NOT (${groupStr})`;
+        else if (parts.length > 1) groupStr = `(${groupStr})`;
+
+        const prefix = gi > 0
+            ? `<div class="text-primary text-center my-1 small"><strong>${g.logic}</strong></div>`
+            : '';
+
+        return `${prefix}<div class="small mb-2">${groupStr}</div>`;
+    }).join('');
+
+    container.innerHTML = html;
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+document.addEventListener("DOMContentLoaded", () => {
+    // Leer el JSON serializado con json_script (evita el bug de None/True/False)
+    let existing = null;
+    try {
+        const raw = document.getElementById("rule-conditionals-data");
+        if (raw) {
+            const parsed = JSON.parse(raw.textContent);
+            if (parsed && typeof parsed === "object" && Array.isArray(parsed.groups)) {
+                existing = parsed;
+            }
+        }
+    } catch (e) {
+        console.error("Error parseando existing_conditionals:", e);
+    }
+
+    if (existing) {
+        state.groups = existing.groups;
+        // Normalizar operators en grupos cargados (por si son viejos)
+        state.groups.forEach(g => normalizeGroupOperators(g));
+    }
+
+    updateConditionsSummary();
+    updatePlaceholdersList();
+    updateSummary();
+
+    const ta = document.getElementById("id_custom_message");
+    if (ta) ta.addEventListener("input", updateMessagePreview);
+
+    ["id_name", "id_severity"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("input", updateMessagePreview);
+    });
+
+    document.getElementById("rule-form").addEventListener("submit", (e) => {
+        if (state.groups.length === 0) {
+            e.preventDefault();
+            alert("Debes configurar al menos 1 grupo con condicionales.");
+            return false;
+        }
+        for (let gi = 0; gi < state.groups.length; gi++) {
+            const g = state.groups[gi];
+            if (g.conditionals.length === 0) {
+                e.preventDefault();
+                alert(`Grupo ${gi+1} no tiene condicionales.`);
+                return false;
+            }
+            for (let ci = 0; ci < g.conditionals.length; ci++) {
+                if (!g.conditionals[ci].device_id) {
+                    e.preventDefault();
+                    alert(`Grupo ${gi+1}, Condicional ${ci+1}: debes seleccionar un equipo.`);
+                    return false;
+                }
+            }
+            // Normalizar operators antes de serializar
+            normalizeGroupOperators(g);
+        }
+
+        document.getElementById("id_conditionals_json").value = JSON.stringify({
+            version: 2,
+            groups: state.groups,
+        });
+        return true;
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,1459 @@
+{% extends "base.html" %}
+{% load sorting_tags %}
+{% block title %}Interfaces - {{ device.name }} - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">
+            {% if show_ap_tab and not show_iface_tab %}
+                <i class="bi bi-broadcast-pin"></i> Clientes AP
+            {% elif show_ap_tab and show_iface_tab %}
+                <i class="bi bi-ethernet"></i> Interfaces / Clientes AP
+            {% else %}
+                <i class="bi bi-ethernet"></i> Interfaces
+            {% endif %}
+            <span class="text-muted">· {{ device.name }}</span>
+        </h2>
+        <p class="text-muted mb-0 small">
+            <code>{{ device.ip }}</code>
+            · <span class="badge badge-role badge-{{ device.device_role }}">{{ device.get_device_role_display }}</span>
+            · {{ device.vendor|default:"Genérico" }}
+            {% if device.device_model %}
+                <span class="text-muted">/ {{ device.device_model.name }}</span>
+            {% endif %}
+            {% if is_wireless_link %}
+                <span class="badge bg-info text-dark ms-1">
+                    <i class="bi bi-broadcast-pin"></i> Radioenlace
+                </span>
+            {% endif %}
+            {% if not device.monitor_interfaces and has_interfaces_support %}
+                <span class="badge bg-warning text-dark ms-1">
+                    <i class="bi bi-pause-fill"></i> Interfaces deshabilitadas
+                </span>
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="btn-group flex-wrap">
+        <a href="{% url 'inventario:device_detail' device.id %}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+
+        {% if is_admin and show_iface_tab %}
+        <form method="post"
+              action="{% url 'monitoreo:run_discovery' device.id %}"
+              class="d-inline"
+              onsubmit="return confirm('¿Ejecutar Discovery de interfaces IF-MIB vía SNMP? Puede tardar unos segundos.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-arrow-repeat"></i> Discovery Interfaces
+            </button>
+        </form>
+        {% endif %}
+
+        {% if is_admin and show_ap_tab %}
+        <form method="post"
+              action="{% url 'monitoreo:run_ap_discovery' device.id %}"
+              class="d-inline"
+              onsubmit="return confirm('¿Ejecutar Discovery de clientes AP vía SNMP? Puede tardar unos segundos.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-info">
+                <i class="bi bi-broadcast"></i> Discovery AP
+            </button>
+        </form>
+        {% endif %}
+
+        <a href="{% url 'monitoreo:discovery_history' device.id %}"
+           class="btn btn-outline-secondary"
+           title="Historial de ejecuciones del discovery">
+            <i class="bi bi-clock-history"></i>
+        </a>
+
+        <!-- botón Destacar WAN -->
+        {% if is_admin and show_iface_tab %}
+        <button type="button"
+                class="btn btn-outline-warning"
+                id="btn-highlight-wan"
+                onclick="resetToWan()"
+                title="Marcar la interfaz WAN/ether1 como destacada del dashboard">
+            <i class="bi bi-star-fill"></i>
+            <span class="d-none d-md-inline">Destacar WAN</span>
+        </button>
+        {% endif %}        
+
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CASO: el equipo NO soporta interfaces                        -->
+<!-- ============================================================ -->
+{% if show_none %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-slash-circle text-muted" style="font-size: 4rem;"></i>
+        <h4 class="mt-3 mb-2">Este equipo no soporta interfaces</h4>
+        <p class="text-muted mb-3">
+            El modelo <strong>{{ device.device_model.name|default:"(sin modelo)" }}</strong>
+            no tiene interfaces IF-MIB ni es un radioenlace con clientes AP.
+        </p>
+        <div class="d-flex justify-content-center gap-2">
+            <a href="{% url 'inventario:device_edit' device.id %}"
+               class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-pencil"></i> Editar equipo
+            </a>
+            <a href="{% url 'inventario:device_model_edit' device.device_model.id %}"
+               class="btn btn-outline-info btn-sm">
+                <i class="bi bi-cpu"></i> Editar modelo
+            </a>
+        </div>
+        <div class="alert alert-info small mt-4 mx-auto" style="max-width: 600px;">
+            <i class="bi bi-info-circle"></i>
+            Si este modelo <strong>debería</strong> tener interfaces,
+            márcalo en el modelo con <em>“Tiene interfaces SNMP”</em> o
+            <em>“Es radio-enlace”</em> según corresponda.
+        </div>
+    </div>
+</div>
+
+{% else %}
+
+<!-- ============================================================ -->
+<!-- TABS (solo si ambos están disponibles)                       -->
+<!-- ============================================================ -->
+{% if show_both_tabs %}
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-ifaces-btn"
+                data-bs-toggle="tab" data-bs-target="#tab-ifaces"
+                type="button" role="tab">
+            <i class="bi bi-ethernet"></i> Interfaces IF-MIB
+            <span class="badge bg-secondary ms-1">{{ count_all|default:0 }}</span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-ap-btn"
+                data-bs-toggle="tab" data-bs-target="#tab-ap"
+                type="button" role="tab">
+            <i class="bi bi-broadcast-pin"></i> Clientes AP
+            <span class="badge bg-info ms-1">{{ ap_clients_total }}</span>
+        </button>
+    </li>
+</ul>
+{% endif %}
+
+<div class="tab-content">
+
+    <!-- ======================================================== -->
+    <!-- TAB: INTERFACES IF-MIB                                   -->
+    <!-- ======================================================== -->
+    {% if show_iface_tab %}
+    <div class="tab-pane fade {% if not show_both_tabs or show_iface_tab %}show active{% endif %}"
+         id="tab-ifaces" role="tabpanel">
+
+        <!-- Stats -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <a href="?" class="text-decoration-none">
+                    <div class="card card-metric">
+                        <div class="card-body">
+                            <div class="metric-value text-primary">{{ count_all }}</div>
+                            <div class="metric-label">Interfaces totales</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="?monitored=1" class="text-decoration-none">
+                    <div class="card card-metric">
+                        <div class="card-body">
+                            <div class="metric-value text-success">{{ count_monitored }}</div>
+                            <div class="metric-label">Monitoreadas</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="?status=up" class="text-decoration-none">
+                    <div class="card card-metric">
+                        <div class="card-body">
+                            <div class="metric-value text-info">{{ count_up }}</div>
+                            <div class="metric-label">Operativas (up)</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Aviso -->
+        <div class="alert alert-info small">
+            <i class="bi bi-info-circle"></i>
+            Marca las interfaces cuyo tráfico quieres monitorear.
+            Solo esas se consultarán vía SNMP en cada ciclo del poller.
+            <br>
+            <i class="bi bi-star-fill text-warning"></i>
+            <strong>Tip:</strong> usa el botón <i class="bi bi-star"></i>
+            de la última columna para marcar la
+            <em>interfaz destacada del dashboard</em>. Esa interfaz es la
+            que se muestra en la card del dashboard principal. Si no marcas
+            ninguna, se usa la primera interfaz con tráfico.
+        </div>
+
+        <!-- Buscador colapsable -->
+        <div class="card mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center"
+                 style="cursor: pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#search-panel">
+                <div>
+                    <i class="bi bi-search"></i>
+                    <strong>Buscador avanzado</strong>
+                    {% if has_filters %}
+                    <span class="badge bg-primary ms-2">
+                        <i class="bi bi-funnel-fill"></i> Filtros activos
+                    </span>
+                    {% endif %}
+                </div>
+                <div>
+                    {% if has_filters %}
+                    <a href="{% url 'inventario:device_interfaces' device.id %}"
+                       class="btn btn-sm btn-outline-secondary me-2"
+                       onclick="event.stopPropagation();">
+                        <i class="bi bi-x-lg"></i> Limpiar
+                    </a>
+                    {% endif %}
+                    <i class="bi bi-chevron-down"></i>
+                </div>
+            </div>
+
+            <div id="search-panel" class="collapse {% if has_filters %}show{% endif %}">
+                <div class="card-body">
+                    <form method="get" class="row g-2">
+                        <input type="hidden" name="sort" value="{{ sort_key }}">
+                        <input type="hidden" name="order" value="{{ order }}">
+
+                        <div class="col-md-4">
+                            <label class="form-label small">Buscar</label>
+                            <input type="text" name="q" value="{{ search }}"
+                                   class="form-control"
+                                   placeholder="Nombre o alias...">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Monitoreo</label>
+                            <select name="monitored" class="form-select">
+                                <option value="">Todas</option>
+                                <option value="1" {% if monitored_filter == "1" %}selected{% endif %}>Monitoreadas</option>
+                                <option value="0" {% if monitored_filter == "0" %}selected{% endif %}>No monitoreadas</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Estado</label>
+                            <select name="status" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="up" {% if status_filter == "up" %}selected{% endif %}>Up</option>
+                                <option value="down" {% if status_filter == "down" %}selected{% endif %}>Down</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Tipo</label>
+                            <select name="type" class="form-select">
+                                <option value="">Todos</option>
+                                {% for t in type_choices %}
+                                <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small">Velocidad</label>
+                            <select name="has_speed" class="form-select">
+                                <option value="">Todas</option>
+                                <option value="1" {% if has_speed_filter == "1" %}selected{% endif %}>Con velocidad</option>
+                                <option value="0" {% if has_speed_filter == "0" %}selected{% endif %}>Sin velocidad</option>
+                            </select>
+                        </div>
+                        <div class="col-12 d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary me-2">
+                                <i class="bi bi-search"></i> Filtrar
+                            </button>
+                            <a href="{% url 'inventario:device_interfaces' device.id %}"
+                               class="btn btn-outline-secondary">Limpiar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form de guardado -->
+        <form method="post" id="ifaces-form">
+            {% csrf_token %}
+
+            <div class="card">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-ethernet"></i>
+                        Interfaces ({{ interfaces|length }})
+                    </h5>
+                    {% if is_admin and interfaces %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="selectAll()" title="Seleccionar todas">
+                            <i class="bi bi-check-all"></i> Todas
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="deselectAll()" title="Deseleccionar todas">
+                            <i class="bi bi-x-lg"></i> Ninguna
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="selectPhysical()" title="Solo interfaces con velocidad > 0">
+                            <i class="bi bi-funnel"></i> Solo con velocidad
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                {% if is_admin %}<th style="width: 40px;"></th>{% endif %}
+                                {% sortable_th "index" "ifIndex" "90px" %}
+                                {% sortable_th "nombre" "Nombre" "150px" %}
+                                {% sortable_th "alias" "Alias" "150px" %}
+                                {% sortable_th "tipo" "Tipo" "110px" %}
+                                {% sortable_th "velocidad" "Velocidad" "120px" %}
+                                {% sortable_th "estado" "Estado" "100px" %}
+                                {% sortable_th "monitor" "Monitoreada" "130px" %}
+                                {% if is_admin %}
+                                <th style="width: 60px;" class="text-center"
+                                    title="Interfaz destacada en el dashboard">
+                                    <i class="bi bi-star-fill text-warning"></i>
+                                </th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for iface in interfaces %}
+                            <tr class="{% if iface.monitored %}interface-monitored{% endif %}"
+                                data-interface-id="{{ iface.id }}">
+                                {% if is_admin %}
+                                <td>
+                                    <input type="checkbox"
+                                           name="monitored"
+                                           value="{{ iface.id }}"
+                                           class="form-check-input interface-checkbox"
+                                           data-speed="{{ iface.if_speed_bps|default:0 }}"
+                                           {% if iface.monitored %}checked{% endif %}>
+                                </td>
+                                {% endif %}
+                                <td>{{ iface.if_index }}</td>
+                                <td>
+                                    <strong>{{ iface.if_name|default:"—" }}</strong>
+                                    {% if iface.id == device.dashboard_interface_id %}
+                                    <span class="badge bg-warning text-dark ms-1"
+                                          title="Esta es la interfaz destacada del dashboard"
+                                          style="font-size: 0.6rem;">
+                                        <i class="bi bi-star-fill"></i> Destacada
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-muted">{{ iface.if_alias|default:"—" }}</td>
+                                <td>
+                                    <span class="badge bg-light text-dark">{{ iface.if_type|default:"—" }}</span>
+                                </td>
+                                <td>
+                                    {% if iface.if_speed_bps %}
+                                        {{ iface.speed_mbps }} Mbps
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if iface.oper_status %}
+                                        <span class="status-up"><i class="bi bi-arrow-up-circle"></i> up</span>
+                                    {% else %}
+                                        <span class="status-down"><i class="bi bi-arrow-down-circle"></i> down</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if iface.monitored %}
+                                        <span class="badge bg-success"><i class="bi bi-check-lg"></i> Sí</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                                {% if is_admin %}
+                                <td class="text-center">
+                                    <button type="button"
+                                            class="btn btn-sm btn-dashboard-star
+                                                {% if iface.id == device.dashboard_interface_id %}
+                                                btn-warning
+                                                {% else %}
+                                                btn-outline-secondary
+                                                {% endif %}"
+                                            data-interface-id="{{ iface.id }}"
+                                            data-is-dashboard="{% if iface.id == device.dashboard_interface_id %}true{% else %}false{% endif %}"
+                                            title="{% if iface.id == device.dashboard_interface_id %}Quitar como destacada{% else %}Marcar como destacada del dashboard{% endif %}">
+                                        <i class="bi {% if iface.id == device.dashboard_interface_id %}bi-star-fill{% else %}bi-star{% endif %}"></i>
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if is_admin %}9{% else %}7{% endif %}"
+                                    class="text-center text-muted py-5">
+                                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                    <p class="mt-3 mb-2">No hay interfaces que coincidan con los filtros.</p>
+                                    {% if is_admin %}
+                                    <p class="text-muted small">
+                                        Pulsa <strong>Discovery Interfaces</strong> para detectarlas vía SNMP.
+                                    </p>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if is_admin and interfaces %}
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted">
+                            <span id="selected-count">0</span> de {{ interfaces|length }} seleccionadas
+                        </span>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Guardar cambios
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- ======================================================== -->
+    <!-- TAB: CLIENTES AP                                         -->
+    <!-- ======================================================== -->
+    {% if show_ap_tab %}
+    <div class="tab-pane fade {% if not show_both_tabs or show_ap_tab and not show_iface_tab %}show active{% endif %}"
+         id="tab-ap" role="tabpanel">
+
+        <!-- Stats AP -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card card-metric">
+                    <div class="card-body">
+                        <div class="metric-value text-success" id="ap-stat-online">
+                            {{ ap_clients_online }}
+                        </div>
+                        <div class="metric-label">Clientes en línea</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-metric">
+                    <div class="card-body">
+                        <div class="metric-value text-primary" id="ap-stat-total">
+                            {{ ap_clients_total }}
+                        </div>
+                        <div class="metric-label">Clientes totales</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toolbar AP -->
+        <div class="card mb-3">
+            <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+                <small class="text-muted">
+                    <i class="bi bi-clock"></i>
+                    Última actualización: <span id="ap-last-update">—</span>
+                </small>
+                <div class="form-check form-switch ms-auto mb-0">
+                    <input class="form-check-input" type="checkbox"
+                           id="ap-auto-refresh" checked>
+                    <label class="form-check-label small" for="ap-auto-refresh">
+                        Auto (10s)
+                    </label>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        id="ap-btn-refresh"
+                        onclick="loadApClients(true)">
+                    <i class="bi bi-arrow-clockwise"></i> Recargar
+                </button>
+            </div>
+        </div>
+
+        <div class="alert alert-info small">
+            <i class="bi bi-info-circle"></i>
+            Los clientes AP se descubren automáticamente vía SNMP. Los
+            clientes offline se conservan en la lista con su información
+            estática (MAC, IP, hostname) pero sus métricas en vivo no se
+            actualizan hasta que reconecten.
+        </div>
+
+        <!-- Tabla AP -->
+        <div class="card">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-broadcast-pin"></i>
+                    Clientes conectados
+                    <span class="badge bg-info text-dark ms-1"
+                          id="ap-count-badge">{{ ap_clients_total }}</span>
+                </h5>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle" id="ap-clients-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>MAC</th>
+                            <th>IP</th>
+                            <th>Hostname</th>
+                            <th class="text-end">Signal</th>
+                            <th class="text-end">CCQ</th>
+                            <th class="text-end">Noise</th>
+                            <th class="text-end">SNR</th>
+                            <th class="text-end">TX</th>
+                            <th class="text-end">RX</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ap-clients-tbody">
+                        {% for c in ap_clients %}
+                        <tr class="{% if not c.online %}opacity-50{% endif %}"
+                            data-mac="{{ c.mac }}">
+                            <td><code class="small">{{ c.mac }}</code></td>
+                            <td><code class="small">{{ c.ip|default:"—" }}</code></td>
+                            <td class="small">{{ c.hostname|default:"—" }}</td>
+                            <td class="text-end small ap-cell-signal">—</td>
+                            <td class="text-end small ap-cell-ccq">—</td>
+                            <td class="text-end small ap-cell-noise">—</td>
+                            <td class="text-end small ap-cell-snr">—</td>
+                            <td class="text-end small ap-cell-tx">—</td>
+                            <td class="text-end small ap-cell-rx">—</td>
+                            <td class="text-center">
+                                {% if c.online %}
+                                <span class="badge bg-success">Online</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Offline</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center text-muted py-5">
+                                <i class="bi bi-broadcast-pin" style="font-size: 3rem;"></i>
+                                <p class="mt-3 mb-2">No hay clientes AP registrados.</p>
+                                {% if is_admin %}
+                                <p class="text-muted small">
+                                    Pulsa <strong>Discovery AP</strong> para
+                                    descubrirlos vía SNMP.
+                                </p>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Interfaces — Guía de uso",
+    sections: [
+        {
+            heading: "¿Qué muestra esta página?",
+            body: `
+                Dependiendo del tipo de equipo, esta página puede mostrar
+                <strong>dos tipos de interfaces</strong>:
+                <br><br>
+                <strong>Interfaces IF-MIB (equipos no wireless):</strong>
+                interfaces tradicionales (eth0, wlan0, etc.) donde puedes
+                marcar manualmente cuáles monitorear.
+                <br><br>
+                <strong>Clientes AP (radioenlaces):</strong>
+                lista de clientes conectados al Access Point, con métricas
+                en vivo (señal, CCQ, tasas). Se descubren automáticamente
+                vía SNMP.
+            `
+        },
+                {
+            heading: "Interfaces IF-MIB",
+            body: `
+                Cada interfaz tiene un <code>ifIndex</code> único, un nombre
+                (ej. <code>ether1</code>), un alias opcional, un tipo
+                (ethernet, wlan, loopback...) y una velocidad.
+                <br><br>
+                Marca el checkbox para indicar que quieres monitorear el
+                tráfico de esa interfaz. Solo las marcadas consumen ancho
+                de banda SNMP en cada ciclo del poller.
+                <br><br>
+                <strong>Tip:</strong> el botón <em>"Solo con velocidad"</em>
+                selecciona automáticamente las interfaces físicas (con
+                velocidad > 0), excluyendo loopbacks y virtuales.
+            `
+        },
+        {
+            heading: "Interfaz destacada del dashboard",
+            body: `
+                El botón <i class="bi bi-star text-warning"></i> de la última
+                columna marca una interfaz como <strong>destacada del
+                dashboard</strong>. Esa interfaz es la que se muestra en la
+                card compacta del dashboard principal (con su sparkline de
+                tráfico).
+                <br><br>
+                <strong>Reglas:</strong>
+                <br>
+                • Solo puede haber <strong>una</strong> destacada por equipo.
+                <br>
+                • Si marcas una nueva, la anterior se reemplaza automáticamente.
+                <br>
+                • Si clickas la misma que ya es destacada, se desmarca.
+                <br>
+                • Si no marcas ninguna, el dashboard usa la <em>primera
+                interfaz con tráfico</em> (normalmente <code>ether1</code>/WAN).
+                <br><br>
+                <strong>Botón "Destacar WAN":</strong>
+                en el header hay un botón de acceso rápido que busca y marca
+                automáticamente la interfaz WAN (por nombre: <code>ether1</code>,
+                <code>wan</code>, <code>eth0</code>, <code>sfp-sfpplus1</code>,
+                etc.). Si la WAN ya es la destacada, el botón se vuelve
+                amarillo sólido. Si no encuentra una WAN clara, muestra un
+                aviso sugiriendo marcar manualmente con el ⭐.
+                <br><br>
+                <strong>Recomendación:</strong> usa el botón <em>"Destacar
+                WAN"</em> como atajo rápido, y el ⭐ para cambiar a otra
+                interfaz si lo necesitas.
+            `
+        },
+        {
+            heading: "Clientes AP",
+            body: `
+                Para radioenlaces que operan en modo Access Point, esta
+                tabla muestra los clientes conectados con sus métricas
+                en vivo:
+                <br>
+                • <strong>Signal:</strong> nivel de señal recibida (dBm). Más cercano a 0 es mejor.
+                <br>
+                • <strong>CCQ:</strong> calidad de enlace (%). Valores > 80% son buenos.
+                <br>
+                • <strong>Noise:</strong> piso de ruido (dBm). Más negativo es mejor.
+                <br>
+                • <strong>SNR:</strong> relación señal/ruido (dB). Valores > 25 son excelentes.
+                <br>
+                • <strong>TX/RX:</strong> tasas actuales de transmisión/recepción.
+                <br><br>
+                Los clientes <strong>offline</strong> (sin métricas recientes)
+                se muestran atenuados y con badge gris. Su información estática
+                (MAC, IP, hostname) se conserva hasta que reconecten o se
+                ejecute un nuevo Discovery.
+            `
+        },
+        {
+            heading: "Botones de Discovery",
+            body: `
+                Ejecutan el descubrimiento vía SNMP:
+                <br>
+                • <strong>Discovery Interfaces:</strong> recorre la tabla
+                IF-MIB del equipo y actualiza la lista de interfaces.
+                <br>
+                • <strong>Discovery AP:</strong> recorre la tabla de clientes
+                wireless (ubntWlStatTable) y actualiza la lista de clientes AP.
+                <br><br>
+                El Discovery <strong>preserva la configuración manual</strong>
+                (por ejemplo, qué interfaces tienes marcadas para monitoreo)
+                y solo actualiza los datos que vienen del equipo.
+            `
+        },
+        {
+            heading: "Auto-refresh de clientes AP",
+            body: `
+                Las métricas de los clientes AP se actualizan automáticamente
+                cada <strong>10 segundos</strong> desde el endpoint de
+                monitoreo en vivo. Desactiva el switch si quieres congelar
+                los valores para analizarlos con calma.
+                <br><br>
+                El polling se pausa automáticamente cuando la pestaña del
+                navegador no está visible (ahorro de recursos).
+            `
+        },
+        {
+            heading: "Equipo sin interfaces",
+            body: `
+                Si el modelo del equipo no soporta interfaces (ni IF-MIB ni
+                radioenlace), se muestra un mensaje central explicando cómo
+                habilitarlas. Debes:
+                <br>
+                1. Ir a <em>Editar equipo</em> o <em>Editar modelo</em>.
+                <br>
+                2. Marcar el checkbox <em>“Tiene interfaces SNMP”</em> o
+                <em>“Es radio-enlace”</em> en el modelo.
+                <br>
+                3. Volver a esta página.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// CONFIGURACIÓN INICIAL
+// ============================================================
+const AP_DEVICE_ID = {{ device.id }};
+const AP_URL_LIVE = "{% url 'monitoreo:devices_live' %}";
+const AP_REFRESH_INTERVAL = 10000;  // 10s
+
+let apRefreshTimer = null;
+let apAutoRefreshEnabled = true;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Formatea bps a K/M/G con 2 decimales.
+ * @param {number|null} v
+ * @returns {string}
+ */
+function formatBps(v) {
+    if (v === null || v === undefined) return '—';
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' Gbps';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + ' Mbps';
+    if (v >= 1e3) return (v / 1e3).toFixed(2) + ' Kbps';
+    return v.toFixed(0) + ' bps';
+}
+
+/**
+ * Escapa HTML para inyectar como texto seguro.
+ */
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Devuelve la clase de color para un valor de señal (dBm).
+ */
+function signalColor(s) {
+    if (s === null || s === undefined) return '';
+    if (s < -80) return 'text-danger';
+    if (s < -70) return 'text-warning';
+    return 'text-success';
+}
+
+/**
+ * Devuelve la clase de color para un valor de CCQ (%).
+ */
+function ccqColor(c) {
+    if (c === null || c === undefined) return '';
+    if (c < 50) return 'text-danger';
+    if (c < 80) return 'text-warning';
+    return 'text-success';
+}
+
+/**
+ * Devuelve la clase de color para un valor de noise (dBm).
+ */
+function noiseColor(n) {
+    if (n === null || n === undefined) return '';
+    if (n > -80) return 'text-danger';
+    if (n > -90) return 'text-warning';
+    return '';
+}
+
+/**
+ * Devuelve la clase de color para un valor de SNR (dB).
+ */
+function snrColor(s) {
+    if (s === null || s === undefined) return '';
+    if (s < 15) return 'text-danger';
+    if (s < 25) return 'text-warning';
+    return 'text-success';
+}
+
+// ============================================================
+// CARGA DE CLIENTES AP (polling)
+// ============================================================
+
+/**
+ * Carga los clientes AP del device actual desde el endpoint
+ * de monitoreo en vivo.
+ *
+ * @param {boolean} manual - true si el usuario pulsó "Recargar".
+ */
+async function loadApClients(manual = false) {
+    const btn = document.getElementById('ap-btn-refresh');
+
+    if (manual && btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    }
+
+    try {
+        const response = await fetch(AP_URL_LIVE, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+
+        const myDevice = (data.devices || []).find(d => d.id === AP_DEVICE_ID);
+        if (!myDevice) {
+            console.warn('Device no encontrado en la respuesta del servidor.');
+            return;
+        }
+
+        const clients = myDevice.ap_clients || [];
+        renderApClients(clients);
+
+        // Timestamp
+        const ts = new Date(data.timestamp);
+        const el = document.getElementById('ap-last-update');
+        if (el) el.textContent = ts.toLocaleTimeString('es-VE');
+
+    } catch (e) {
+        console.error('Error cargando clientes AP:', e);
+        const el = document.getElementById('ap-last-update');
+        if (el) el.textContent = 'error';
+    } finally {
+        if (manual && btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Recargar';
+        }
+    }
+}
+
+/**
+ * Renderiza (o actualiza) la tabla de clientes AP.
+ * @param {Array} clients - array de clientes desde el endpoint.
+ */
+function renderApClients(clients) {
+    const tbody = document.getElementById('ap-clients-tbody');
+    if (!tbody) return;
+
+    // Actualizar stats
+    const online = clients.filter(c => c.online).length;
+    const total = clients.length;
+
+    const statOnlineEl = document.getElementById('ap-stat-online');
+    const statTotalEl = document.getElementById('ap-stat-total');
+    const badgeEl = document.getElementById('ap-count-badge');
+
+    if (statOnlineEl) statOnlineEl.textContent = online;
+    if (statTotalEl) statTotalEl.textContent = total;
+    if (badgeEl) badgeEl.textContent = total;
+
+    // Si la tabla está vacía, mostrar mensaje
+    if (clients.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="text-center text-muted py-5">
+                    <i class="bi bi-broadcast-pin" style="font-size: 3rem;"></i>
+                    <p class="mt-3 mb-2">No hay clientes AP registrados.</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    // Ordenar: online primero, luego por MAC
+    clients.sort((a, b) => {
+        if (a.online !== b.online) return b.online - a.online;
+        return (a.mac || '').localeCompare(b.mac || '');
+    });
+
+    tbody.innerHTML = clients.map(c => {
+        const rowCls = c.online ? '' : 'opacity-50';
+
+        const signalVal = c.signal !== null && c.signal !== undefined
+            ? c.signal.toFixed(0) + ' dBm' : '—';
+        const ccqVal = c.ccq !== null && c.ccq !== undefined
+            ? c.ccq.toFixed(0) + '%' : '—';
+        const noiseVal = c.noise !== null && c.noise !== undefined
+            ? c.noise.toFixed(0) + ' dBm' : '—';
+        const snrVal = c.snr !== null && c.snr !== undefined
+            ? c.snr.toFixed(0) + ' dB' : '—';
+        const txVal = formatBps(c.tx_rate);
+        const rxVal = formatBps(c.rx_rate);
+
+        return `
+            <tr class="${rowCls}" data-mac="${escapeHtmlJs(c.mac)}">
+                <td><code class="small">${escapeHtmlJs(c.mac)}</code></td>
+                <td><code class="small">${escapeHtmlJs(c.ip) || '—'}</code></td>
+                <td class="small">${escapeHtmlJs(c.hostname) || '—'}</td>
+                <td class="text-end small ${signalColor(c.signal)}">${signalVal}</td>
+                <td class="text-end small ${ccqColor(c.ccq)}">${ccqVal}</td>
+                <td class="text-end small ${noiseColor(c.noise)}">${noiseVal}</td>
+                <td class="text-end small ${snrColor(c.snr)}">${snrVal}</td>
+                <td class="text-end small text-success">↓ ${txVal}</td>
+                <td class="text-end small text-warning">↑ ${rxVal}</td>
+                <td class="text-center">
+                    ${c.online
+                        ? '<span class="badge bg-success">Online</span>'
+                        : '<span class="badge bg-secondary">Offline</span>'}
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// ============================================================
+// CICLO DE AUTO-REFRESH
+// ============================================================
+
+function startApAutoRefresh() {
+    stopApAutoRefresh();
+    apAutoRefreshEnabled = true;
+    apRefreshTimer = setInterval(() => loadApClients(false), AP_REFRESH_INTERVAL);
+}
+
+function stopApAutoRefresh() {
+    if (apRefreshTimer) {
+        clearInterval(apRefreshTimer);
+        apRefreshTimer = null;
+    }
+    apAutoRefreshEnabled = false;
+}
+
+// ============================================================
+// CONTROLES DE IF-MIB (selección de checkboxes)
+// ============================================================
+
+function updateCount() {
+    const checkboxes = document.querySelectorAll('.interface-checkbox');
+    const checked = document.querySelectorAll('.interface-checkbox:checked');
+    const el = document.getElementById('selected-count');
+    if (el) el.textContent = checked.length;
+
+    checkboxes.forEach(cb => {
+        const row = cb.closest('tr');
+        if (cb.checked) row.classList.add('interface-monitored');
+        else row.classList.remove('interface-monitored');
+    });
+}
+
+function selectAll() {
+    document.querySelectorAll('.interface-checkbox').forEach(cb => cb.checked = true);
+    updateCount();
+}
+
+function deselectAll() {
+    document.querySelectorAll('.interface-checkbox').forEach(cb => cb.checked = false);
+    updateCount();
+}
+
+function selectPhysical() {
+    document.querySelectorAll('.interface-checkbox').forEach(cb => {
+        const speed = parseInt(cb.dataset.speed) || 0;
+        cb.checked = speed > 0;
+    });
+    updateCount();
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // IF-MIB: listeners de checkboxes
+    document.querySelectorAll('.interface-checkbox').forEach(cb => {
+        cb.addEventListener('change', updateCount);
+    });
+    updateCount();
+
+    // AP: solo si la tab AP existe
+    const apTable = document.getElementById('ap-clients-table');
+    if (!apTable) return;
+
+    const autoToggle = document.getElementById('ap-auto-refresh');
+
+    // Carga inicial (solo si hay clientes estáticos; si no, el usuario
+    // debe pulsar Discovery primero)
+    const hasStaticClients = {{ ap_clients_total|default:0 }} > 0;
+    if (hasStaticClients) {
+        loadApClients(false);
+    }
+
+    // Auto-refresh
+    if (autoToggle) {
+        autoToggle.addEventListener('change', () => {
+            if (autoToggle.checked) startApAutoRefresh();
+            else stopApAutoRefresh();
+        });
+        if (autoToggle.checked) startApAutoRefresh();
+    }
+
+    // Pausar cuando la pestaña no está visible
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (apRefreshTimer) stopApAutoRefresh();
+        } else {
+            const toggle = document.getElementById('ap-auto-refresh');
+            if (toggle && toggle.checked) {
+                startApAutoRefresh();
+                loadApClients(false);
+            }
+        }
+    });
+});
+
+// ============================================================
+// MARCAR INTERFAZ DESTACADA DEL DASHBOARD
+// ============================================================
+const URL_SET_DASHBOARD = "{% url 'inventario:device_interface_set_dashboard' device.id 0 %}"
+    .replace(/\/0\/set-dashboard/, '/__IFACE__/set-dashboard');
+
+/**
+ * Maneja el click del botón ⭐ de una interfaz.
+ *
+ * @param {HTMLButtonElement} btn - botón clickeado
+ */
+async function toggleDashboardInterface(btn) {
+    const interfaceId = parseInt(btn.dataset.interfaceId, 10);
+    const isCurrent = btn.dataset.isDashboard === 'true';
+
+    // Si ya es la destacada, desmarcamos (interface_id = 0 en el backend
+    // significa "quitar la destacada actual"). Si no, marcamos esta.
+    const targetId = isCurrent ? 0 : interfaceId;
+
+    // Deshabilitar mientras se ejecuta
+    btn.disabled = true;
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        const url = URL_SET_DASHBOARD.replace('__IFACE__', targetId);
+        const csrfToken = getCookie('csrftoken');
+
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrfToken },
+        });
+
+        const data = await response.json();
+
+        if (!data.ok) {
+            alert(data.error || 'Error al marcar la interfaz.');
+            return;
+        }
+
+        // Actualizar TODOS los botones de la tabla
+        // (porque solo una interfaz puede ser destacada a la vez)
+        updateAllStarButtons(data.dashboard_interface_id);
+
+        // Mostrar toast de confirmación
+        showInterfaceToast(data.message, 'success');
+
+        // Actualizar el badge "Destacada" en la tabla
+        updateDashboardBadges(data.dashboard_interface_id);
+
+        // Actualizar el estado del botón "Destacar WAN"
+        updateHighlightWanButton();
+
+    } catch (e) {
+        console.error('Error marcando interfaz:', e);
+        alert('Error de red. Intenta de nuevo.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+/**
+ * Actualiza el estado visual de TODOS los botones ⭐ de la tabla.
+ *
+ * @param {number|null} dashboardId - ID de la interfaz destacada actual
+ *                                    (o null si no hay ninguna).
+ */
+function updateAllStarButtons(dashboardId) {
+    document.querySelectorAll('.btn-dashboard-star').forEach(btn => {
+        const btnIfaceId = parseInt(btn.dataset.interfaceId, 10);
+        const isNow = dashboardId !== null && btnIfaceId === dashboardId;
+
+        btn.dataset.isDashboard = isNow ? 'true' : 'false';
+
+        // Actualizar clases del botón
+        btn.classList.toggle('btn-warning', isNow);
+        btn.classList.toggle('btn-outline-secondary', !isNow);
+
+        // Actualizar icono
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('bi-star-fill', isNow);
+            icon.classList.toggle('bi-star', !isNow);
+        }
+
+        // Actualizar tooltip
+        btn.title = isNow
+            ? 'Quitar como destacada'
+            : 'Marcar como destacada del dashboard';
+    });
+}
+
+/**
+ * Actualiza los badges "Destacada" en la columna de nombre.
+ *
+ * @param {number|null} dashboardId
+ */
+function updateDashboardBadges(dashboardId) {
+    // Quitar todos los badges existentes
+    document.querySelectorAll('.dashboard-badge').forEach(b => b.remove());
+
+    if (dashboardId === null) return;
+
+    // Añadir el badge en la fila correspondiente
+    const row = document.querySelector(
+        `tr[data-interface-id="${dashboardId}"]`
+    );
+    if (!row) return;
+
+    const nameCell = row.querySelector('td:nth-child(2)');
+    // Ajuste: si no hay checkbox (usuario no admin), es nth-child(2);
+    // si hay checkbox, es nth-child(3). Buscamos la celda que tiene
+    // el if_name.
+    const targetCell = row.querySelector('td:nth-child(2)') ||
+                       row.querySelector('td:nth-child(3)');
+    if (!targetCell) return;
+
+    const badge = document.createElement('span');
+    badge.className = 'badge bg-warning text-dark ms-1 dashboard-badge';
+    badge.title = 'Esta es la interfaz destacada del dashboard';
+    badge.style.fontSize = '0.6rem';
+    badge.innerHTML = '<i class="bi bi-star-fill"></i> Destacada';
+    targetCell.appendChild(badge);
+}
+
+/**
+ * Muestra un toast de confirmación (independiente del sistema
+ * de toasts del dashboard, para que device_interfaces funcione
+ * aunque el dashboard no esté cargado).
+ *
+ * @param {string} message
+ * @param {string} severity - 'success' | 'danger' | 'info' | 'warning'
+ */
+function showInterfaceToast(message, severity = 'success') {
+    // Reutilizar el contenedor global si existe; si no, crearlo
+    let container = document.getElementById('iface-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'iface-toast-container';
+        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        container.style.zIndex = '1090';
+        document.body.appendChild(container);
+    }
+
+    const colors = {
+        success: 'bg-success text-white',
+        warning: 'bg-warning text-dark',
+        danger:  'bg-danger text-white',
+        info:    'bg-info text-white',
+    };
+    const icons = {
+        success: 'bi-check-circle-fill',
+        warning: 'bi-exclamation-triangle-fill',
+        danger:  'bi-x-circle-fill',
+        info:    'bi-info-circle-fill',
+    };
+
+    const id = 'iface-toast-' + Date.now();
+
+    container.insertAdjacentHTML('beforeend', `
+        <div id="${id}" class="toast" role="alert" data-bs-autohide="true"
+             data-bs-delay="4000">
+            <div class="toast-header ${colors[severity] || colors.info}">
+                <i class="bi ${icons[severity] || icons.info} me-2"></i>
+                <strong class="me-auto">Interfaz destacada</strong>
+                <small>ahora</small>
+                <button type="button" class="btn-close btn-close-white ms-2"
+                        data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body small">${escapeHtmlJs(message)}</div>
+        </div>
+    `);
+
+    const el = document.getElementById(id);
+    if (el) new bootstrap.Toast(el).show();
+
+    // Auto-eliminar el elemento tras el hide
+    if (el) {
+        el.addEventListener('hidden.bs.toast', () => el.remove());
+    }
+}
+
+// ============================================================
+// LISTENERS DEL BOTÓN ⭐
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.btn-dashboard-star').forEach(btn => {
+        btn.addEventListener('click', () => toggleDashboardInterface(btn));
+    });
+});
+
+// ============================================================
+// DESTACAR WAN AUTOMÁTICAMENTE
+// ============================================================
+
+/**
+ * Busca y marca automáticamente la interfaz WAN/ether1 como
+ * interfaz destacada del dashboard.
+ *
+ * Estrategia de búsqueda por prioridad:
+ *   1. Interfaces cuyo nombre contenga: ether1, wan, sfp-sfpplus1,
+ *      eth0, eth1 (case-insensitive).
+ *   2. La primera interfaz física (con velocidad > 0) y monitored=True.
+ *   3. La primera interfaz con oper_status=True.
+ *
+ * Si ninguna coincide, muestra un toast de advertencia sugiriendo
+ * marcar manualmente.
+ *
+ * Es idempotente: si la WAN ya es la destacada, no hace nada
+ * (excepto confirmar visualmente).
+ */
+async function resetToWan() {
+    const btn = document.getElementById('btn-highlight-wan');
+    if (!btn) return;
+
+    // Feedback visual en el botón
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    try {
+        // --------------------------------------------------------
+        // 1. Buscar la interfaz objetivo por nombre (por prioridad)
+        // --------------------------------------------------------
+        const nameCandidates = [
+            'ether1', 'wan', 'sfp-sfpplus1', 'eth0', 'eth1',
+            'ether2', 'internet', 'uplink',
+        ];
+
+        // Obtener todas las filas de interfaces
+        const rows = Array.from(document.querySelectorAll('tr[data-interface-id]'));
+        if (rows.length === 0) {
+            showInterfaceToast(
+                'No hay interfaces en la tabla. Ejecuta Discovery primero.',
+                'warning'
+            );
+            return;
+        }
+
+        /**
+         * Extrae el nombre de la interfaz de una fila.
+         * El nombre está en un <strong> dentro de la celda 2 o 3
+         * (depende de si hay checkbox o no).
+         */
+        function getRowName(row) {
+            // Buscar en la celda que contiene <strong>
+            const cells = row.querySelectorAll('td');
+            for (const cell of cells) {
+                const strong = cell.querySelector('strong');
+                if (strong) return strong.textContent.trim().toLowerCase();
+            }
+            return '';
+        }
+
+        // Buscar por nombre candidato
+        let targetRow = null;
+        let matchedBy = null;
+
+        for (const candidate of nameCandidates) {
+            targetRow = rows.find(row => {
+                const name = getRowName(row);
+                return name === candidate || name.includes(candidate);
+            });
+            if (targetRow) {
+                matchedBy = `nombre "${candidate}"`;
+                break;
+            }
+        }
+
+        // --------------------------------------------------------
+        // 2. Fallback: primera interfaz con velocidad > 0 + monitored
+        // --------------------------------------------------------
+        if (!targetRow) {
+            targetRow = rows.find(row => {
+                const cb = row.querySelector('.interface-checkbox');
+                if (!cb) return false;
+                const speed = parseInt(cb.dataset.speed) || 0;
+                return speed > 0 && cb.checked;
+            });
+            if (targetRow) matchedBy = 'primera física monitoreada';
+        }
+
+        // --------------------------------------------------------
+        // 3. Fallback: primera interfaz con oper_status up
+        // --------------------------------------------------------
+        if (!targetRow) {
+            targetRow = rows.find(row => {
+                const statusText = row.textContent.toLowerCase();
+                return statusText.includes('up') && !statusText.includes('down');
+            });
+            if (targetRow) matchedBy = 'primera interfaz activa (up)';
+        }
+
+        // --------------------------------------------------------
+        // 4. Sin candidatos → mostrar aviso
+        // --------------------------------------------------------
+        if (!targetRow) {
+            showInterfaceToast(
+                'No se encontró una interfaz WAN clara. ' +
+                'Marca manualmente con el botón ⭐ de la tabla.',
+                'warning'
+            );
+            return;
+        }
+
+        // --------------------------------------------------------
+        // 5. Ejecutar el toggle correspondiente
+        // --------------------------------------------------------
+        const starBtn = targetRow.querySelector('.btn-dashboard-star');
+        if (!starBtn) {
+            showInterfaceToast(
+                'No se pudo encontrar el botón ⭐ de la fila. ' +
+                'Refresca la página e intenta de nuevo.',
+                'danger'
+            );
+            return;
+        }
+
+        const isCurrentlyDashboard = starBtn.dataset.isDashboard === 'true';
+        const ifaceName = getRowName(targetRow);
+
+        // Si YA es la destacada, avisamos al usuario (no hacemos toggle
+        // accidental hacia "quitar")
+        if (isCurrentlyDashboard) {
+            showInterfaceToast(
+                `"${ifaceName}" ya es la interfaz destacada del dashboard.`,
+                'info'
+            );
+            return;
+        }
+
+        // Simular clic en el botón ⭐ (reutiliza toda la lógica existente)
+        starBtn.click();
+
+        // El toast de confirmación lo maneja `toggleDashboardInterface`
+
+        // Scroll suave a la fila para que el usuario vea el cambio
+        targetRow.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+        });
+
+        // Highlight temporal de la fila (feedback visual)
+        targetRow.style.transition = 'background-color 0.3s ease';
+        const originalBg = targetRow.style.backgroundColor;
+        targetRow.style.backgroundColor = 'rgba(255, 193, 7, 0.25)';
+        setTimeout(() => {
+            targetRow.style.backgroundColor = originalBg;
+        }, 1200);
+
+    } catch (e) {
+        console.error('Error destacando WAN:', e);
+        showInterfaceToast(
+            'Error al destacar la WAN. Intenta manualmente.',
+            'danger'
+        );
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
+// ============================================================
+// ESTADO DEL BOTÓN "DESTACAR WAN"
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    updateHighlightWanButton();
+});
+
+/**
+ * Actualiza el estado visual del botón "Destacar WAN" según si la
+ * interfaz WAN ya es la destacada actualmente.
+ *
+ * Se llama:
+ *   - Al cargar la página.
+ *   - Después de cada toggle de ⭐ (agregar llamada en
+ *     `toggleDashboardInterface` justo después de
+ *     `updateDashboardBadges(...)`).
+ */
+function updateHighlightWanButton() {
+    const btn = document.getElementById('btn-highlight-wan');
+    if (!btn) return;
+
+    // Buscar la WAN siguiendo la misma lógica de resetToWan
+    const nameCandidates = [
+        'ether1', 'wan', 'sfp-sfpplus1', 'eth0', 'eth1',
+        'ether2', 'internet', 'uplink',
+    ];
+    const rows = Array.from(document.querySelectorAll('tr[data-interface-id]'));
+
+    function getRowName(row) {
+        const cells = row.querySelectorAll('td');
+        for (const cell of cells) {
+            const strong = cell.querySelector('strong');
+            if (strong) return strong.textContent.trim().toLowerCase();
+        }
+        return '';
+    }
+
+    let targetRow = null;
+    for (const candidate of nameCandidates) {
+        targetRow = rows.find(row => getRowName(row).includes(candidate));
+        if (targetRow) break;
+    }
+
+    if (!targetRow) {
+        // No hay WAN clara → el botón sigue neutro pero deshabilitado
+        btn.classList.add('disabled');
+        btn.title = 'No se encontró una interfaz WAN. Marca manualmente con ⭐.';
+        return;
+    }
+
+    const starBtn = targetRow.querySelector('.btn-dashboard-star');
+    const isDashboard = starBtn && starBtn.dataset.isDashboard === 'true';
+
+    if (isDashboard) {
+        // Ya destacada: botón amarillo sólido + texto "WAN destacada"
+        btn.classList.remove('btn-outline-warning');
+        btn.classList.add('btn-warning');
+        btn.innerHTML = '<i class="bi bi-star-fill"></i>' +
+            '<span class="d-none d-md-inline"> WAN destacada</span>';
+        btn.title = 'La WAN ya es la interfaz destacada del dashboard';
+    } else {
+        // No destacada: botón outline + texto "Destacar WAN"
+        btn.classList.remove('btn-warning');
+        btn.classList.add('btn-outline-warning');
+        btn.innerHTML = '<i class="bi bi-star-fill"></i>' +
+            '<span class="d-none d-md-inline"> Destacar WAN</span>';
+        btn.title = 'Marcar la interfaz WAN/ether1 como destacada del dashboard';
+    }
+}
+
+</script>
+{% endblock %}

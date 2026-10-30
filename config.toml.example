@@ -1,0 +1,83 @@
+# ============================================================
+# config.toml — Configuración runtime de Comfutech Monitor
+# ============================================================
+# Este archivo contiene credenciales de integraciones.
+# NO lo versiones.
+#
+# 1. Copia este archivo como `config.toml` en la raíz del proyecto.
+# 2. Rellena los valores. Los secretos con #, =, espacios y
+#    comillas se guardan tal cual entre comillas dobles.
+# 3. Restringe permisos:
+#    Linux:   chmod 600 config.toml
+#    Windows: clic derecho > Propiedades > Seguridad > solo tu usuario
+#
+# Puedes editar este archivo desde la UI (/configuracion/) o
+# manualmente. Los cambios se aplican en el próximo ciclo del monitor
+# (≤60 segundos).
+#
+# Ejemplos válidos de secretos:
+#   token = "abc123P_6VmQ=="              # termina en ==
+#   password = "abcd abcd abcd abcd"      # con espacios
+#   secret = "mySecret#2024&Key"          # con # dentro
+# ============================================================
+
+[influxdb]
+url = "http://localhost:8086"
+# Pega el API token entre comillas dobles
+token = ""
+org = "comfutech"
+bucket = "metricas_red"
+
+[grafana]
+url = "http://localhost:3000"
+
+[telegram]
+enabled = false
+bot_token = ""
+chat_id = ""
+
+[monitor]
+enabled = true
+snmp_poll_interval = 60
+health_poll_interval = 120
+icmp_poll_interval = 120
+radio_poll_interval = 120
+ap_clients_poll_interval = 120
+
+[email]
+host = "smtp.gmail.com"
+port = 587
+use_tls = true
+use_ssl = false
+host_user = ""
+host_password = ""
+default_from = "Comfutech Monitor <noreply@comfutech.local>"
+
+[maintenance]
+# Si true, ejecuta un backup automático diario a la hora indicada.
+auto_backup_enabled = false
+
+# Hora local (formato HH:MM, 24h). Ej: "03:00"
+backup_time = "03:00"
+
+# Si true, ejecuta un backup al iniciar el monitor.
+# Anti-spam: se omite si el último backup fue hace <1h.
+backup_on_startup = false
+
+# Componentes a incluir en los backups automáticos
+backup_db = true
+backup_config = true
+
+# Auto-eliminar backups con más de N días (0 = nunca)
+retention_days = 30
+
+# Ruta a mysqldump. Vacío = autodetección (PATH + rutas comunes)
+mysql_dump_path = ""
+
+[_meta]
+# Metadata de auditoría (la maneja el sistema automáticamente)
+updated_at = ""
+updated_by = ""
+last_backup_run = ""
+last_backup_type = ""
+last_backup_filename = ""

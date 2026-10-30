@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+{% block title %}Estado del Monitor - Comfutech{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-activity"></i> Estado del Monitor</h2>
+        <p class="text-muted mb-0 small">
+            Estado del servicio en background y configuración de intervalos.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'monitoreo:monitor_live' %}" class="btn btn-outline-primary">
+            <i class="bi bi-broadcast"></i> Monitoreo en vivo
+        </a>
+        <a href="{% url 'core:system_settings' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-gear"></i> Configuración
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Alerta si el monitor no está respondiendo                    -->
+<!-- ============================================================ -->
+{% if not is_alive %}
+<div class="alert alert-danger d-flex align-items-center mb-4">
+    <i class="bi bi-exclamation-triangle-fill me-2" style="font-size: 1.5rem;"></i>
+    <div class="flex-grow-1">
+        <strong>El monitor no está respondiendo.</strong>
+        No se ha recibido heartbeat en los últimos 90 segundos.
+        Verifica que el servicio <code>ComfutechMonitor</code> esté corriendo
+        (<code>nssm status ComfutechMonitor</code>) y revisa los logs.
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================ -->
+<!-- Tarjetas de estado                                           -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Estado del servicio</div>
+                <div class="metric-value {% if is_alive %}text-success{% else %}text-danger{% endif %}">
+                    {% if is_alive %}
+                    <i class="bi bi-check-circle-fill"></i> Activo
+                    {% else %}
+                    <i class="bi bi-x-circle-fill"></i> Detenido
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Último heartbeat</div>
+                <div class="metric-value" style="font-size: 1.1rem;">
+                    {% if status and status.last_heartbeat %}
+                    {{ status.last_heartbeat|timesince }} atrás
+                    <br><small class="text-muted" style="font-size: 0.75rem;">
+                        {{ status.last_heartbeat|date:"d/m H:i:s" }}
+                    </small>
+                    {% else %}
+                    Nunca
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Host / PID</div>
+                <div class="metric-value" style="font-size: 1.1rem;">
+                    {% if status %}
+                    <code class="small">{{ status.hostname|default:"—" }}</code>
+                    <br>
+                    PID <code class="small">{{ status.pid|default:"—" }}</code>
+                    {% else %}—{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Monitor habilitado</div>
+                <div class="metric-value" style="font-size: 1.1rem;">
+                    {% if monitor_enabled %}
+                    <span class="badge bg-success">Sí</span>
+                    {% else %}
+                    <span class="badge bg-danger">No</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Intervalos configurados                                      -->
+<!-- ============================================================ -->
+<div class="card mb-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-sliders text-primary"></i> Pollers configurados
+        </h5>
+        <a href="{% url 'core:system_settings' %}"
+           class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-pencil"></i> Editar intervalos
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Poller</th>
+                    <th class="text-center">Intervalo</th>
+                    <th class="text-center">Última ejecución</th>
+                    <th class="text-center">Próximo run</th>
+                    <th>Descripción</th>
+                </tr>
+            </thead>
+            <tbody>
+
+                <!-- TRAFFIC -->
+                <tr>
+                    <td>
+                        <i class="bi bi-graph-up text-primary"></i>
+                        <strong>SNMP Tráfico</strong>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-primary">{{ snmp_interval }} s</span>
+                    </td>
+                    <td class="text-center small">
+                        {% if status and status.last_traffic_run %}
+                        {{ status.last_traffic_run|timesince }} atrás
+                        <br><span class="text-muted" style="font-size: 0.7rem;">
+                            {{ status.last_traffic_run|date:"H:i:s" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center small">
+                        <span class="next-run"
+                              data-last="{% if status and status.last_traffic_run %}{{ status.last_traffic_run|date:'U' }}{% endif %}"
+                              data-interval="{{ snmp_interval }}">—</span>
+                    </td>
+                    <td class="text-muted small">
+                        Lee contadores de tráfico por interfaz vía SNMP
+                    </td>
+                </tr>
+
+                <!-- HEALTH -->
+                <tr>
+                    <td>
+                        <i class="bi bi-heart-pulse text-success"></i>
+                        <strong>Core Health</strong>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">{{ health_interval }} s</span>
+                    </td>
+                    <td class="text-center small">
+                        {% if status and status.last_health_run %}
+                        {{ status.last_health_run|timesince }} atrás
+                        <br><span class="text-muted" style="font-size: 0.7rem;">
+                            {{ status.last_health_run|date:"H:i:s" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center small">
+                        <span class="next-run"
+                              data-last="{% if status and status.last_health_run %}{{ status.last_health_run|date:'U' }}{% endif %}"
+                              data-interval="{{ health_interval }}">—</span>
+                    </td>
+                    <td class="text-muted small">
+                        CPU, memoria y temperatura de equipos core/distribution
+                    </td>
+                </tr>
+
+                <!-- ICMP/TCP -->
+                <tr>
+                    <td>
+                        <i class="bi bi-activity text-warning"></i>
+                        <strong>ICMP / TCP</strong>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-warning text-dark">{{ icmp_interval }} s</span>
+                    </td>
+                    <td class="text-center small">
+                        {% if status and status.last_icmp_run %}
+                        {{ status.last_icmp_run|timesince }} atrás
+                        <br><span class="text-muted" style="font-size: 0.7rem;">
+                            {{ status.last_icmp_run|date:"H:i:s" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center small">
+                        <span class="next-run"
+                              data-last="{% if status and status.last_icmp_run %}{{ status.last_icmp_run|date:'U' }}{% endif %}"
+                              data-interval="{{ icmp_interval }}">—</span>
+                    </td>
+                    <td class="text-muted small">
+                        Latencia, pérdida de paquetes y puertos TCP
+                    </td>
+                </tr>
+
+                <!-- RADIO -->
+                <tr>
+                    <td>
+                        <i class="bi bi-broadcast-pin text-info"></i>
+                        <strong>Radiofrecuencia</strong>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-info text-dark">{{ health_interval }} s</span>
+                    </td>
+                    <td class="text-center small">
+                        {% if status and status.last_radio_run %}
+                        {{ status.last_radio_run|timesince }} atrás
+                        <br><span class="text-muted" style="font-size: 0.7rem;">
+                            {{ status.last_radio_run|date:"H:i:s" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center small">
+                        <span class="next-run"
+                              data-last="{% if status and status.last_radio_run %}{{ status.last_radio_run|date:'U' }}{% endif %}"
+                              data-interval="{{ health_interval }}">—</span>
+                    </td>
+                    <td class="text-muted small">
+                        Frecuencia, señal, CCQ y tasas TX/RX de radioenlaces
+                    </td>
+                </tr>
+
+                <!-- AP CLIENTS -->
+                <tr>
+                    <td>
+                        <i class="bi bi-people-fill text-primary"></i>
+                        <strong>Clientes AP</strong>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-primary">{{ health_interval }} s</span>
+                    </td>
+                    <td class="text-center small">
+                        {% if status and status.last_ap_clients_run %}
+                        {{ status.last_ap_clients_run|timesince }} atrás
+                        <br><span class="text-muted" style="font-size: 0.7rem;">
+                            {{ status.last_ap_clients_run|date:"H:i:s" }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">Nunca</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center small">
+                        <span class="next-run"
+                              data-last="{% if status and status.last_ap_clients_run %}{{ status.last_ap_clients_run|date:'U' }}{% endif %}"
+                              data-interval="{{ health_interval }}">—</span>
+                    </td>
+                    <td class="text-muted small">
+                        Clientes conectados a APs (signal, CCQ, tasas)
+                    </td>
+                </tr>
+
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer bg-white small text-muted">
+        <i class="bi bi-info-circle"></i>
+        Los intervalos se aplican automáticamente en menos de
+        <strong>60 segundos</strong> tras guardarlos en
+        <a href="{% url 'core:system_settings' %}">Configuración</a>.
+        El poller de radio usa el mismo intervalo que Core Health.
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Último error                                                 -->
+<!-- ============================================================ -->
+{% if status and status.last_error %}
+<div class="alert alert-warning" id="last-error-box">
+    <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1" style="min-width: 0;">
+            <strong>
+                <i class="bi bi-exclamation-triangle"></i> Último error registrado:
+            </strong>
+            <pre class="mb-0 mt-2" style="white-space: pre-wrap; font-size: 0.8rem;
+                 max-height: 200px; overflow-y: auto;">{{ status.last_error|truncatechars:1000 }}</pre>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                onclick="dismissError()"
+                title="Ocultar hasta recargar la página">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================ -->
+<!-- Ayuda                                                        -->
+<!-- ============================================================ -->
+<div class="card border-info mb-4">
+    <div class="card-header bg-info bg-opacity-10">
+        <h6 class="mb-0">
+            <i class="bi bi-info-circle text-info"></i> ¿Cómo funciona el monitor?
+        </h6>
+    </div>
+    <div class="card-body small">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <strong><i class="bi bi-cpu"></i> Proceso independiente</strong>
+                <p class="text-muted mb-0 mt-1">
+                    El monitor corre como servicio de Windows
+                    (<code>ComfutechMonitor</code>) separado de Django.
+                    Si Django se cae, el monitor sigue operando.
+                </p>
+            </div>
+            <div class="col-md-4">
+                <strong><i class="bi bi-arrow-repeat"></i> Auto-reload</strong>
+                <p class="text-muted mb-0 mt-1">
+                    Cada 60s el monitor comprueba si la configuración
+                    cambió. Los nuevos intervalos se aplican sin
+                    reiniciar el servicio.
+                </p>
+            </div>
+            <div class="col-md-4">
+                <strong><i class="bi bi-shield-check"></i> Heartbeat</strong>
+                <p class="text-muted mb-0 mt-1">
+                    El scheduler actualiza <code>last_heartbeat</code>
+                    cada 60s. Si supera 90s sin señal, el monitor se
+                    considera caído.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Estado del Monitor — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Muestra el estado del <strong>servicio monitor</strong>
+                (proceso en background), sus intervalos configurados,
+                la última ejecución de cada poller y el próximo run.
+                <br><br>
+                El monitor corre como servicio de Windows independiente
+                (<code>ComfutechMonitor</code>), separado de Django. Si
+                Django se cae, el monitor sigue operando.
+            `
+        },
+        {
+            heading: "Estado del servicio",
+            body: `
+                El sistema evalúa si el monitor está <strong>activo</strong>
+                basándose en el <em>heartbeat</em>:
+                <br>
+                • Cada 60s, el monitor actualiza <code>last_heartbeat</code>.
+                <br>
+                • Si supera <strong>90s</strong> sin señal, se considera caído.
+                <br><br>
+                Si aparece la alerta roja en la parte superior, significa
+                que el monitor no está respondiendo. Revisa:
+                <br>
+                • <code>nssm status ComfutechMonitor</code>
+                <br>
+                • Los logs en <code>logs/monitor_err.log</code>
+            `
+        },
+        {
+            heading: "Los 4 pollers",
+            body: `El monitor ejecuta 4 pollers independientes:`,
+            list: [
+                "<i class='bi bi-graph-up text-primary'></i> <strong>SNMP Tráfico:</strong> lee contadores de tráfico por interfaz (default: 60s).",
+                "<i class='bi bi-heart-pulse text-success'></i> <strong>Core Health:</strong> CPU, memoria, temperatura (default: 120s).",
+                "<i class='bi bi-activity text-warning'></i> <strong>ICMP / TCP:</strong> latencia, pérdida, puertos (default: 120s).",
+                "<i class='bi bi-broadcast-pin text-info'></i> <strong>Radiofrecuencia:</strong> señal, CCQ, tasas de radioenlaces (default: 120s, mismo que health).",
+                "<i class='bi bi-people-fill text-primary'></i> <strong>Clientes AP:</strong> clientes conectados a APs (default: 120s, mismo que health)."
+            ]
+        },
+        {
+            heading: "Intervalos configurables",
+            body: `
+                Los intervalos se configuran en
+                <a href="/configuracion/">Configuración del sistema</a>
+                y se aplican automáticamente en menos de <strong>60
+                segundos</strong> (el heartbeat detecta cambios).
+                <br><br>
+                <strong>Recomendaciones:</strong>
+                <br>
+                • <strong>SNMP Tráfico:</strong> mínimo 30s, recomendado 60s.
+                <br>
+                • <strong>Core Health:</strong> mínimo 60s, recomendado 120s.
+                <br>
+                • <strong>ICMP/TCP:</strong> mínimo 30s, recomendado 120s.
+                <br><br>
+                <strong>Advertencia:</strong> intervalos muy bajos aumentan
+                la carga de red y CPU del servidor. No bajar sin justificación.
+            `
+        },
+        {
+            heading: "Próximo run",
+            body: `
+                Cada poller muestra un contador en vivo:
+                <br>
+                • <span class="text-muted">"en Xs"</span>: normal.
+                <br>
+                • <span class="text-warning fw-bold">"atrasado Xs"</span>:
+                el poller anterior aún no terminó o hay un ciclo perdido.
+                <br><br>
+                Si ves "atrasado" con frecuencia, puede indicar:
+                <br>
+                • Timeouts SNMP frecuentes.
+                <br>
+                • Intervalos muy bajos para la cantidad de equipos.
+                <br>
+                • Problemas de red con los equipos.
+            `
+        },
+        {
+            heading: "Último error",
+            body: `
+                Si hay un error registrado (excepción en algún poller),
+                aparece un banner amarillo con el mensaje. Los errores se
+                <strong>preservan hasta que un ciclo exitoso los sobrescriba</strong>.
+                <br><br>
+                Puedes ocultarlo con el botón <i class="bi bi-x-lg"></i>
+                (se oculta solo hasta recargar la página).
+            `
+        },
+        {
+            heading: "Acciones desde esta página",
+            body: `El header tiene dos accesos directos:`,
+            list: [
+                "<strong>Monitoreo en vivo:</strong> ir a la vista con cards de todos los equipos.",
+                "<strong>Configuración:</strong> modificar intervalos y otras opciones del sistema."
+            ]
+        },
+        {
+            heading: "Modo silencioso",
+            body: `
+                El monitor puede arrancar en <strong>modo silencioso</strong>
+                (<code>--silent</code>), que reduce los logs a solo
+                WARNING+:
+                <br>
+                • Silencia <code>pysnmp</code>, <code>influxdb_client</code>,
+                <code>urllib3</code>, <code>apscheduler</code>.
+                <br>
+                • Útil en producción para reducir I/O de logs.
+                <br><br>
+                El modo silencioso se configura en el script de instalación
+                de servicios (<code>install_services.bat</code>).
+            `
+        }
+    ]
+});
+
+/**
+ * Calcula y muestra el tiempo hasta el próximo run de cada poller.
+ * Se actualiza cada segundo en el cliente.
+ */
+function updateNextRuns() {
+    const now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('.next-run').forEach(el => {
+        const last = parseInt(el.dataset.last, 10);
+        const interval = parseInt(el.dataset.interval, 10);
+
+        if (!last || !interval) {
+            el.textContent = '—';
+            el.className = 'next-run text-muted';
+            return;
+        }
+
+        const next = last + interval;
+        const diff = next - now;
+
+        if (diff <= 0) {
+            el.textContent = `atrasado ${Math.abs(diff)}s`;
+            el.className = 'next-run text-warning fw-bold';
+        } else {
+            el.textContent = `en ${diff}s`;
+            el.className = 'next-run text-muted';
+        }
+    });
+}
+
+/**
+ * Oculta el banner de último error hasta que se recargue la página.
+ */
+function dismissError() {
+    const box = document.getElementById('last-error-box');
+    if (box) box.style.display = 'none';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateNextRuns();
+    setInterval(updateNextRuns, 1000);
+});
+</script>
+{% endblock %}

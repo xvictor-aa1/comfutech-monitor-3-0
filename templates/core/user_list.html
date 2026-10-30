@@ -1,0 +1,794 @@
+{% extends "base.html" %}
+{% load sorting_tags %}
+{% block title %}Usuarios - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-people"></i> Gestión de usuarios</h2>
+        <p class="text-muted mb-0 small">
+            Administra los accesos al sistema.
+            <strong>{{ paginator.count }}</strong> usuario{{ paginator.count|pluralize:"s" }} visible{{ paginator.count|pluralize:"s" }}{% if has_filters %} con filtros activos{% endif %}.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <button type="button" class="btn btn-outline-info"
+                data-bs-toggle="modal" data-bs-target="#tipsUsersModal">
+            <i class="bi bi-lightbulb-fill text-warning"></i> Tips
+        </button>
+        {% if is_admin %}
+        <a href="{% url 'core:user_create' %}" class="btn btn-primary">
+            <i class="bi bi-person-plus"></i> Nuevo usuario
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats                                                        -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'core:user_list' %}" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body">
+                    <div class="metric-value text-primary">{{ total_users }}</div>
+                    <div class="metric-label">Total usuarios</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?status=1" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body">
+                    <div class="metric-value text-success">{{ active_users }}</div>
+                    <div class="metric-label">Activos</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?verified=1" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body">
+                    <div class="metric-value text-info">{{ verified_count }}</div>
+                    <div class="metric-label">Email verificado</div>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?verified=0" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body">
+                    <div class="metric-value text-warning">{{ unverified_count }}</div>
+                    <div class="metric-label">Sin verificar</div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Buscador avanzado                                            -->
+<!-- ============================================================ -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         style="cursor: pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#search-panel">
+        <div>
+            <i class="bi bi-search"></i>
+            <strong>Buscador avanzado</strong>
+            {% if has_filters %}
+            <span class="badge bg-primary ms-2">
+                <i class="bi bi-funnel-fill"></i> Filtros activos
+            </span>
+            {% endif %}
+        </div>
+        <div>
+            {% if has_filters %}
+            <a href="{% url 'core:user_list' %}"
+               class="btn btn-sm btn-outline-secondary me-2"
+               onclick="event.stopPropagation();">
+                <i class="bi bi-x-lg"></i> Limpiar
+            </a>
+            {% endif %}
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+
+    <div id="search-panel" class="collapse {% if has_filters %}show{% endif %}">
+        <div class="card-body">
+            <form method="get" class="row g-2">
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="order" value="{{ order }}">
+
+                <div class="col-md-4">
+                    <label class="form-label small">Buscar</label>
+                    <input type="text" name="q" value="{{ query }}"
+                           class="form-control"
+                           placeholder="Usuario, nombre, email...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Rol</label>
+                    <select name="role" class="form-select">
+                        <option value="">Todos</option>
+                        {% for value, label in role_choices %}
+                        <option value="{{ value }}"
+                                {% if role_filter == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Estado</label>
+                    <select name="status" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if status_filter == "1" %}selected{% endif %}>Activos</option>
+                        <option value="0" {% if status_filter == "0" %}selected{% endif %}>Inactivos</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Email</label>
+                    <select name="verified" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if verified_filter == "1" %}selected{% endif %}>Verificados</option>
+                        <option value="0" {% if verified_filter == "0" %}selected{% endif %}>Sin verificar</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Tabla                                                        -->
+<!-- ============================================================ -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="text-muted small">
+                <i class="bi bi-list-check"></i>
+                {% if paginator.count > 0 %}
+                    Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
+                    de {{ paginator.count }} usuario{{ paginator.count|pluralize:"s" }}
+                    {% if has_filters %}<span class="badge bg-primary ms-2">Filtrado</span>{% endif %}
+                {% else %}
+                    Sin resultados
+                {% endif %}
+            </span>
+            {% if users_data %}
+            <div class="input-group input-group-sm" style="max-width: 240px;"
+                 title="Filtra las filas visibles sin recargar (atajo: /)">
+                <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+                <input type="search" id="quick-search" class="form-control"
+                       placeholder="Filtrar visibles..."
+                       autocomplete="off">
+                <button type="button" class="btn btn-outline-secondary"
+                        id="quick-search-clear" style="display:none;"
+                        title="Limpiar filtro">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <span id="live-count" class="small text-muted"></span>
+            {% endif %}
+        </div>
+        {% if has_filters %}
+        <a href="{% url 'core:user_list' %}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-x-lg"></i> Limpiar filtros
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle" id="users-table">
+            <thead class="table-light">
+                <tr>
+                    {% sortable_th "usuario" "Usuario" "160px" %}
+                    {% sortable_th "nombre" "Nombre completo" %}
+                    {% sortable_th "email" "Email" %}
+                    <th style="width: 130px;">Verificación</th>
+                    {% sortable_th "rol" "Rol" "140px" %}
+                    {% sortable_th "activo" "Estado" "100px" %}
+                    {% sortable_th "ultimo_login" "Último acceso" "150px" %}
+                    <th style="width: 200px;" class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in users_data %}
+                <tr data-user-id="{{ row.user.id }}"
+                    data-user-name="{{ row.user.username|escapejs }}">
+                    <!-- Usuario -->
+                    <td>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <strong>{{ row.user.username }}</strong>
+                            {% if row.user.pk == request.user.pk %}
+                            <span class="badge bg-info"
+                                  title="Eres tú">Tú</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Nombre completo -->
+                    <td>{{ row.user.get_full_name|default:"—" }}</td>
+
+                    <!-- Email -->
+                    <td>
+                        {% if row.user.email %}
+                        <code class="small">{{ row.user.email }}</code>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Verificación -->
+                    <td>
+                        {% if row.email_verified %}
+                        <span class="badge bg-success"
+                              title="Correo verificado y activo">
+                            <i class="bi bi-patch-check-fill"></i> Verificado
+                        </span>
+                        {% elif row.user.email %}
+                        <span class="badge bg-warning text-dark"
+                              title="Correo registrado pero sin verificar">
+                            <i class="bi bi-exclamation-circle-fill"></i> Sin verificar
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary"
+                              title="Sin correo asignado">
+                            Sin correo
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Rol -->
+                    <td>
+                        {% if row.role == "superadmin" %}
+                        <span class="badge bg-danger"
+                              title="Superadministrador (control total)">
+                            {{ row.role_display }}
+                        </span>
+                        {% elif row.role == "administrador" %}
+                        <span class="badge bg-warning text-dark"
+                              title="Administrador (gestión limitada)">
+                            {{ row.role_display }}
+                        </span>
+                        {% elif row.role == "usuario" %}
+                        <span class="badge bg-primary"
+                              title="Usuario (solo lectura)">
+                            {{ row.role_display }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ row.role_display }}</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Estado -->
+                    <td>
+                        {% if row.user.is_active %}
+                        <span class="badge bg-success">Activo</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Último acceso -->
+                    <td>
+                        {% if row.user.last_login %}
+                        <small class="text-muted"
+                               title="{{ row.user.last_login|date:'d/m/Y H:i:s' }}">
+                            <i class="bi bi-clock"></i>
+                            {{ row.user.last_login|timesince }} atrás
+                        </small>
+                        {% else %}
+                        <small class="text-muted">
+                            <i class="bi bi-dash-circle"></i> Nunca
+                        </small>
+                        {% endif %}
+                    </td>
+
+                    <!-- Acciones -->
+                    <td class="text-end">
+                        {% if row.user.email %}
+                            {% if row.email_verified %}
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-success"
+                                        disabled
+                                        title="Correo ya verificado">
+                                    <i class="bi bi-patch-check-fill"></i>
+                                </button>
+                            {% else %}
+                                <form method="post"
+                                      action="{% url 'core:user_send_verification' row.user.id %}"
+                                      class="d-inline"
+                                      onsubmit="return confirm('¿Enviar enlace de verificación a {{ row.user.email|escapejs }}?');">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-warning"
+                                            title="Reenviar enlace de verificación">
+                                        <i class="bi bi-envelope-arrow-up"></i>
+                                    </button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if row.can_edit %}
+                        <a href="{% url 'core:user_edit' row.user.id %}"
+                           class="btn btn-sm btn-outline-secondary"
+                           title="Editar usuario">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{% url 'core:user_change_password' row.user.id %}"
+                           class="btn btn-sm btn-outline-warning"
+                           title="Cambiar contraseña">
+                            <i class="bi bi-key"></i>
+                        </a>
+                        {% endif %}
+
+                        {% if row.can_delete %}
+                        <a href="{% url 'core:user_delete' row.user.id %}"
+                           class="btn btn-sm btn-outline-danger"
+                           title="Eliminar usuario">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-2">
+                            {% if has_filters %}
+                                No hay usuarios que coincidan con los filtros.
+                            {% else %}
+                                No hay usuarios registrados.
+                            {% endif %}
+                        </p>
+                        {% if has_filters %}
+                        <a href="{% url 'core:user_list' %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x-lg"></i> Limpiar filtros
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Paginación -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page=1">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if num == page_obj.number %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Tips de usuarios                                      -->
+<!-- ============================================================ -->
+<div class="modal fade" id="tipsUsersModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightbulb-fill text-warning"></i>
+                    Tips de gestión de usuarios
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body small">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-shield-fill text-danger"></i> Roles del sistema:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><span class="badge bg-danger">Superadmin</span> — control total. Solo existe UNO en el sistema.</li>
+                            <li><span class="badge bg-warning text-dark">Admin</span> — gestiona usuarios normales y equipos.</li>
+                            <li><span class="badge bg-primary">Usuario</span> — solo lectura del sistema.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-patch-check text-success"></i> Verificación de email:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><strong>Verificado:</strong> el usuario confirmó su correo. Puede recuperar contraseña.</li>
+                            <li><strong>Sin verificar:</strong> tiene correo pero no lo confirmó. <em>No puede recuperar contraseña</em>.</li>
+                            <li><strong>Sin correo:</strong> no tiene email asignado.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-toggles text-primary"></i> Acciones por usuario:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><i class="bi bi-envelope-arrow-up text-warning"></i> Reenviar verificación de email.</li>
+                            <li><i class="bi bi-pencil text-secondary"></i> Editar datos (nombre, email, rol).</li>
+                            <li><i class="bi bi-key text-warning"></i> Cambiar contraseña.</li>
+                            <li><i class="bi bi-trash text-danger"></i> Eliminar usuario.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-shield-lock text-warning"></i> Protecciones especiales:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li>Nadie puede cambiar su propio rol.</li>
+                            <li>No se puede eliminar al último superadmin.</li>
+                            <li>Los admins no ven a otros admins.</li>
+                            <li>No se puede eliminar al usuario <code>admin</code>.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="alert alert-info py-2 mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Buscador rápido:</strong> la barra dentro del card de la tabla filtra las
+                    filas visibles sin recargar. Atajos: <kbd>/</kbd> para enfocar, <kbd>Esc</kbd> para limpiar.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Cerrar
+                </button>
+                <button type="button" class="btn btn-primary"
+                        onclick="openHelpModal()">
+                    <i class="bi bi-question-circle"></i> Guía completa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Gestión de Usuarios — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Centraliza la gestión de todos los usuarios del sistema.
+                Desde aquí puedes crear, editar, cambiar contraseñas,
+                eliminar usuarios y reenviar enlaces de verificación de email.
+                <br><br>
+                El acceso está restringido a <strong>Administradores</strong>
+                y <strong>Superadministradores</strong>. Los usuarios normales
+                no pueden ver esta página.
+            `
+        },
+        {
+            heading: "Roles del sistema",
+            body: `
+                Hay 3 roles con niveles de acceso diferentes:
+                <br><br>
+                <strong><span class="badge bg-danger">Superadministrador</span></strong>
+                — control total del sistema. Puede gestionar otros admins,
+                cambiar emails y acceder a la configuración global.
+                <strong>Solo puede existir uno</strong> en el sistema
+                (se crea en el setup inicial).
+                <br><br>
+                <strong><span class="badge bg-warning text-dark">Administrador</span></strong>
+                — gestiona usuarios normales y equipos. No puede crear/editar
+                otros admins ni cambiar emails.
+                <br><br>
+                <strong><span class="badge bg-primary">Usuario</span></strong>
+                — solo lectura. Ve el dashboard, equipos y alertas, pero no
+                puede modificar nada.
+            `
+        },
+        {
+            heading: "Estados de verificación de email",
+            body: `
+                Cada usuario puede tener su email en 3 estados:
+                <br><br>
+                <span class="badge bg-success"><i class="bi bi-patch-check-fill"></i> Verificado</span>
+                — el usuario confirmó el correo. Puede recibir notificaciones
+                y recuperar contraseña.
+                <br><br>
+                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-circle-fill"></i> Sin verificar</span>
+                — tiene correo registrado pero no lo confirmó. <em>No puede
+                recuperar su contraseña</em> hasta que verifique.
+                <br><br>
+                <span class="badge bg-secondary">Sin correo</span>
+                — no tiene email asignado. Solo puede iniciar sesión
+                (no puede recuperar contraseña).
+            `
+        },
+        {
+            heading: "Columnas de la tabla",
+            body: `Cada fila muestra:`,
+            list: [
+                "<strong>Usuario:</strong> nombre de login. El badge azul <span class='badge bg-info'>Tú</span> indica tu propia cuenta.",
+                "<strong>Nombre completo:</strong> nombre y apellido.",
+                "<strong>Email:</strong> correo registrado (en formato monoespaciado).",
+                "<strong>Verificación:</strong> badge del estado de verificación del email.",
+                "<strong>Rol:</strong> Superadmin / Administrador / Usuario, con color según el nivel.",
+                "<strong>Estado:</strong> Activo (puede iniciar sesión) o Inactivo (cuenta suspendida).",
+                "<strong>Último acceso:</strong> cuándo inició sesión por última vez (relativo).",
+                "<strong>Acciones:</strong> botones disponibles según el usuario."
+            ]
+        },
+        {
+            heading: "Buscador avanzado",
+            body: `
+                El buscador colapsable permite filtrar desde el servidor:
+                <br>
+                • <strong>Búsqueda de texto:</strong> username, nombre, apellido o email.
+                <br>
+                • <strong>Rol:</strong> superadmin, administrador, usuario, sin rol.
+                <br>
+                • <strong>Estado:</strong> activos o inactivos.
+                <br>
+                • <strong>Email:</strong> verificados o sin verificar.
+                <br><br>
+                Los filtros se combinan con AND y se preservan al paginar
+                y ordenar.
+            `
+        },
+        {
+            heading: "Filtro rápido (cliente)",
+            body: `
+                La barra dentro del card de la tabla filtra las filas
+                <strong>visibles</strong> sin recargar la página.
+                <br><br>
+                <strong>Diferencia con el buscador avanzado:</strong>
+                <br>
+                • <strong>Avanzado:</strong> filtra desde el servidor, resetea la paginación.
+                <br>
+                • <strong>Rápido:</strong> filtra solo la página actual, sin recargar.
+                <br><br>
+                <strong>Atajos:</strong> <kbd>/</kbd> enfoca, <kbd>Esc</kbd> limpia.
+            `
+        },
+        {
+            heading: "Acciones por usuario",
+            body: `Cada fila puede tener hasta 4 botones:`,
+            list: [
+                "<i class='bi bi-envelope-arrow-up text-warning'></i> <strong>Reenviar verificación:</strong> envía un nuevo enlace de verificación al correo. Solo aparece si el email no está verificado.",
+                "<i class='bi bi-pencil text-secondary'></i> <strong>Editar:</strong> modifica nombre, email y rol. El email solo lo puede cambiar el superadmin.",
+                "<i class='bi bi-key text-warning'></i> <strong>Cambiar contraseña:</strong> establece una nueva contraseña sin conocer la actual.",
+                "<i class='bi bi-trash text-danger'></i> <strong>Eliminar:</strong> borra la cuenta (con confirmación). Requiere no ser tú mismo ni el último superadmin."
+            ]
+        },
+        {
+            heading: "Protecciones especiales",
+            body: `
+                El sistema aplica varias protecciones para evitar bloqueos:
+                <br>
+                • <strong>Nadie puede cambiar su propio rol</strong> (evita auto-degradarse).
+                <br>
+                • <strong>No se puede eliminar al último superadmin activo</strong>.
+                <br>
+                • <strong>No se puede eliminar al usuario <code>admin</code></strong> (nombre reservado).
+                <br>
+                • <strong>Los administradores no ven a otros admins</strong> ni superadmins en la lista.
+                <br>
+                • <strong>No puedes eliminarte a ti mismo</strong> desde esta página.
+            `
+        },
+        {
+            heading: "Nota sobre el superadmin único",
+            body: `
+                Solo existe <strong>un superadministrador</strong> en el
+                sistema, creado durante el setup inicial. <strong>No se
+                puede crear otro desde esta interfaz</strong> — el rol
+                "Superadmin" no aparece en el formulario de creación.
+                <br><br>
+                Si por alguna razón se pierde el superadmin, hay que
+                restaurar la BD o crear uno manualmente con
+                <code>python manage.py createsuperuser</code>.
+            `
+        },
+        {
+            heading: "Flujo de creación de usuarios",
+            body: `
+                Al crear un usuario:
+                <br>
+                1. Se crea la cuenta con los datos ingresados.
+                <br>
+                2. Se crea automáticamente un registro de verificación de email.
+                <br>
+                3. Se envía <strong>automáticamente</strong> un email con el enlace de verificación.
+                <br>
+                4. El usuario recibe el email y confirma su correo haciendo clic en el enlace.
+                <br>
+                5. Una vez verificado, puede recuperar contraseña.
+                <br><br>
+                Si el envío del email falla (config SMTP incorrecta), se
+                muestra un warning pero <strong>el usuario se crea igual</strong>.
+                Puedes reenviar el enlace desde esta lista.
+            `
+        },
+        {
+            heading: "Estadísticas superiores",
+            body: `
+                Las 4 tarjetas muestran:
+                <br>
+                • <strong>Total usuarios:</strong> todas las cuentas.
+                <br>
+                • <strong>Activos:</strong> cuentas habilitadas para login.
+                <br>
+                • <strong>Email verificado:</strong> cuentas con correo confirmado.
+                <br>
+                • <strong>Sin verificar:</strong> cuentas con correo pendiente o sin correo.
+                <br><br>
+                Cada tarjeta es clickeable y aplica el filtro correspondiente.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Nunca crees dos cuentas con el mismo email</strong> — el sistema lo impide, pero verifica.
+                <br>
+                • <strong>Verifica el email de los usuarios nuevos</strong> — sin verificar no pueden recuperar contraseña.
+                <br>
+                • <strong>Usa "usuario" en lugar de "administrador"</strong> cuando no necesiten gestionar nada — principio de menor privilegio.
+                <br>
+                • <strong>Desactiva, no elimines</strong> — si un usuario se va de la empresa, desactívalo para conservar su historial.
+                <br>
+                • <strong>No compartas el rol de administrador</strong> — cada admin puede ver/modificar usuarios, así que trátalo con cuidado.
+                <br>
+                • <strong>Documenta el motivo</strong> de cada cuenta inactiva (en la descripción del usuario) para auditoría futura.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// FILTRO RÁPIDO (cliente)
+// ============================================================
+(function() {
+    const input = document.getElementById("quick-search");
+    const clearBtn = document.getElementById("quick-search-clear");
+    const counter = document.getElementById("live-count");
+    const table = document.getElementById("users-table");
+    if (!input || !table) return;
+
+    function applyFilter() {
+        const q = input.value.toLowerCase().trim();
+        const rows = table.querySelectorAll("tbody tr[data-user-id]");
+        let visible = 0;
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            row.style.display = match ? "" : "none";
+            if (match) visible++;
+        });
+
+        if (clearBtn) clearBtn.style.display = input.value ? "block" : "none";
+        if (counter) {
+            counter.textContent = q
+                ? `${visible} de ${rows.length} visibles`
+                : "";
+            counter.className = visible === 0
+                ? "small text-danger fw-bold"
+                : "small text-success";
+        }
+    }
+
+    input.addEventListener("input", applyFilter);
+    if (clearBtn) {
+        clearBtn.addEventListener("click", () => {
+            input.value = "";
+            applyFilter();
+            input.focus();
+        });
+    }
+
+    // Atajos
+    document.addEventListener("keydown", (e) => {
+        const tag = (e.target.tagName || "").toUpperCase();
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+            if (e.key === "Escape" && e.target === input) {
+                input.value = "";
+                applyFilter();
+                input.blur();
+            }
+            return;
+        }
+        if (e.key === "/") {
+            e.preventDefault();
+            input.focus();
+        }
+    });
+})();
+
+// ============================================================
+// TOOLTIPS DE BOOTSTRAP
+// ============================================================
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el);
+    });
+});
+</script>
+{% endblock %}

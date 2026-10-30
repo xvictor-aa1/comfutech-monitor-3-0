@@ -1,0 +1,10 @@
+<th style="{% if width %}width: {{ width }};{% endif %}">
+    <a href="{{ url }}" class="text-decoration-none text-dark d-flex align-items-center">
+        {{ label }}
+        {% if current_sort == key %}
+            <i class="bi bi-caret-{% if current_order == 'asc' %}up{% else %}down{% endif %}-fill ms-1"></i>
+        {% else %}
+            <i class="bi bi-arrow-down-up ms-1 text-muted small opacity-50"></i>
+        {% endif %}
+    </a>
+</th>

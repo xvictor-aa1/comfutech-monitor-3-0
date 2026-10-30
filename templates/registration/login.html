@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión - Comfutech Monitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <i class="bi bi-router" style="font-size: 3rem; color: #0d6efd;"></i>
+                    <h4 class="mt-2">Comfutech Monitor</h4>
+                    <p class="text-muted small">Sistema de Monitoreo de Red</p>
+                </div>
+
+                {% if messages %}
+                {% for msg in messages %}
+                <div class="alert alert-{{ msg.tags }} py-2 small">{{ msg }}</div>
+                {% endfor %}
+                {% endif %}
+
+                {% if form.errors %}
+                <div class="alert alert-danger py-2 small">
+                    <i class="bi bi-x-circle-fill"></i>
+                    Usuario o contraseña incorrectos.
+                </div>
+                {% endif %}
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">
+                            <i class="bi bi-person"></i> Usuario
+                        </label>
+                        <input type="text" name="username" id="id_username"
+                               class="form-control" autofocus required
+                               autocomplete="username">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">
+                            <i class="bi bi-key"></i> Contraseña
+                        </label>
+                        <div class="input-group">
+                            <input type="password" name="password" id="id_password"
+                                   class="form-control" required
+                                   autocomplete="current-password">
+                            <button type="button" class="btn btn-outline-secondary"
+                                    onclick="togglePassword('id_password', this)"
+                                    tabindex="-1"
+                                    title="Mostrar/ocultar contraseña">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 mb-3">
+                        <i class="bi bi-box-arrow-in-right"></i> Iniciar sesión
+                    </button>
+
+                    <div class="text-center">
+                        <a href="{% url 'core:password_reset_request' %}"
+                           class="text-decoration-none small">
+                            <i class="bi bi-question-circle"></i>
+                            ¿Olvidaste tu contraseña? Solucionar ahora
+                        </a>
+                    </div>
+
+                    <div class="alert alert-info small mt-3 mb-0 py-2">
+                        <i class="bi bi-info-circle"></i>
+                        Para recuperar la contraseña, tu correo electrónico debe estar
+                        <strong>verificado</strong> por un administrador.
+                    </div>
+
+                    <input type="hidden" name="next" value="{{ next }}">
+                </form>
+            </div>
+        </div>
+        <p class="text-center text-muted mt-3 small">
+            &copy; {% now "Y" %} Comfutech - Güigüe, Carabobo
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+</script>
+{% endblock %}

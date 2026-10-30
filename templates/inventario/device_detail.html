@@ -1,0 +1,968 @@
+{% extends "base.html" %}
+{% block title %}{{ device.name }} - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header con acciones                                          -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">
+            <i class="bi bi-hdd-network"></i> {{ device.name }}
+            {% if device.device_model.is_wireless_link %}
+            <span class="badge bg-info text-dark ms-1"
+                  title="Equipo de radio-enlace">
+                <i class="bi bi-broadcast-pin"></i> Radioenlace
+            </span>
+            {% endif %}
+            {% if not device.active %}
+            <span class="badge bg-secondary ms-1">Inactivo</span>
+            {% endif %}
+        </h2>
+        <p class="text-muted mb-0 small">
+            <code>{{ device.ip }}</code>
+            · <span class="badge badge-role badge-{{ device.device_role }}">{{ device.get_device_role_display }}</span>
+            · {{ device.get_device_type_display }}
+            · {{ device.vendor|default:"Genérico" }}
+            {% if device.device_model %}
+                <span class="text-muted">/ {{ device.device_model.name }}</span>
+            {% endif %}
+            · {{ device.location }}
+        </p>
+    </div>
+    <div class="btn-group flex-wrap">
+        <a href="{% url 'inventario:device_list' %}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        {% if device.has_interfaces_support and device.monitor_interfaces or device.is_wireless_link %}
+        <a href="{% url 'inventario:device_interfaces' device.id %}"
+           class="btn btn-outline-primary">
+            <i class="bi bi-ethernet"></i>
+            {% if device.is_wireless_link %}Clientes AP{% else %}Interfaces{% endif %}
+        </a>
+        {% endif %}
+        {% if is_admin %}
+        <a href="{% url 'inventario:device_edit' device.id %}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="{% url 'inventario:device_delete' device.id %}"
+           class="btn btn-outline-danger">
+            <i class="bi bi-trash"></i> Eliminar
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats en vivo (auto-refresh)                                 -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4" id="stats-live">
+    <!-- Estado (desde ICMP en vivo) -->
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Estado en vivo</div>
+                <div class="metric-value" id="stat-status">
+                    <span class="text-muted">—</span>
+                </div>
+                <small class="text-muted" id="stat-status-detail">cargando...</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interfaces -->
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Interfaces</div>
+                <div class="metric-value">
+                    {% if device.is_wireless_link %}
+                        {{ device.ap_interfaces|length|default:"0" }}<small class="text-muted"> AP</small>
+                    {% else %}
+                        {{ device.monitored_interfaces_count }}<small class="text-muted">/{{ device.total_interfaces_count }}</small>
+                    {% endif %}
+                </div>
+                <small class="text-muted">
+                    {% if device.is_wireless_link %}
+                        clientes AP registrados
+                    {% else %}
+                        monitoreadas / totales
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Alertas activas</div>
+                <div class="metric-value
+                    {% if active_alerts_count > 0 %}text-danger{% else %}text-success{% endif %}">
+                    {{ active_alerts_count }}
+                </div>
+                <small class="text-muted">
+                    {{ total_alerts_count }} históricas
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Última actualización -->
+    <div class="col-md-3">
+        <div class="card card-metric">
+            <div class="card-body">
+                <div class="metric-label">Última actualización</div>
+                <div class="metric-value" style="font-size: 1.1rem;" id="stat-last-update">
+                    <span class="text-muted">—</span>
+                </div>
+                <small class="text-muted">
+                    <div class="form-check form-switch mt-1 mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               id="live-auto-refresh" checked>
+                        <label class="form-check-label small text-muted"
+                               for="live-auto-refresh">
+                            Auto (10s)
+                        </label>
+                    </div>
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Layout principal: info + estado en vivo                      -->
+<!-- ============================================================ -->
+<div class="row g-4">
+
+    <!-- ======================================================== -->
+    <!-- COLUMNA IZQUIERDA: info + SNMP + capacidades              -->
+    <!-- ======================================================== -->
+    <div class="col-lg-4">
+
+        <!-- Info general -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-info-circle text-primary"></i> Información</strong>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-sm-5">Nombre</dt>
+                    <dd class="col-sm-7">{{ device.name }}</dd>
+
+                    <dt class="col-sm-5">IP</dt>
+                    <dd class="col-sm-7"><code>{{ device.ip }}</code></dd>
+
+                    <dt class="col-sm-5">Tipo</dt>
+                    <dd class="col-sm-7">{{ device.get_device_type_display }}</dd>
+
+                    <dt class="col-sm-5">Rol</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge badge-role badge-{{ device.device_role }}">
+                            {{ device.get_device_role_display }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-5">Fabricante</dt>
+                    <dd class="col-sm-7">{{ device.vendor|default:"—" }}</dd>
+
+                    <dt class="col-sm-5">Modelo</dt>
+                    <dd class="col-sm-7">
+                        {% if device.device_model %}
+                            <a href="{% url 'inventario:device_model_edit' device.device_model.id %}"
+                               class="text-decoration-none">
+                                {{ device.device_model.name }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">Sin asignar</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-5">Ubicación</dt>
+                    <dd class="col-sm-7">{{ device.location|default:"—" }}</dd>
+
+                    <dt class="col-sm-5">Estado</dt>
+                    <dd class="col-sm-7">
+                        {% if device.active %}
+                        <span class="text-success">
+                            <i class="bi bi-check-circle-fill"></i> Activo
+                        </span>
+                        {% else %}
+                        <span class="text-muted">
+                            <i class="bi bi-dash-circle"></i> Inactivo
+                        </span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-5">Creado</dt>
+                    <dd class="col-sm-7">
+                        <small class="text-muted">{{ device.created_at|date:"d/m/Y H:i" }}</small>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- SNMP -->
+        <div class="card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-shield-lock text-danger"></i> SNMP</strong>
+                {% if device.snmp_version == "3" %}
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="toggleSnmpCredentials()"
+                        title="Mostrar/ocultar credenciales">
+                    <i class="bi bi-eye" id="snmp-eye-icon"></i>
+                </button>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0 small">
+                    <dt class="col-sm-5">Versión</dt>
+                    <dd class="col-sm-7">
+                        <span class="badge bg-secondary">v{{ device.snmp_version }}</span>
+                    </dd>
+
+                    {% if device.snmp_version == "3" %}
+                    <dt class="col-sm-5">Usuario</dt>
+                    <dd class="col-sm-7">
+                        <code class="snmp-secret">••••••</code>
+                        <code class="snmp-reveal" style="display:none;">{{ device.snmp_user|default:"—" }}</code>
+                    </dd>
+                    <dt class="col-sm-5">Auth Key</dt>
+                    <dd class="col-sm-7">
+                        <code class="snmp-secret">••••••</code>
+                        <code class="snmp-reveal" style="display:none;">{{ device.snmp_auth|default:"—" }}</code>
+                    </dd>
+                    <dt class="col-sm-5">Priv Key</dt>
+                    <dd class="col-sm-7">
+                        <code class="snmp-secret">••••••</code>
+                        <code class="snmp-reveal" style="display:none;">{{ device.snmp_priv|default:"—" }}</code>
+                    </dd>
+                    {% else %}
+                    <dt class="col-sm-5">Community</dt>
+                    <dd class="col-sm-7"><code>{{ device.snmp_community|default:"—" }}</code></dd>
+                    {% endif %}
+
+                    <dt class="col-sm-5">Puertos TCP</dt>
+                    <dd class="col-sm-7"><code>{{ device.tcp_ports|default:"161" }}</code></dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Capacidades -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <strong><i class="bi bi-toggles text-success"></i> Capacidades de monitoreo</strong>
+            </div>
+            <div class="card-body">
+                <div class="small">
+                    <!-- Interfaces -->
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <i class="bi bi-ethernet text-primary"></i>
+                            <strong>Interfaces SNMP</strong>
+                        </div>
+                        <div>
+                            {% if device.has_interfaces_support %}
+                                {% if device.monitor_interfaces %}
+                                    <span class="badge bg-success">Habilitado</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Deshabilitado</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">No soportado</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Health -->
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                        <div>
+                            <i class="bi bi-heart-pulse text-danger"></i>
+                            <strong>CPU / Mem / Temp</strong>
+                        </div>
+                        <div>
+                            {% if device.monitor_health and device.device_model.oids or device.device_model.vendor %}
+                                {% if device.monitor_health %}
+                                    <span class="badge bg-success">Habilitado</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Deshabilitado</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">No disponible</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Wireless -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="bi bi-broadcast-pin text-info"></i>
+                            <strong>Radioenlace</strong>
+                        </div>
+                        <div>
+                            {% if device.is_wireless_link %}
+                                <span class="badge bg-info text-dark">Sí</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Interfaz destacada -->
+                    {% if not device.is_wireless_link %}
+                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                        <div>
+                            <i class="bi bi-star-fill text-warning"></i>
+                            <strong>Interfaz destacada</strong>
+                        </div>
+                        <div>
+                            {% with di=device.dashboard_interface_resolved %}
+                            {% if di %}
+                                <span class="badge bg-warning text-dark"
+                                      title="Interfaz mostrada en el dashboard">
+                                    <i class="bi bi-ethernet"></i> {{ di.if_name|default:"—" }}
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">Sin interfaces</span>
+                            {% endif %}
+                            {% endwith %}
+                        </div>
+                    </div>
+                    {% endif %}                    
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- COLUMNA DERECHA: estado en vivo + alertas + discovery    -->
+    <!-- ======================================================== -->
+    <div class="col-lg-8">
+
+        <!-- ==================================================== -->
+        <!-- Estado en vivo                                       -->
+        <!-- ==================================================== -->
+        <div class="card mb-4" id="live-metrics-card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-activity text-primary"></i> Estado en vivo</strong>
+                <small class="text-muted" id="live-timestamp">—</small>
+            </div>
+            <div class="card-body">
+                <div id="live-metrics-content">
+                    <div class="text-center text-muted py-4">
+                        <div class="spinner-border spinner-border-sm text-primary"></div>
+                        <p class="mt-2 mb-0 small">Cargando métricas...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- Alertas recientes                                    -->
+        <!-- ==================================================== -->
+        <div class="card mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-bell text-warning"></i> Alertas recientes</strong>
+                <a href="{% url 'alertas:alert_list' %}?device={{ device.id }}"
+                   class="btn btn-sm btn-outline-secondary">
+                    Ver todas <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                {% for alert in alerts %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="mb-1">
+                                <span class="badge
+                                    {% if alert.severity == 'critical' %}bg-danger
+                                    {% elif alert.severity == 'warning' %}bg-warning text-dark
+                                    {% else %}bg-info{% endif %}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                                <code class="ms-1 small">{{ alert.alert_type }}</code>
+                                {% if alert.status == "activa" %}
+                                    <span class="badge bg-danger ms-1">Activa</span>
+                                {% elif alert.status == "reconocida" %}
+                                    <span class="badge bg-warning text-dark ms-1">Reconocida</span>
+                                {% else %}
+                                    <span class="badge bg-success ms-1">Resuelta</span>
+                                {% endif %}
+                            </div>
+                            <div class="small">{{ alert.message|truncatechars:120 }}</div>
+                            <small class="text-muted">
+                                <i class="bi bi-clock"></i>
+                                {{ alert.created_at|timesince }} atrás
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="list-group-item text-center text-muted py-4">
+                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                    <p class="mb-0 mt-2 small">Sin alertas registradas</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ==================================================== -->
+        <!-- Últimos discovery jobs                               -->
+        <!-- ==================================================== -->
+        {% if discovery_jobs %}
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-clock-history text-info"></i> Últimos Discovery</strong>
+                <a href="{% url 'monitoreo:discovery_history' device.id %}"
+                   class="btn btn-sm btn-outline-secondary">
+                    Ver historial <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th class="text-center">Encontradas</th>
+                            <th class="text-center">Nuevas</th>
+                            <th class="text-center">Act.</th>
+                            <th class="text-center">Elim.</th>
+                            <th class="text-center">Duración</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for job in discovery_jobs %}
+                        <tr>
+                            <td>
+                                <small>{{ job.started_at|date:"d/m/Y H:i" }}</small>
+                            </td>
+                            <td>
+                                {% if job.status == "success" %}
+                                    <span class="badge bg-success">OK</span>
+                                {% elif job.status == "failed" %}
+                                    <span class="badge bg-danger">Falla</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Curso</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ job.interfaces_found }}</td>
+                            <td class="text-center">
+                                {% if job.interfaces_created %}+{{ job.interfaces_created }}{% else %}0{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if job.interfaces_updated %}{{ job.interfaces_updated }}{% else %}0{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if job.interfaces_deleted %}-{{ job.interfaces_deleted }}{% else %}0{% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if job.duration_ms %}{{ job.duration_ms }}ms{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Detalle de Equipo — Guía",
+    sections: [
+        {
+            heading: "¿Qué muestra esta página?",
+            body: `
+                El detalle de un equipo concentra toda su información
+                en una sola vista: configuración, SNMP, capacidades,
+                estado en vivo, alertas recientes y últimos discovery jobs.
+                <br><br>
+                Es la pantalla principal para diagnosticar un equipo.
+            `
+        },
+        {
+            heading: "Stats en vivo",
+            body: `
+                Las 4 tarjetas superiores muestran información actualizada
+                cada 10 segundos:
+                <br>
+                • <strong>Estado en vivo:</strong> si el equipo responde
+                a ICMP (vivo/caído). Se obtiene del poller ICMP.
+                <br>
+                • <strong>Interfaces:</strong> contador de interfaces
+                monitoreadas/totales (equipos normales) o clientes AP
+                registrados (radioenlaces).
+                <br>
+                • <strong>Alertas activas:</strong> alertas sin resolver
+                asociadas a este equipo.
+                <br>
+                • <strong>Última actualización:</strong> timestamp del
+                último fetch exitoso al endpoint de monitoreo en vivo.
+            `
+        },
+        {
+            heading: "Información del equipo",
+            body: `
+                La columna izquierda muestra la información estática del
+                equipo: nombre, IP, tipo, rol, fabricante, modelo,
+                ubicación y estado. Desde aquí puedes:
+                <br>
+                • Hacer clic en el <strong>modelo</strong> para editarlo.
+                <br>
+                • Ver la <strong>configuración SNMP</strong> (con opción
+                de revelar credenciales v3).
+                <br>
+                • Ver las <strong>capacidades de monitoreo</strong>
+                (interfaces, health, wireless) con su estado.
+            `
+        },
+        {
+            heading: "Estado en vivo",
+            body: `
+                El bloque <strong>Estado en vivo</strong> muestra las
+                métricas actuales del equipo según su tipo:
+                <br>
+                • <strong>Equipos normales:</strong> ICMP, tráfico por
+                interfaz, CPU/mem/temp, puertos TCP.
+                <br>
+                • <strong>Radioenlaces:</strong> ICMP, radiofrecuencia
+                (frecuencia, señal, CCQ), clientes AP, CPU/mem/temp.
+                <br><br>
+                Se actualiza automáticamente cada 10s. Puedes desactivar
+                el auto-refresh desde el switch en la tarjeta superior.
+            `
+        },
+        {
+            heading: "Alertas recientes",
+            body: `
+                Muestra las últimas alertas generadas por el motor de
+                reglas para este equipo. Cada alerta tiene:
+                <br>
+                • <strong>Severidad:</strong> Info, Advertencia, Crítica.
+                <br>
+                • <strong>Tipo:</strong> la métrica que disparó la alerta.
+                <br>
+                • <strong>Estado:</strong> Activa, Reconocida, Resuelta.
+                <br>
+                • <strong>Mensaje:</strong> descripción del evento.
+                <br><br>
+                Haz clic en <em>"Ver todas"</em> para acceder al listado
+                completo con filtros.
+            `
+        },
+        {
+            heading: "Últimos Discovery",
+            body: `
+                Si el equipo ha tenido ejecuciones de discovery recientes,
+                se muestran aquí las últimas 5 con:
+                <br>
+                • <strong>Estado:</strong> OK, Falla o En curso.
+                <br>
+                • <strong>Métricas:</strong> interfaces encontradas,
+                nuevas, actualizadas, eliminadas.
+                <br>
+                • <strong>Duración:</strong> tiempo del walk SNMP.
+                <br><br>
+                Haz clic en <em>"Ver historial"</em> para acceder a la
+                tabla completa con paginación y filtros.
+            `
+        },
+        {
+            heading: "Acciones disponibles",
+            body: `Desde el header puedes:`,
+            list: [
+                "<i class='bi bi-ethernet text-primary'></i> <strong>Interfaces:</strong> gestionar interfaces o clientes AP.",
+                "<i class='bi bi-pencil text-secondary'></i> <strong>Editar:</strong> modificar la configuración del equipo (admin).",
+                "<i class='bi bi-trash text-danger'></i> <strong>Eliminar:</strong> borrar el equipo y todos sus datos asociados (admin)."
+            ]
+        }
+    ]
+});
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+const LIVE_DEVICE_ID = {{ device.id }};
+const LIVE_URL = "{% url 'monitoreo:devices_live' %}";
+const LIVE_REFRESH_MS = 10000;
+
+let liveTimer = null;
+let liveAutoRefresh = true;
+
+// ============================================================
+// HELPERS
+// ============================================================
+function formatBps(v) {
+    if (v === null || v === undefined) return '—';
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' Gbps';
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + ' Mbps';
+    if (v >= 1e3) return (v / 1e3).toFixed(2) + ' Kbps';
+    return v.toFixed(0) + ' bps';
+}
+
+function formatUptime(sec) {
+    if (sec === null || sec === undefined) return '—';
+    const d = Math.floor(sec / 86400);
+    const h = Math.floor((sec % 86400) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
+
+function relativeTime(isoTs) {
+    if (!isoTs) return '—';
+    const d = new Date(isoTs);
+    if (isNaN(d.getTime())) return '—';
+    const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diff < 5) return 'ahora';
+    if (diff < 60) return `hace ${diff}s`;
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`;
+    return `hace ${Math.floor(diff / 86400)}d`;
+}
+
+function escapeHtmlJs(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ============================================================
+// TOGGLE DE CREDENCIALES SNMP
+// ============================================================
+function toggleSnmpCredentials() {
+    const secrets = document.querySelectorAll('.snmp-secret');
+    const reveals = document.querySelectorAll('.snmp-reveal');
+    const icon = document.getElementById('snmp-eye-icon');
+
+    const isHidden = secrets[0] && secrets[0].style.display !== 'none';
+
+    secrets.forEach(el => el.style.display = isHidden ? 'none' : '');
+    reveals.forEach(el => el.style.display = isHidden ? '' : 'none');
+
+    if (icon) {
+        icon.classList.toggle('bi-eye', !isHidden);
+        icon.classList.toggle('bi-eye-slash', isHidden);
+    }
+}
+
+// ============================================================
+// RENDER DE MÉTRICAS EN VIVO
+// ============================================================
+function renderLiveMetrics(device) {
+    const container = document.getElementById('live-metrics-content');
+    if (!container) return;
+
+    const icmp = device.icmp || {};
+    const health = device.health;
+    const radio = device.radio;
+    const traffic = device.traffic || [];
+    const tcp = device.tcp || [];
+    const apClients = device.ap_clients || [];
+
+    // Stats superiores
+    const statusEl = document.getElementById('stat-status');
+    const statusDetailEl = document.getElementById('stat-status-detail');
+
+    if (icmp.alive === null || icmp.alive === undefined) {
+        statusEl.innerHTML = '<span class="text-muted">—</span>';
+        statusDetailEl.textContent = 'sin datos';
+    } else if (icmp.alive) {
+        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Vivo</span>';
+        const rtt = icmp.rtt !== null && icmp.rtt !== undefined
+            ? icmp.rtt.toFixed(1) + ' ms' : '—';
+        const loss = icmp.loss !== null && icmp.loss !== undefined
+            ? icmp.loss.toFixed(0) + '% pérdida' : '—';
+        statusDetailEl.textContent = `RTT ${rtt} · ${loss}`;
+    } else {
+        statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Caído</span>';
+        statusDetailEl.textContent = 'sin respuesta ICMP';
+    }
+
+    // Bloque principal
+    let html = '';
+
+    // ICMP
+    if (icmp.alive !== undefined) {
+        html += `
+            <div class="mb-3 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">
+                        <i class="bi bi-activity"></i> ICMP
+                    </span>
+                    <small class="text-muted">${relativeTime(icmp.ts)}</small>
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-4">
+                        <div class="text-muted">Estado</div>
+                        <div class="${icmp.alive ? 'text-success' : 'text-danger'} fw-bold">
+                            <i class="bi bi-${icmp.alive ? 'check-circle-fill' : 'x-circle-fill'}"></i>
+                            ${icmp.alive ? 'Vivo' : 'Caído'}
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted">Latencia</div>
+                        <div class="fw-bold">
+                            ${icmp.rtt !== null && icmp.rtt !== undefined ? icmp.rtt.toFixed(1) + ' ms' : '—'}
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted">Pérdida</div>
+                        <div class="fw-bold ${icmp.loss > 5 ? 'text-danger' : icmp.loss > 0 ? 'text-warning' : ''}">
+                            ${icmp.loss !== null && icmp.loss !== undefined ? icmp.loss.toFixed(0) + '%' : '—'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Radiofrecuencia
+    if (device.has_radio_metrics && radio) {
+        html += `
+            <div class="mb-3 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">
+                        <i class="bi bi-broadcast-pin text-info"></i> Radiofrecuencia
+                    </span>
+                    <small class="text-muted">${relativeTime(radio.ts)}</small>
+                </div>
+                <div class="row g-2 small">
+                    <div class="col-4">
+                        <div class="text-muted">Frecuencia</div>
+                        <div class="fw-bold">${radio.freq !== null ? radio.freq.toFixed(0) + ' MHz' : '—'}</div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted">Signal</div>
+                        <div class="fw-bold ${radio.signal < -80 ? 'text-danger' : radio.signal < -70 ? 'text-warning' : 'text-success'}">
+                            ${radio.signal !== null ? radio.signal.toFixed(0) + ' dBm' : '—'}
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-muted">CCQ</div>
+                        <div class="fw-bold ${radio.ccq < 50 ? 'text-danger' : radio.ccq < 80 ? 'text-warning' : 'text-success'}">
+                            ${radio.ccq !== null ? radio.ccq.toFixed(0) + '%' : '—'}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Health
+    if (device.has_health_metrics && health) {
+        const avail = device.available_health_metrics || [];
+        let cells = '';
+        if (avail.includes('cpu_pct')) {
+            cells += `<div class="col"><div class="text-muted">CPU</div><div class="fw-bold ${health.cpu > 90 ? 'text-danger' : health.cpu > 75 ? 'text-warning' : ''}">${health.cpu !== null ? health.cpu.toFixed(0) + '%' : '—'}</div></div>`;
+        }
+        if (avail.includes('mem_pct')) {
+            cells += `<div class="col"><div class="text-muted">Mem</div><div class="fw-bold ${health.mem > 92 ? 'text-danger' : health.mem > 80 ? 'text-warning' : ''}">${health.mem !== null ? health.mem.toFixed(0) + '%' : '—'}</div></div>`;
+        }
+        if (avail.includes('temp_c')) {
+            cells += `<div class="col"><div class="text-muted">Temp</div><div class="fw-bold ${health.temp > 85 ? 'text-danger' : health.temp > 70 ? 'text-warning' : ''}">${health.temp !== null ? health.temp.toFixed(0) + '°C' : '—'}</div></div>`;
+        }
+        cells += `<div class="col"><div class="text-muted">Uptime</div><div class="fw-bold">${formatUptime(health.uptime)}</div></div>`;
+
+        html += `
+            <div class="mb-3 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">
+                        <i class="bi bi-heart-pulse"></i> Core Health
+                    </span>
+                    <small class="text-muted">${relativeTime(health.ts)}</small>
+                </div>
+                <div class="row g-2 small">${cells}</div>
+            </div>
+        `;
+    }
+
+    // Clientes AP
+    if (apClients.length > 0) {
+        const online = apClients.filter(c => c.online).length;
+        html += `
+            <div class="mb-3 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">
+                        <i class="bi bi-people-fill text-info"></i> Clientes AP
+                    </span>
+                    <small class="text-muted">${online}/${apClients.length} en línea</small>
+                </div>
+                <div class="small">
+                    <a href="{% url 'inventario:device_interfaces' device.id %}"
+                       class="text-decoration-none">
+                        <i class="bi bi-arrow-right-circle"></i> Ver detalle de clientes
+                    </a>
+                </div>
+            </div>
+        `;
+    }
+
+    // Tráfico
+    if (traffic.length > 0 && device.has_interfaces_support) {
+        const rows = traffic.slice(0, 3).map(t => `
+            <tr>
+                <td><code class="small">${escapeHtmlJs(t.interface)}</code></td>
+                <td class="text-end small text-success">↓ ${formatBps(t.in_bps)}</td>
+                <td class="text-end small text-warning">↑ ${formatBps(t.out_bps)}</td>
+                <td class="text-end small">${t.utilization !== null ? t.utilization.toFixed(1) + '%' : '—'}</td>
+            </tr>
+        `).join('');
+
+        html += `
+            <div class="mb-3 pb-3 border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted small text-uppercase fw-bold">
+                        <i class="bi bi-graph-up"></i> SNMP Tráfico
+                    </span>
+                    <small class="text-muted">${traffic.length} interfaz${traffic.length !== 1 ? 'es' : ''}</small>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-borderless mb-0">
+                        <thead><tr class="small text-muted">
+                            <th>Interfaz</th>
+                            <th class="text-end">RX</th>
+                            <th class="text-end">TX</th>
+                            <th class="text-end">Uso</th>
+                        </tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+
+    // TCP
+    if (tcp.length > 0) {
+        const badges = tcp.map(t => `
+            <span class="badge ${t.is_open ? 'bg-success' : 'bg-danger'} me-1 mb-1">
+                <i class="bi bi-${t.is_open ? 'unlock-fill' : 'lock-fill'}"></i> ${t.port}
+            </span>
+        `).join('');
+
+        html += `
+            <div>
+                <div class="text-muted small text-uppercase fw-bold mb-2">
+                    <i class="bi bi-hdd-network"></i> TCP
+                </div>
+                <div class="small">${badges}</div>
+            </div>
+        `;
+    }
+
+    if (!html) {
+        html = `
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>
+                <p class="mt-2 mb-0 small">
+                    Sin métricas disponibles para este equipo.
+                </p>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+}
+
+// ============================================================
+// FETCH DE MÉTRICAS EN VIVO
+// ============================================================
+async function loadLiveMetrics() {
+    try {
+        const response = await fetch(LIVE_URL, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const myDevice = (data.devices || []).find(d => d.id === LIVE_DEVICE_ID);
+
+        if (!myDevice) {
+            document.getElementById('live-metrics-content').innerHTML =
+                '<div class="text-center text-muted py-4 small">Equipo no encontrado en la respuesta.</div>';
+            return;
+        }
+
+        renderLiveMetrics(myDevice);
+
+        const ts = new Date(data.timestamp);
+        document.getElementById('live-timestamp').textContent =
+            ts.toLocaleTimeString('es-VE');
+        document.getElementById('stat-last-update').innerHTML =
+            `<span class="text-success">${ts.toLocaleTimeString('es-VE')}</span>`;
+
+    } catch (e) {
+        console.error('Error cargando métricas en vivo:', e);
+        document.getElementById('live-timestamp').textContent = 'error';
+    }
+}
+
+// ============================================================
+// CICLO DE AUTO-REFRESH
+// ============================================================
+function startLiveRefresh() {
+    stopLiveRefresh();
+    liveAutoRefresh = true;
+    liveTimer = setInterval(loadLiveMetrics, LIVE_REFRESH_MS);
+}
+
+function stopLiveRefresh() {
+    if (liveTimer) {
+        clearInterval(liveTimer);
+        liveTimer = null;
+    }
+    liveAutoRefresh = false;
+}
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+    // Carga inicial
+    loadLiveMetrics();
+
+    // Auto-refresh
+    const toggle = document.getElementById('live-auto-refresh');
+    if (toggle) {
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) startLiveRefresh();
+            else stopLiveRefresh();
+        });
+        if (toggle.checked) startLiveRefresh();
+    }
+
+    // Pausar cuando la pestaña no está visible
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            if (liveTimer) stopLiveRefresh();
+        } else {
+            const toggle = document.getElementById('live-auto-refresh');
+            if (toggle && toggle.checked) {
+                startLiveRefresh();
+                loadLiveMetrics();
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

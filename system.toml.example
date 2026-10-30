@@ -1,0 +1,46 @@
+# ============================================================
+# system.toml — Configuración de arranque de Django
+# ============================================================
+# Este archivo contiene credenciales. NO lo versiones.
+#
+# 1. Copia este archivo como `system.toml` en la raíz del proyecto.
+# 2. Rellena los valores (pueden contener #, =, espacios, comillas).
+# 3. Restringe permisos:
+#    Linux:   chmod 600 system.toml
+#    Windows: clic derecho > Propiedades > Seguridad > solo tu usuario
+# ============================================================
+
+[django]
+# Genera una nueva con:
+#   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+# Se permiten # y = dentro del valor.
+secret_key = "cambia-esto-por-una-clave-larga-aleatoria"
+debug = false
+allowed_hosts = "localhost,127.0.0.1"
+log_level = "INFO"
+
+# ============================================================
+# BASE DE DATOS
+# ============================================================
+[database]
+# Motor a usar: "mysql" | "sqlite3" | "postgres"
+# Cambiar SOLO este campo para alternar entre ambos.
+engine = "mysql"
+
+# --- MySQL / Postgres
+name = "monitoreo_red"
+user = "monitor"
+password = "tu_password"
+host = "127.0.0.1"
+port = "3306"     # 5432 para Postgres; ignorado en SQLite
+
+# --- Configuración de SQLite (ignorada si engine = "mysql" | "postgres") ---
+[database.sqlite]
+# Ruta relativa a BASE_DIR o absoluta.
+# Ejemplo: "db.sqlite3" → se crea en la raíz del proyecto.
+path = "db.sqlite3"
+
+[email_backend]
+# Backend de Django para envío de emails (bootstrap).
+# El resto de la configuración SMTP vive en config.toml.
+backend = "django.core.mail.backends.smtp.EmailBackend"

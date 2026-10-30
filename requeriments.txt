@@ -1,0 +1,14 @@
+Django
+mysqlclient
+pymysql
+pysnmp
+influxdb-client
+requests
+apscheduler
+waitress
+whitenoise
+openpyxl
+reportlab
+dynaconf
+dynaconf[toml]
+tomlkit

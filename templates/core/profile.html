@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}Mi perfil - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-person-circle"></i> Mi perfil</h2>
+        <p class="text-muted mb-0 small">
+            Administra tu información personal y credenciales.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+
+        <!-- Card de información -->
+        <div class="card mb-4">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle text-primary"></i> Cuenta
+                </h5>
+            </div>
+            <div class="card-body">
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Usuario</label>
+                        <input type="text" class="form-control"
+                               value="{{ user_obj.username }}" disabled>
+                        <div class="form-text">
+                            El nombre de usuario no se puede cambiar.
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Rol</label>
+                        <div>
+                            {% if user_obj.is_superuser %}
+                            <span class="badge bg-danger fs-6">
+                                <i class="bi bi-shield-fill"></i> Superadministrador
+                            </span>
+                            {% elif user_obj.groups.first.name == "Administrador" %}
+                            <span class="badge bg-warning text-dark fs-6">
+                                <i class="bi bi-shield-check"></i> Administrador
+                            </span>
+                            {% elif user_obj.groups.first.name == "Usuario" %}
+                            <span class="badge bg-primary fs-6">
+                                <i class="bi bi-person"></i> Usuario
+                            </span>
+                            {% else %}
+                            <span class="badge bg-secondary fs-6">Sin rol asignado</span>
+                            {% endif %}
+                        </div>
+                        <div class="form-text">
+                            El rol se asigna desde la administración.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estado de verificación del email -->
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label">Estado del correo</label>
+                        <div>
+                            {% if email_verified %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-patch-check-fill"></i> Verificado
+                            </span>
+                            <span class="small text-muted ms-2">{{ user_obj.email }}</span>
+                            {% elif user_obj.email %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-exclamation-circle-fill"></i> Sin verificar
+                            </span>
+                            <span class="small text-muted ms-2">{{ user_obj.email }}</span>
+                            <div class="alert alert-warning small mt-2 mb-0 py-2">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                Tu correo aún no está verificado. Contacta a un
+                                administrador para que te envíe un enlace de verificación.
+                            </div>
+                            {% else %}
+                            <span class="badge bg-secondary">Sin correo asignado</span>
+                            <div class="form-text">
+                                Contacta a un administrador para que asigne un correo a tu cuenta.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {% if user_obj.last_login %}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Último acceso</label>
+                        <div class="small">
+                            <i class="bi bi-clock-history text-muted"></i>
+                            {{ user_obj.last_login|date:"d/m/Y H:i" }}
+                            <span class="text-muted">({{ user_obj.last_login|timesince }} atrás)</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Cuenta creada</label>
+                        <div class="small">
+                            <i class="bi bi-calendar-check text-muted"></i>
+                            {{ user_obj.date_joined|date:"d/m/Y" }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+            </div>
+        </div>
+
+        <!-- Card de edición -->
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="card mb-4">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-pencil text-primary"></i> Información personal
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    {% if form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.first_name.label }}</label>
+                            {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                            <div class="text-danger small mt-1">{{ form.first_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.last_name.label }}</label>
+                            {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                            <div class="text-danger small mt-1">{{ form.last_name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label">{{ form.email.label }}</label>
+                        {{ form.email }}
+                        {% if form.email.errors %}
+                        <div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            <i class="bi bi-shield-lock"></i>
+                            Solo un administrador puede cambiar el correo.
+                            Si necesitas cambiarlo, contacta al equipo administrativo.
+                        </div>
+                    </div>
+
+                </div>
+                <div class="card-footer bg-white d-flex justify-content-between">
+                    <a href="{% url 'core:user_change_password' user_obj.id %}"
+                       class="btn btn-outline-warning">
+                        <i class="bi bi-key"></i> Cambiar contraseña
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Guardar cambios
+                    </button>
+                </div>
+            </div>
+
+        </form>
+
+        <!-- Card de seguridad -->
+        <div class="card border-warning">
+            <div class="card-header bg-warning bg-opacity-10">
+                <h5 class="mb-0">
+                    <i class="bi bi-shield-lock text-warning"></i> Seguridad
+                </h5>
+            </div>
+            <div class="card-body small">
+                <div class="d-flex align-items-start gap-2 mb-3">
+                    <i class="bi bi-info-circle text-primary fs-5"></i>
+                    <div>
+                        <strong>Cambia tu contraseña regularmente</strong>
+                        y no la compartas con nadie. El sistema nunca te pedirá
+                        tu contraseña por email o teléfono.
+                    </div>
+                </div>
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-envelope-check text-success fs-5"></i>
+                    <div>
+                        <strong>Mantén tu correo verificado</strong> para poder
+                        recuperar tu cuenta si olvidas la contraseña. Si aún no
+                        lo has verificado, contacta a un administrador.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+registerHelpContent({
+    title: "Mi perfil — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Muestra y permite editar tu información personal dentro
+                del sistema. También te da acceso al cambio de contraseña
+                y muestra el estado de tu cuenta.
+                <br><br>
+                <strong>Importante:</strong> desde aquí <strong>no</strong>
+                puedes cambiar tu rol, tu nombre de usuario ni tu email.
+                Esas acciones están reservadas a los administradores.
+            `
+        },
+        {
+            heading: "Información de tu cuenta",
+            body: `
+                La primera card muestra:
+                <br>
+                • <strong>Usuario:</strong> tu nombre de login (no editable).
+                <br>
+                • <strong>Rol:</strong> tu nivel de acceso en el sistema.
+                <br>
+                • <strong>Estado del correo:</strong> si está verificado, pendiente o no tiene.
+                <br>
+                • <strong>Último acceso:</strong> cuándo iniciaste sesión por última vez.
+                <br>
+                • <strong>Cuenta creada:</strong> cuándo se dio de alta tu cuenta.
+            `
+        },
+        {
+            heading: "Roles del sistema",
+            body: `
+                <strong><span class="badge bg-danger">Superadministrador</span></strong>
+                — control total. Solo existe uno.
+                <br>
+                <strong><span class="badge bg-warning text-dark">Administrador</span></strong>
+                — gestiona equipos y usuarios normales.
+                <br>
+                <strong><span class="badge bg-primary">Usuario</span></strong>
+                — solo lectura. Ve el sistema pero no modifica nada.
+                <br><br>
+                Si crees que tu rol es incorrecto, contacta a un administrador.
+                <strong>No puedes cambiar tu propio rol.</strong>
+            `
+        },
+        {
+            heading: "Editar tu información",
+            body: `
+                Puedes cambiar:
+                <br>
+                • <strong>Nombre y apellido:</strong> solo letras, espacios,
+                guiones y apóstrofes. Se muestran en la UI.
+                <br><br>
+                <strong>No puedes cambiar:</strong>
+                <br>
+                • <strong>Username:</strong> es tu identificador único de login.
+                <br>
+                • <strong>Rol:</strong> lo asigna un administrador.
+                <br>
+                • <strong>Email:</strong> solo un administrador puede cambiarlo.
+                <br><br>
+                Pulsa <em>Guardar cambios</em> para aplicar. Puedes cancelar
+                navegando a otra página sin guardar.
+            `
+        },
+        {
+            heading: "Estado de verificación del correo",
+            body: `
+                Tu correo puede estar en 3 estados:
+                <br>
+                <span class="badge bg-success">Verificado</span> — puedes
+                recuperar tu contraseña si la olvidas.
+                <br>
+                <span class="badge bg-warning text-dark">Sin verificar</span>
+                — tienes correo pero no lo confirmaste. <strong>No puedes
+                recuperar tu contraseña</strong> en este estado. Contacta a
+                un administrador para que te reenvíe el enlace.
+                <br>
+                <strong>Sin correo</strong> — no tienes correo asignado.
+                Contacta a un administrador para que agregue uno.
+            `
+        },
+        {
+            heading: "Cambiar contraseña",
+            body: `
+                El botón <strong>"Cambiar contraseña"</strong> al pie de la
+                card de información personal te lleva al formulario de cambio.
+                <br><br>
+                Requisitos:
+                <br>
+                • Entre 8 y 16 caracteres.
+                <br>
+                • Mezcla recomendada: mayúsculas + minúsculas + números + símbolos.
+                <br>
+                • No puede ser una contraseña común.
+                <br>
+                • No puede ser similar a tu nombre de usuario o email.
+            `
+        },
+        {
+            heading: "Seguridad",
+            body: `
+                Recomendaciones:
+                <br>
+                • <strong>Nunca compartas tu contraseña</strong> con nadie,
+                ni siquiera con administradores.
+                <br>
+                • <strong>Cambia tu contraseña regularmente</strong>
+                (cada 3-6 meses) y siempre que sospeches que alguien
+                la conoce.
+                <br>
+                • <strong>No uses la misma contraseña</strong> que en otros
+                servicios.
+                <br>
+                • <strong>Verifica tu email</strong> para poder recuperar
+                tu cuenta.
+                <br>
+                • Si recibes un email sospechoso pidiendo tu contraseña,
+                <strong>no respondas</strong> — el sistema nunca te pedirá
+                contraseña por email.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Mantén tu nombre actualizado</strong> para que
+                aparezca correctamente en la UI.
+                <br>
+                • <strong>Verifica tu email</strong> cuanto antes.
+                <br>
+                • <strong>Revisa tu último acceso</strong> periódicamente —
+                si ves accesos que no reconoces, cambia tu contraseña
+                inmediatamente y avisa a un administrador.
+                <br>
+                • <strong>No dejes la sesión abierta</strong> en computadoras
+                compartidas — cierra sesión cuando termines.
+            `
+        }
+    ]
+});
+</script>
+{% endblock %}

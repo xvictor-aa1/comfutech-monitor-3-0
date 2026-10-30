@@ -1,0 +1,1168 @@
+{% extends "base.html" %}
+{% load sorting_tags %}
+{% block title %}Reglas de alerta - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1">
+            <i class="bi bi-shield-exclamation"></i> Reglas de alerta
+        </h2>
+        <p class="text-muted mb-0 small">
+            Reglas con grupos de condicionales lógicos, paginadas de 10 en 10.
+            Cada regla define cuándo se dispara una alerta.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'core:dashboard' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <a href="{% url 'alertas:alert_list' %}" class="btn btn-outline-warning">
+            <i class="bi bi-bell"></i> Ver alertas
+        </a>
+        <a href="{% url 'alertas:rule_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Nueva regla
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Botón: Tips de uso rápido (abre modal)                       -->
+<!-- ============================================================ -->
+<div class="mb-3">
+    <button type="button"
+            class="btn btn-sm btn-outline-info d-inline-flex align-items-center gap-2"
+            data-bs-toggle="modal" data-bs-target="#tipsModal">
+        <i class="bi bi-lightbulb-fill text-warning"></i>
+        <span>Tips de uso rápido</span>
+        <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+    </button>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats                                                        -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="card card-metric">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-value text-primary">{{ total }}</div>
+                    <div class="metric-label">Reglas totales</div>
+                    <small class="text-muted" style="font-size: 0.68rem;">
+                        {{ active_count }} activa{{ active_count|pluralize:"s" }}
+                    </small>
+                </div>
+                <i class="bi bi-shield metric-icon text-primary"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card card-metric">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-value text-success">{{ active_count }}</div>
+                    <div class="metric-label">Activas</div>
+                    <small class="text-muted" style="font-size: 0.68rem;">
+                        evaluando actualmente
+                    </small>
+                </div>
+                <i class="bi bi-check-circle metric-icon text-success"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card card-metric">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-value text-info">{{ telegram_count }}</div>
+                    <div class="metric-label">Notifican Telegram</div>
+                    <small class="text-muted" style="font-size: 0.68rem;">
+                        de {{ active_count }} activa{{ active_count|pluralize:"s" }}
+                    </small>
+                </div>
+                <i class="bi bi-telegram metric-icon text-info"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card card-metric">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-value {% if firing_count > 0 %}text-danger{% else %}text-muted{% endif %}">
+                        {{ firing_count }}
+                    </div>
+                    <div class="metric-label">Disparando ahora</div>
+                    <small class="text-muted" style="font-size: 0.68rem;">
+                        con alertas activas
+                    </small>
+                </div>
+                <i class="bi bi-bell metric-icon {% if firing_count > 0 %}text-danger{% else %}text-muted{% endif %}"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Buscador colapsable                                          -->
+<!-- ============================================================ -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         style="cursor: pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#search-panel">
+        <div>
+            <i class="bi bi-search"></i>
+            <strong>Buscador avanzado</strong>
+            {% if has_filters %}
+            <span class="badge bg-primary ms-2">
+                <i class="bi bi-funnel-fill"></i> Filtros activos
+            </span>
+            {% endif %}
+        </div>
+        <div>
+            {% if has_filters %}
+            <a href="{% url 'alertas:rule_list' %}"
+               class="btn btn-sm btn-outline-secondary me-2"
+               onclick="event.stopPropagation();">
+                <i class="bi bi-x-lg"></i> Limpiar
+            </a>
+            {% endif %}
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+
+    <div id="search-panel" class="collapse {% if has_filters %}show{% endif %}">
+        <div class="card-body">
+            <form method="get" class="row g-2">
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="order" value="{{ order }}">
+
+                <div class="col-md-6">
+                    <label class="form-label small">Buscar</label>
+                    <input type="text" name="q" value="{{ q }}" class="form-control"
+                           placeholder="Nombre o descripción...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Prioridad</label>
+                    <select name="severity" class="form-select">
+                        <option value="">Todas</option>
+                        {% for value, label in severity_choices %}
+                        <option value="{{ value }}" {% if severity_filter == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Estado</label>
+                    <select name="enabled" class="form-select">
+                        <option value="">Todas</option>
+                        <option value="1" {% if enabled_filter == "1" %}selected{% endif %}>Activas</option>
+                        <option value="0" {% if enabled_filter == "0" %}selected{% endif %}>Inactivas</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Form bulk (fuera de la tabla)                                -->
+<!-- ============================================================ -->
+<form method="post" action="{% url 'alertas:rule_bulk' %}" id="bulk-form">
+    {% csrf_token %}
+</form>
+
+<!-- ============================================================ -->
+<!-- Tabla de reglas                                              -->
+<!-- ============================================================ -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="text-muted small">
+                <i class="bi bi-list-check"></i>
+                {% if paginator.count > 0 %}
+                    Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
+                    de {{ paginator.count }} regla{{ paginator.count|pluralize:"s" }}
+                    {% if has_filters %}<span class="badge bg-primary ms-2">Filtrado</span>{% endif %}
+                {% else %}
+                    Sin resultados
+                {% endif %}
+            </span>
+            {% if rules_data %}
+            <div class="input-group input-group-sm" style="max-width: 260px;"
+                 title="Filtra las filas visibles sin recargar (atajo: /)">
+                <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+                <input type="search" id="quick-search" class="form-control"
+                       placeholder="Filtrar resultados..."
+                       autocomplete="off">
+                <button type="button" class="btn btn-outline-secondary"
+                        id="quick-search-clear" style="display:none;"
+                        title="Limpiar filtro">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+            <span id="live-count" class="small text-muted"></span>
+            {% endif %}
+        </div>
+        {% if rules_data %}
+        <div class="btn-group btn-group-sm">
+            <button type="submit" form="bulk-form" name="bulk_action" value="enable"
+                    class="btn btn-outline-success"
+                    onclick="return confirmBulk('activar')">
+                <i class="bi bi-play-fill"></i> Activar
+            </button>
+            <button type="submit" form="bulk-form" name="bulk_action" value="disable"
+                    class="btn btn-outline-warning"
+                    onclick="return confirmBulk('desactivar')">
+                <i class="bi bi-pause-fill"></i> Desactivar
+            </button>
+            <button type="submit" form="bulk-form" name="bulk_action" value="delete"
+                    class="btn btn-outline-danger"
+                    onclick="return confirmBulk('eliminar', true)">
+                <i class="bi bi-trash"></i> Eliminar
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle" id="rules-table">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 35px;">
+                        <input type="checkbox" class="form-check-input"
+                               id="select-all-rules"
+                               onclick="toggleAll(this)">
+                    </th>
+                    {% sortable_th "estado" "Estado" "100px" %}
+                    {% sortable_th "nombre" "Regla" %}
+                    <th style="width: 140px;" class="text-center"
+                        title="Cantidad de grupos y condicionales">
+                        Condicionales
+                    </th>
+                    {% sortable_th "prioridad" "Prioridad" "100px" %}
+                    <th style="width: 70px;" class="text-center"
+                        title="Notificación por Telegram">
+                        Notif.
+                    </th>
+                    <th style="width: 160px;"
+                        title="Comportamiento de disparo">
+                        Comportamiento
+                    </th>
+                    {% sortable_th "ultima" "Última vez" "110px" %}
+                    <th style="width: 180px;" class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rules_data %}
+                {% with rule=row.rule %}
+                <tr data-rule-id="{{ rule.id }}"
+                    data-rule-name="{{ rule.name|escapejs }}"
+                    data-rule-active-alerts="{{ rule.active_alerts }}"
+                    class="{% if not rule.enabled %}opacity-75{% endif %}">
+                    <td>
+                        <input type="checkbox" name="selected_rules"
+                               value="{{ rule.id }}"
+                               form="bulk-form"
+                               class="form-check-input rule-checkbox">
+                    </td>
+
+                    <!-- Estado -->
+                    <td>
+                        {% if rule.enabled %}
+                        <span class="badge bg-success">
+                            <i class="bi bi-check-circle"></i> Activa
+                        </span>
+                        {% else %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-pause-circle"></i> Inactiva
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Regla (con descripción en tooltip) -->
+                    <td>
+                        <div class="d-flex flex-column gap-1">
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <a href="{% url 'alertas:rule_edit' rule.id %}"
+                                   class="text-decoration-none"
+                                   {% if rule.description %}title="{{ rule.description }}"{% endif %}>
+                                    <strong>{{ rule.name }}</strong>
+                                </a>
+                                {% if rule.description %}
+                                <i class="bi bi-info-circle text-muted small"
+                                   title="{{ rule.description }}"></i>
+                                {% endif %}
+                                {% if rule.active_alerts > 0 %}
+                                <a href="{% url 'alertas:alert_list' %}?status=activa"
+                                   class="badge bg-danger text-decoration-none"
+                                   title="{{ rule.active_alerts }} alerta(s) activa(s) generadas por esta regla">
+                                    <i class="bi bi-bell-fill"></i> {{ rule.active_alerts }}
+                                </a>
+                                {% endif %}
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                <i class="bi bi-clock"></i>
+                                Actualizada {{ rule.updated_at|timesince }} atrás
+                            </small>
+                        </div>
+                    </td>
+
+                    <!-- Condicionales (conteos) -->
+                    <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1 flex-wrap">
+                            <span class="badge bg-secondary"
+                                  title="{{ rule.groups_count }} grupo{{ rule.groups_count|pluralize:'s' }} de condicionales">
+                                <i class="bi bi-collection"></i>
+                                {{ rule.groups_count }}G
+                            </span>
+                            <span class="badge bg-info text-dark"
+                                  title="{{ rule.conditionals_count }} condicional{{ rule.conditionals_count|pluralize:'es' }} en total">
+                                <i class="bi bi-list-check"></i>
+                                {{ rule.conditionals_count }}C
+                            </span>
+                        </div>
+                    </td>
+
+                    <!-- Prioridad -->
+                    <td>
+                        <span class="badge
+                            {% if rule.severity == 'critical' %}bg-danger
+                            {% elif rule.severity == 'warning' %}bg-warning text-dark
+                            {% else %}bg-info{% endif %}">
+                            {{ rule.get_severity_display }}
+                        </span>
+                    </td>
+
+                    <!-- Notificación Telegram -->
+                    <td class="text-center">
+                        {% if rule.telegram_enabled %}
+                        <i class="bi bi-telegram text-primary"
+                           style="font-size: 1.1rem;"
+                           title="Notifica por Telegram"></i>
+                        {% else %}
+                        <i class="bi bi-telegram text-muted opacity-50"
+                           style="font-size: 1.1rem;"
+                           title="Sin notificación por Telegram"></i>
+                        {% endif %}
+                    </td>
+
+                    <!-- Comportamiento (flags) -->
+                    <td>
+                        <div class="d-flex flex-column gap-1">
+                            {% if rule.fire_once %}
+                            <span class="badge bg-info"
+                                  title="Dispara solo UNA vez por periodo de violación">
+                                <i class="bi bi-1-circle-fill"></i> Una vez
+                            </span>
+                            {% endif %}
+                            {% if rule.skip_on_startup %}
+                            <span class="badge bg-secondary"
+                                  title="No se evalúa durante los primeros 120s tras arrancar el monitor">
+                                <i class="bi bi-skip-start-fill"></i> Skip start
+                            </span>
+                            {% endif %}
+                            {% if not rule.fire_once and not rule.skip_on_startup %}
+                            <span class="text-muted" style="font-size: 0.8rem;">—</span>
+                            {% endif %}
+                        </div>
+                    </td>
+
+                    <!-- Última vez -->
+                    <td class="text-center">
+                        {% if rule.last_fired %}
+                        <small class="text-muted"
+                               title="{{ rule.last_fired|date:'d/m/Y H:i:s' }}">
+                            <i class="bi bi-clock-history"></i>
+                            {{ rule.last_fired|timesince }} atrás
+                        </small>
+                        {% else %}
+                        <small class="text-muted">
+                            <i class="bi bi-dash-circle"></i> Nunca
+                        </small>
+                        {% endif %}
+                    </td>
+
+                    <!-- Acciones -->
+                    <td class="text-end">
+                        <form method="post" action="{% url 'alertas:rule_toggle' rule.id %}"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-sm {% if rule.enabled %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                                    title="{% if rule.enabled %}Desactivar{% else %}Activar{% endif %}">
+                                <i class="bi bi-{% if rule.enabled %}pause-fill{% else %}play-fill{% endif %}"></i>
+                            </button>
+                        </form>
+
+                        <a href="{% url 'alertas:rule_edit' rule.id %}"
+                           class="btn btn-sm btn-outline-secondary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+
+                        <form method="post" action="{% url 'alertas:rule_duplicate' rule.id %}"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-info"
+                                    title="Duplicar regla (crea copia desactivada)"
+                                    onclick="return confirm('¿Duplicar la regla &quot;{{ rule.name|escapejs }}&quot;?\n\nSe creará una copia DESACTIVADA con el sufijo &quot;(copia)&quot;.');">
+                                <i class="bi bi-files"></i>
+                            </button>
+                        </form>
+
+                        <a href="{% url 'alertas:rule_delete' rule.id %}"
+                           class="btn btn-sm btn-outline-danger" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-5">
+                        <i class="bi bi-shield-slash" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-2">
+                            {% if has_filters %}
+                                No hay reglas que coincidan con los filtros.
+                            {% else %}
+                                No hay reglas de alerta configuradas.
+                            {% endif %}
+                        </p>
+                        {% if has_filters %}
+                        <a href="{% url 'alertas:rule_list' %}"
+                           class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-x-lg"></i> Limpiar filtros
+                        </a>
+                        {% else %}
+                        <a href="{% url 'alertas:rule_create' %}"
+                           class="btn btn-primary">
+                            <i class="bi bi-plus-lg"></i> Crear la primera regla
+                        </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Paginación                                                   -->
+    <!-- ============================================================ -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page=1"
+                       title="Primera">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}"
+                       title="Anterior">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if num == page_obj.number %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}"
+                       title="Siguiente">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}"
+                       title="Última">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Tips de uso rápido                                    -->
+<!-- ============================================================ -->
+<div class="modal fade" id="tipsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-lightbulb-fill text-warning"></i>
+                    Tips de uso rápido
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body small">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-plus-circle text-primary"></i> Crear una regla en 4 pasos:</strong>
+                        <ol class="mb-0 ps-3 mt-1">
+                            <li>Nombre descriptivo y prioridad (Info / Advertencia / Crítica).</li>
+                            <li>Pulsa <em>Configurar Condicionales</em> en el formulario.</li>
+                            <li>Añade 1-5 grupos con 1-5 condicionales cada uno.</li>
+                            <li>Guarda. La regla se evalúa en el próximo ciclo del monitor.</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-toggles text-success"></i> Interpretar los badges:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><span class="badge bg-success">Activa</span> / <span class="badge bg-secondary">Inactiva</span> — switch de evaluación.</li>
+                            <li><span class="badge bg-secondary"><i class="bi bi-collection"></i> NG</span> Grupos · <span class="badge bg-info text-dark"><i class="bi bi-list-check"></i> NC</span> Condicionales.</li>
+                            <li><span class="badge bg-info"><i class="bi bi-1-circle-fill"></i> Una vez</span> — dispara solo 1 vez por violación.</li>
+                            <li><span class="badge bg-secondary"><i class="bi bi-skip-start-fill"></i> Skip</span> — omitida durante el warm-up.</li>
+                            <li><i class="bi bi-telegram text-primary"></i> — notifica por Telegram.</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <hr class="my-3">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-clock-history text-warning"></i> Diferencias clave:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><strong>Duración</strong> (por condicional) — tiempo que debe sostenerse la condición.</li>
+                            <li><strong>Fire once</strong> (por regla) — dispara 1 vez por periodo de violación.</li>
+                            <li><strong>Cooldown Telegram</strong> (por regla) — separación mínima entre notificaciones.</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <strong><i class="bi bi-lightning-charge text-danger"></i> Atajos de teclado:</strong>
+                        <ul class="mb-0 ps-3 mt-1">
+                            <li><kbd>/</kbd> — enfocar el buscador rápido.</li>
+                            <li><kbd>F1</kbd> o <kbd>Shift+?</kbd> — abrir la guía completa.</li>
+                            <li><kbd>Esc</kbd> — limpiar el buscador rápido.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg"></i> Cerrar
+                </button>
+                <button type="button" class="btn btn-primary"
+                        onclick="openHelpModal()">
+                    <i class="bi bi-question-circle"></i> Abrir guía completa
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA (expandida)
+// ============================================================
+registerHelpContent({
+    title: "Reglas de Alerta — Guía completa",
+    sections: [
+        {
+            heading: "¿Qué es una regla de alerta?",
+            body: `
+                Una <strong>regla de alerta</strong> define las condiciones
+                que disparan una notificación. Cuando las métricas de los
+                equipos cumplen esas condiciones durante el tiempo
+                configurado, el motor de alertas crea una alerta y
+                (opcionalmente) envía un mensaje por Telegram.
+                <br><br>
+                Las reglas se evalúan <strong>automáticamente</strong> en
+                cada ciclo del monitor (cuando los pollers recolectan
+                métricas frescas). No hace falta recargar nada.
+            `
+        },
+        {
+            heading: "Flujo de trabajo típico",
+            body: `
+                1. <strong>Identifica el problema a detectar.</strong>
+                Por ejemplo: "detectar cuando el CPU del core supera 85%
+                sostenido por 5 minutos".
+                <br>
+                2. <strong>Crea la regla</strong> con nombre descriptivo y
+                prioridad adecuada.
+                <br>
+                3. <strong>Configura los condicionales:</strong> 1-5 grupos,
+                cada uno con 1-5 condicionales lógicos.
+                <br>
+                4. <strong>Ajusta el mensaje personalizado</strong> si
+                quieres notificaciones más informativas.
+                <br>
+                5. <strong>Activa la regla</strong> y verifica que dispara
+                correctamente (puedes crear una versión de prueba con
+                prioridad "Info").
+                <br>
+                6. <strong>Monitorea las alertas generadas</strong> desde
+                la sección <em>Alertas</em>.
+            `
+        },
+        {
+            heading: "Columnas de la tabla",
+            body: `Cada fila muestra una regla con esta información:`,
+            list: [
+                "<strong>Estado:</strong> <span class='badge bg-success'>Activa</span> (evaluando) o <span class='badge bg-secondary'>Inactiva</span> (pausada).",
+                "<strong>Regla:</strong> nombre. Si tiene descripción, aparece en tooltip al pasar el mouse. El badge rojo <span class='badge bg-danger'><i class='bi bi-bell-fill'></i> N</span> indica alertas activas generadas por esta regla.",
+                "<strong>Condicionales:</strong> conteos en badges. <span class='badge bg-secondary'>NG</span> = número de grupos, <span class='badge bg-info text-dark'>NC</span> = número de condicionales totales.",
+                "<strong>Prioridad:</strong> Info, Advertencia o Crítica.",
+                "<strong>Notificación:</strong> icono de Telegram (azul = activa, gris = desactivada).",
+                "<strong>Comportamiento:</strong> badges de <span class='badge bg-info'><i class='bi bi-1-circle-fill'></i> Una vez</span> y <span class='badge bg-secondary'><i class='bi bi-skip-start-fill'></i> Skip start</span> si aplican.",
+                "<strong>Última vez:</strong> cuándo disparó por última vez (relativo).",
+                "<strong>Acciones:</strong> toggle, editar, duplicar, eliminar."
+            ]
+        },
+        {
+            heading: "Estados de una regla",
+            body: `
+                Las reglas tienen 2 estados básicos:
+                <br><br>
+                <strong><span class="badge bg-success">Activa</span>:</strong>
+                se evalúa en cada ciclo del monitor. Si la combinación de
+                condicionales se cumple, dispara una alerta.
+                <br><br>
+                <strong><span class="badge bg-secondary">Inactiva</span>:</strong>
+                no se evalúa. Útil para:
+                <br>
+                • Mantener reglas de prueba sin que disparen.
+                <br>
+                • Pausar reglas ruidosas mientras se ajustan.
+                <br>
+                • Conservar reglas antiguas sin eliminarlas.
+                <br><br>
+                <strong>Tip:</strong> cuando duplicas una regla, la copia
+                se crea <strong>desactivada</strong> por defecto. Así puedes
+                ajustarla antes de activarla.
+            `
+        },
+        {
+            heading: "Estructura de grupos y condicionales",
+            body: `
+                Cada regla tiene <strong>1-5 grupos</strong>. Cada grupo
+                tiene <strong>1-5 condicionales</strong>. Total máximo:
+                <strong>10 condicionales</strong>.
+                <br><br>
+                <strong>Dentro de un grupo:</strong> los condicionales se
+                combinan con operadores independientes por gap (uno por
+                cada par adyacente). Esto permite expresiones como
+                <code>c1 AND c2 OR c3</code> dentro del mismo grupo, donde
+                el primer gap es AND y el segundo es OR.
+                <br><br>
+                <strong>Entre grupos:</strong> también se combinan con
+                AND/OR/XOR, evaluados de izquierda a derecha.
+                <br><br>
+                <strong>Negación (NOT):</strong> puedes negar un grupo
+                entero (resultado invertido) o un condicional individual
+                (solo ese se invierte).
+            `
+        },
+        {
+            heading: "Operadores lógicos: AND, OR, XOR",
+            body: `
+                <strong>AND:</strong> todos los condicionales deben cumplirse
+                para que el grupo (o la combinación entre grupos) sea
+                verdadero.
+                <br>
+                • Ejemplo: <code>CPU &gt; 85 AND Mem &gt; 90</code> → dispara
+                solo si AMBOS se cumplen.
+                <br><br>
+                <strong>OR:</strong> al menos uno debe cumplirse.
+                <br>
+                • Ejemplo: <code>CPU &gt; 85 OR Mem &gt; 90</code> → dispara
+                si CUALQUIERA se cumple.
+                <br><br>
+                <strong>XOR (exclusive OR):</strong> exactamente uno debe
+                cumplirse (si ambos se cumplen, el resultado es Falso).
+                <br>
+                • Ejemplo: <code>Signal &lt; -80 XOR CCQ &lt; 50</code> →
+                dispara si uno se cumple pero no ambos a la vez.
+                <br>
+                • Útil para detectar <em>"una cosa u otra, pero no las dos"</em>.
+            `
+        },
+        {
+            heading: "Badges de comportamiento",
+            body: `
+                En la columna <strong>Comportamiento</strong> aparecen
+                badges cuando la regla tiene flags activos:
+                <br><br>
+                <strong><span class="badge bg-info"><i class="bi bi-1-circle-fill"></i> Una vez</span></strong>
+                (fire_once): la regla dispara <em>una sola vez por periodo
+                de violación</em>. No vuelve a disparar hasta que la
+                condición deje de cumplirse y vuelva a cumplirse.
+                <br>
+                • Caso típico: notificaciones de "vuelta en línea" con
+                <code>device_down = 1</code>.
+                <br><br>
+                <strong><span class="badge bg-secondary"><i class="bi bi-skip-start-fill"></i> Skip start</span></strong>
+                (skip_on_startup): la regla no se evalúa durante los
+                primeros <strong>120 segundos</strong> tras arrancar el
+                monitor.
+                <br>
+                • Caso típico: evitar alertas espurias al reiniciar el
+                servicio (el primer ciclo puede tener datos incompletos).
+                <br><br>
+                Si la regla no tiene ninguno de los dos, aparece un
+                <strong>—</strong> en la columna.
+            `
+        },
+        {
+            heading: "Notificación por Telegram",
+            body: `
+                La columna <strong>Notif.</strong> muestra un icono:
+                <br>
+                • <i class="bi bi-telegram text-primary"></i> azul → la
+                regla envía notificaciones por Telegram cuando dispara.
+                <br>
+                • <i class="bi bi-telegram text-muted opacity-50"></i> gris
+                → no notifica por Telegram (solo crea alerta en BD).
+                <br><br>
+                <strong>Requisito:</strong> Telegram debe estar configurado
+                en <em>Configuración del sistema</em> (bot_token, chat_id,
+                enabled). Si no está configurado, el icono aparece pero
+                las notificaciones no llegarán.
+                <br><br>
+                <strong>Cooldown:</strong> cada regla tiene un cooldown de
+                Telegram (tiempo mínimo entre notificaciones de la misma
+                regla + equipo). Esto evita saturar el chat cuando la
+                condición se cumple repetidamente.
+            `
+        },
+        {
+            heading: "Acciones individuales",
+            body: `Cada fila tiene hasta 4 botones:`,
+            list: [
+                "<i class='bi bi-pause-fill text-warning'></i> <strong>Desactivar/Activar:</strong> pausa o reanuda la evaluación sin eliminar la regla.",
+                "<i class='bi bi-pencil text-secondary'></i> <strong>Editar:</strong> abre el editor completo para modificar condicionales, mensaje, flags, etc.",
+                "<i class='bi bi-files text-info'></i> <strong>Duplicar:</strong> crea una copia desactivada con el sufijo '(copia)'. Útil para crear variantes.",
+                "<i class='bi bi-trash text-danger'></i> <strong>Eliminar:</strong> borra la regla y todas sus alertas asociadas. Requiere confirmación."
+            ]
+        },
+        {
+            heading: "Acciones en bloque",
+            body: `
+                Selecciona varias reglas con los checkboxes y usa los
+                botones superiores:
+                <br>
+                • <strong>Activar:</strong> reanuda las seleccionadas.
+                <br>
+                • <strong>Desactivar:</strong> pausa las seleccionadas.
+                <br>
+                • <strong>Eliminar:</strong> borra permanentemente (con
+                confirmación).
+                <br><br>
+                Los botones se deshabilitan automáticamente si no hay
+                ninguna regla seleccionada.
+                <br><br>
+                <strong>Tip:</strong> usa el checkbox del encabezado para
+                seleccionar/deseleccionar TODAS las reglas de la página
+                actual (no de todas las páginas).
+            `
+        },
+        {
+            heading: "Buscador avanzado (servidor)",
+            body: `
+                El <strong>buscador colapsable</strong> filtra las reglas
+                desde el servidor:
+                <br>
+                • <strong>Búsqueda de texto:</strong> nombre o descripción.
+                <br>
+                • <strong>Prioridad:</strong> Info, Advertencia, Crítica.
+                <br>
+                • <strong>Estado:</strong> activas o inactivas.
+                <br><br>
+                Los filtros se combinan con AND. Los filtros activos se
+                preservan al paginar y ordenar.
+                <br><br>
+                <strong>Diferencia con el filtro rápido:</strong>
+                <br>
+                • El <strong>buscador avanzado</strong> filtra desde el
+                servidor (toda la BD) y resetea la paginación.
+                <br>
+                • El <strong>filtro rápido</strong> (barra en el card de
+                la tabla) filtra solo las filas <em>visibles</em> de la
+                página actual, sin recargar. Es para búsquedas rápidas
+                dentro de lo que ya tienes cargado.
+            `
+        },
+        {
+            heading: "Filtro rápido (cliente)",
+            body: `
+                La barra de búsqueda dentro del card de la tabla
+                (<i class="bi bi-funnel"></i> Filtrar resultados) hace un
+                filtro <strong>en el cliente</strong>: no recarga la página,
+                solo oculta las filas que no coinciden con el texto.
+                <br><br>
+                <strong>Casos de uso:</strong>
+                <br>
+                • Buscar una regla específica cuando tienes 10 en pantalla.
+                <br>
+                • Ver solo las reglas con "core" en el nombre.
+                <br>
+                • Filtrar por estado (ej. escribir "inactiva").
+                <br><br>
+                El contador a la derecha del input muestra cuántas filas
+                están visibles tras el filtrado.
+                <br><br>
+                <strong>Atajos:</strong>
+                <br>
+                • <kbd>/</kbd> — enfocar el buscador rápido.
+                <br>
+                • <kbd>Esc</kbd> — limpiar el buscador rápido.
+            `
+        },
+        {
+            heading: "Ciclo de vida de una alerta generada",
+            body: `
+                Cuando una regla dispara, se crea una alerta con estado
+                <span class="badge bg-danger">Activa</span>.
+                <br><br>
+                <strong>Estados posibles:</strong>
+                <br>
+                • <strong>Activa:</strong> la condición se cumple o aún no
+                se ha atendido.
+                <br>
+                • <strong>Reconocida:</strong> un operador la vio pero no
+                se ha resuelto (acción manual).
+                <br>
+                • <strong>Resuelta:</strong> la condición dejó de cumplirse
+                (auto) o se resolvió manualmente.
+                <br><br>
+                <strong>Auto-resolución:</strong> cuando la combinación de
+                grupos deja de ser True, todas las alertas activas de esa
+                regla para ese equipo se marcan como resueltas
+                automáticamente.
+                <br><br>
+                <strong>Anti-duplicados:</strong> no se crean 2 alertas
+                activas idénticas (misma regla + equipo). Si ya hay una
+                activa, no se duplica aunque la regla siga disparando.
+            `
+        },
+        {
+            heading: "Duración vs Fire_once vs Cooldown",
+            body: `
+                Estos 3 parámetros suenan similares pero controlan cosas
+                distintas. Confundirlos es la causa más común de
+                configuraciones incorrectas:
+                <br><br>
+                <strong>Duración (por condicional):</strong>
+                cuánto tiempo debe sostenerse la condición para considerarse
+                "cumplida". Si dice 60s, la condición debe mantenerse
+                verdadera 60s seguidos. Si se rompe un instante, el contador
+                se resetea.
+                <br>
+                • Recomendado: 60s mínimo, 300s para métricas ruidosas.
+                <br><br>
+                <strong>Fire_once (por regla):</strong>
+                la regla dispara una sola vez por periodo de violación. No
+                vuelve a disparar hasta que la condición deje de cumplirse
+                y vuelva a cumplirse.
+                <br>
+                • Útil para notificaciones de "vuelta en línea".
+                <br><br>
+                <strong>Cooldown de Telegram (por regla):</strong>
+                tiempo mínimo entre notificaciones de la misma regla+equipo.
+                Si la regla dispara 3 veces en 5 min pero el cooldown es
+                600s, solo la primera se envía.
+                <br>
+                • Aplica solo a Telegram, no a la creación de alertas en BD.
+                <br>
+                • Mínimo 60s, recomendado 600s.
+            `
+        },
+        {
+            heading: "Casos de uso comunes",
+            body: `
+                <strong>1. CPU sostenida alta en Core:</strong>
+                <code>CPU &gt; 85% durante 300s AND Mem &gt; 80% durante 300s</code>
+                <br>
+                Detecta saturación real (no picos puntuales).
+                <br><br>
+                <strong>2. CPE caído (con notificación única):</strong>
+                <code>device_down = 0 durante 120s</code>
+                con <em>fire_once = ON</em> → notifica solo cuando se cae,
+                no en cada ciclo.
+                <br><br>
+                <strong>3. Vuelta en línea:</strong>
+                <code>device_down = 1 durante 60s</code>
+                con <em>fire_once = ON</em> → notifica solo cuando se
+                recupera.
+                <br><br>
+                <strong>4. Enlace RF degradado:</strong>
+                <code>NOT (Signal &gt; -70 AND CCQ &gt; 80) durante 180s</code>
+                Detecta cualquier degradación (o señal baja o CCQ bajo).
+                <br><br>
+                <strong>5. Estrés combinado:</strong>
+                <code>(CPU &gt; 90 OR Mem &gt; 90) AND Temp &gt; 70 durante 300s</code>
+                Detecta equipo bajo estrés en múltiples dimensiones.
+            `
+        },
+        {
+            heading: "Solución de problemas",
+            body: `
+                <strong>La regla no dispara:</strong>
+                <br>
+                1. Verifica que esté <strong>Activa</strong> (badge verde).
+                <br>
+                2. Verifica que la duración no sea mayor que el tiempo
+                que la condición se mantiene.
+                <br>
+                3. Verifica que el equipo esté generando esas métricas
+                (ej. <code>cpu_pct</code> requiere que el modelo tenga OIDs
+                de chasis).
+                <br>
+                4. Si tiene <em>Skip start</em>, espera 120s tras el
+                último reinicio del monitor.
+                <br>
+                5. Si tiene <em>Una vez</em>, verifica que no haya
+                disparado ya (el flag se resetea solo cuando la condición
+                deja de cumplirse).
+                <br><br>
+                <strong>Telegram no llega:</strong>
+                <br>
+                1. Verifica que Telegram esté configurado en
+                <a href="/configuracion/">Configuración del sistema</a>.
+                <br>
+                2. Verifica el icono de Telegram en la fila (debe estar azul).
+                <br>
+                3. Verifica que el cooldown no esté bloqueando (espera el
+                tiempo configurado).
+                <br>
+                4. Envía un mensaje de prueba desde Configuración.
+                <br><br>
+                <strong>La alerta se auto-resuelve demasiado rápido:</strong>
+                <br>
+                La métrica está oscilando alrededor del umbral. Aumenta la
+                duración del condicional o acerca el umbral.
+                <br><br>
+                <strong>Muchas alertas duplicadas:</strong>
+                <br>
+                Activa <em>fire_once</em> o aumenta el cooldown de Telegram.
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>No alertes en cada fluctuación.</strong> Usa
+                duración mínima 60-300s para evitar falsos positivos.
+                <br>
+                • <strong>Usa grupos para relaciones complejas:</strong>
+                <code>(A AND B) OR C</code> es más expresivo que
+                <code>A AND B OR C</code> por separado.
+                <br>
+                • <strong>Usa NOT con cuidado.</strong> <code>NOT A</code>
+                con <code>fire_once</code> es útil para "vuelta en línea".
+                Sin <code>fire_once</code>, notificará todo el tiempo que
+                A no se cumpla.
+                <br>
+                • <strong>Prueba primero con prioridad "Info"</strong> y
+                ajusta después.
+                <br>
+                • <strong>Documenta el propósito</strong> en la descripción
+                (aparece como tooltip en la lista).
+                <br>
+                • <strong>Empieza simple:</strong> 1 grupo, 1 condicional,
+                verifica que dispare, luego añade complejidad.
+                <br>
+                • <strong>No dupliques reglas similares:</strong> usa el
+                botón "Duplicar" para crear variantes controladas.
+                <br>
+                • <strong>Desactiva en lugar de eliminar</strong> las
+                reglas que ya no uses pero tengan historial.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// FILTRO RÁPIDO (cliente)
+// ============================================================
+(function() {
+    const input = document.getElementById("quick-search");
+    const clearBtn = document.getElementById("quick-search-clear");
+    const counter = document.getElementById("live-count");
+    const table = document.getElementById("rules-table");
+    if (!input || !table) return;
+
+    function applyFilter() {
+        const q = input.value.toLowerCase().trim();
+        const rows = table.querySelectorAll("tbody tr[data-rule-id]");
+        let visible = 0;
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            row.style.display = match ? "" : "none";
+            if (match) visible++;
+        });
+
+        if (clearBtn) {
+            clearBtn.style.display = input.value ? "block" : "none";
+        }
+
+        if (counter) {
+            if (!q) {
+                counter.textContent = "";
+            } else {
+                counter.textContent = `${visible} de ${rows.length} visibles`;
+                counter.className = visible === 0
+                    ? "small text-danger fw-bold"
+                    : "small text-success";
+            }
+        }
+    }
+
+    input.addEventListener("input", applyFilter);
+
+    if (clearBtn) {
+        clearBtn.addEventListener("click", () => {
+            input.value = "";
+            applyFilter();
+            input.focus();
+        });
+    }
+
+    // Atajo: / para enfocar, Esc para limpiar
+    document.addEventListener("keydown", (e) => {
+        const tag = (e.target.tagName || "").toUpperCase();
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+            if (e.key === "Escape" && e.target === input) {
+                input.value = "";
+                applyFilter();
+                input.blur();
+            }
+            return;
+        }
+        if (e.key === "/") {
+            e.preventDefault();
+            input.focus();
+        }
+    });
+})();
+
+// ============================================================
+// TOGGLE ALL CHECKBOXES
+// ============================================================
+function toggleAll(source) {
+    document.querySelectorAll(".rule-checkbox").forEach(cb => {
+        // Solo los visibles (respetando filtro rápido)
+        const row = cb.closest("tr");
+        if (row && row.style.display !== "none") {
+            cb.checked = source.checked;
+        }
+    });
+    updateSelectedCounter();
+}
+
+// ============================================================
+// CONTADOR DE SELECCIONADOS
+// ============================================================
+function updateSelectedCounter() {
+    const checked = document.querySelectorAll(".rule-checkbox:checked");
+    const master = document.getElementById("select-all-rules");
+    const counter = document.getElementById("live-count");
+
+    if (master) {
+        const all = document.querySelectorAll(".rule-checkbox");
+        master.checked = all.length > 0 && checked.length === all.length;
+        master.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+
+    // Si hay filtro activo, el contador ya muestra los visibles.
+    // Si no hay filtro pero hay seleccionadas, mostrar cuántas.
+    if (checked.length > 0) {
+        const input = document.getElementById("quick-search");
+        if (!input || !input.value) {
+            if (counter) {
+                counter.textContent = `${checked.length} seleccionada${checked.length === 1 ? "" : "s"}`;
+                counter.className = "small text-primary fw-bold";
+            }
+        }
+    }
+}
+
+// ============================================================
+// CONFIRMACIÓN DE ACCIONES EN BLOQUE
+// ============================================================
+function confirmBulk(action, warn = false) {
+    const n = document.querySelectorAll(".rule-checkbox:checked").length;
+    if (n === 0) {
+        alert("No has seleccionado ninguna regla.\n\nMarca al menos una casilla.");
+        return false;
+    }
+    const msg = warn
+        ? `¿Eliminar ${n} regla(s)?\n\nEsta acción NO se puede deshacer.\nTambién se eliminarán todas las alertas asociadas.`
+        : `${action.charAt(0).toUpperCase() + action.slice(1)} ${n} regla(s)?`;
+    return confirm(msg);
+}
+
+// ============================================================
+// TOOLTIPS DE BOOTSTRAP
+// ============================================================
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el);
+    });
+
+    // Listeners de checkboxes para actualizar el contador
+    document.querySelectorAll(".rule-checkbox").forEach(cb => {
+        cb.addEventListener("change", updateSelectedCounter);
+    });
+    updateSelectedCounter();
+});
+</script>
+{% endblock %}

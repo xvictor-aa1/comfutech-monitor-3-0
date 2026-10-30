@@ -1,0 +1,849 @@
+{% extends "base.html" %}
+{% load sorting_tags %}
+{% block title %}Modelos de equipos - Comfutech Monitor{% endblock %}
+
+{% block content %}
+
+<!-- ============================================================ -->
+<!-- Header                                                       -->
+<!-- ============================================================ -->
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1"><i class="bi bi-cpu"></i> Modelos de equipos</h2>
+        <p class="text-muted mb-0 small">
+            Catálogo de modelos por fabricante, con sus OIDs SNMP propios.
+            Si un modelo no define OIDs, se usan los del fabricante por defecto.
+        </p>
+    </div>
+    <div class="btn-group">
+        <a href="{% url 'inventario:device_list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver a equipos
+        </a>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-success dropdown-toggle"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-download"></i> Exportar
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <a class="dropdown-item" href="{% url 'inventario:device_models_export_bulk' %}">
+                        <i class="bi bi-collection"></i> Todos los modelos
+                    </a>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item" onclick="exportSelected()">
+                        <i class="bi bi-check2-square"></i> Solo los seleccionados
+                    </button>
+                </li>
+            </ul>
+        </div>
+        <button type="button" class="btn btn-outline-primary"
+                data-bs-toggle="modal" data-bs-target="#importBulkModal">
+            <i class="bi bi-upload"></i> Importar
+        </button>
+        <a href="{% url 'inventario:device_model_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Nuevo modelo
+        </a>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Stats                                                        -->
+<!-- ============================================================ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <a href="?" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-primary">{{ count_all }}</div>
+                        <div class="metric-label">Modelos totales</div>
+                    </div>
+                    <i class="bi bi-collection metric-icon text-primary"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?active=1" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-success">{{ count_active }}</div>
+                        <div class="metric-label">Activos</div>
+                    </div>
+                    <i class="bi bi-check-circle metric-icon text-success"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <a href="?wireless=1" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="metric-value text-info">{{ count_wireless }}</div>
+                        <div class="metric-label">Radio-enlaces</div>
+                    </div>
+                    <i class="bi bi-broadcast-pin metric-icon text-info"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card card-metric">
+            <div class="card-body d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="metric-value text-warning">{{ count_custom_oids }}</div>
+                    <div class="metric-label">Con OIDs propios</div>
+                </div>
+                <i class="bi bi-braces metric-icon text-warning"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Aviso informativo                                            -->
+<!-- ============================================================ -->
+<div class="alert alert-light border small mb-3">
+    <i class="bi bi-lightbulb text-warning"></i>
+    <strong>Tip:</strong>
+    Los modelos permiten definir OIDs específicos de CPU, memoria,
+    temperatura y uptime. Si los dejas vacíos, el sistema usará los OIDs
+    por defecto del fabricante. Marca <em>“radio-enlace”</em> en equipos
+    AirMax, Cambium, Mimosa, etc., para habilitar el bloque de
+    <em>utilización de enlace</em> en el monitoreo en vivo.
+</div>
+
+<!-- ============================================================ -->
+<!-- Buscador colapsable                                          -->
+<!-- ============================================================ -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         style="cursor: pointer;"
+         data-bs-toggle="collapse"
+         data-bs-target="#search-panel">
+        <div>
+            <i class="bi bi-search"></i>
+            <strong>Buscador avanzado</strong>
+            {% if has_filters %}
+            <span class="badge bg-primary ms-2">
+                <i class="bi bi-funnel-fill"></i> Filtros activos
+            </span>
+            {% endif %}
+        </div>
+        <div>
+            {% if has_filters %}
+            <a href="{% url 'inventario:device_model_list' %}"
+               class="btn btn-sm btn-outline-secondary me-2"
+               onclick="event.stopPropagation();">
+                <i class="bi bi-x-lg"></i> Limpiar
+            </a>
+            {% endif %}
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+
+    <div id="search-panel" class="collapse {% if has_filters %}show{% endif %}">
+        <div class="card-body">
+            <form method="get" class="row g-2">
+                <input type="hidden" name="sort" value="{{ sort_key }}">
+                <input type="hidden" name="order" value="{{ order }}">
+
+                <div class="col-md-4">
+                    <label class="form-label small">Buscar</label>
+                    <input type="text" name="q" value="{{ q }}"
+                           class="form-control"
+                           placeholder="Modelo o descripción...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Fabricante</label>
+                    <select name="vendor" class="form-select">
+                        <option value="">Todos</option>
+                        {% for value, label in vendor_choices %}
+                        <option value="{{ value }}"
+                                {% if vendor_filter == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Radio-enlace</label>
+                    <select name="wireless" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if wireless_filter == "1" %}selected{% endif %}>
+                            Solo radio-enlaces
+                        </option>
+                        <option value="0" {% if wireless_filter == "0" %}selected{% endif %}>
+                            No radio-enlaces
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Estado</label>
+                    <select name="active" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if active_filter == "1" %}selected{% endif %}>Activos</option>
+                        <option value="0" {% if active_filter == "0" %}selected{% endif %}>Inactivos</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- Tabla de modelos                                             -->
+<!-- ============================================================ -->
+<div class="card">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="text-muted small">
+            <i class="bi bi-list-check"></i>
+            Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }}
+            de {{ paginator.count }} modelo{{ paginator.count|pluralize:"s" }}
+        </span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 35px;">
+                        <input type="checkbox" class="form-check-input"
+                               id="select-all-models"
+                               onclick="toggleAllModels(this)">
+                    </th>
+                    {% sortable_th "fabricante" "Fabricante" "130px" %}
+                    {% sortable_th "modelo" "Modelo" %}
+                    <th style="width: 280px;">OIDs propios</th>
+                    {% sortable_th "radio" "Radio-enlace" "110px" %}
+                    {% sortable_th "equipos" "Equipos" "90px" %}
+                    {% sortable_th "activo" "Activo" "90px" %}
+                    <th style="width: 170px;" class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in models %}
+                <tr class="{% if not m.active %}opacity-75{% endif %}">
+                    <td>
+                        <input type="checkbox" class="form-check-input model-checkbox"
+                               value="{{ m.id }}" data-name="{{ m.name|escapejs }}">
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">{{ m.vendor }}</span>
+                    </td>
+                    <td>
+                        <strong>{{ m.name }}</strong>
+                        {% if m.description %}
+                        <br><small class="text-muted">{{ m.description|truncatechars:70 }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m.oids %}
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for key, oid in m.oids.items %}
+                                <span class="badge bg-light text-dark font-monospace"
+                                      title="{{ key }}: {{ oid }}"
+                                      style="font-size: 0.68rem;">
+                                    {{ key }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <small class="text-muted fst-italic">
+                                Sin OIDs propios (usa los del fabricante)
+                            </small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if m.is_wireless_link %}
+                            <span class="badge bg-info text-dark">
+                                <i class="bi bi-broadcast-pin"></i> Sí
+                            </span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary"
+                              title="{{ m.active_devices_count }} activos de {{ m.devices_count }} totales">
+                            {{ m.active_devices_count }}/{{ m.devices_count }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if m.active %}
+                            <span class="badge bg-success">Activo</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <form method="post"
+                              action="{% url 'inventario:device_model_toggle' m.id %}"
+                              class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-sm {% if m.active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                                    title="{% if m.active %}Desactivar{% else %}Activar{% endif %}">
+                                <i class="bi bi-{% if m.active %}pause-fill{% else %}play-fill{% endif %}"></i>
+                            </button>
+                        </form>
+                        <a href="{% url 'inventario:device_model_edit' m.id %}"
+                           class="btn btn-sm btn-outline-secondary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="{% url 'inventario:device_model_delete' m.id %}"
+                           class="btn btn-sm btn-outline-danger" title="Eliminar">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-5">
+                        <i class="bi bi-cpu" style="font-size: 3rem;"></i>
+                        <p class="mt-3 mb-2">No hay modelos que coincidan con los filtros.</p>
+                        <a href="{% url 'inventario:device_model_create' %}"
+                           class="btn btn-primary">
+                            <i class="bi bi-plus-lg"></i> Crear el primer modelo
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- Paginación                                                   -->
+    <!-- ============================================================ -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="text-muted small">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page=1">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-left"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-left"></i></span>
+                </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if num == page_obj.number %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ num }}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link"
+                       href="?{% for k, v in request.GET.items %}{% if k != 'page' %}{{ k }}={{ v }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-right"></i></span>
+                </li>
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="bi bi-chevron-double-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Importar masivo                                       -->
+<!-- ============================================================ -->
+<div class="modal fade" id="importBulkModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">
+                    <i class="bi bi-upload"></i> Importar modelos desde JSON
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Acepta un objeto JSON (un modelo) o una lista (varios).
+                    Los modelos existentes se detectarán como conflictos.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small">Archivo JSON</label>
+                    <input type="file" id="import-bulk-file" class="form-control form-control-sm"
+                           accept=".json,application/json">
+                </div>
+                <div id="import-bulk-error" class="alert alert-danger small py-2 mb-0"
+                     style="display:none;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm"
+                        id="import-bulk-btn" onclick="startBulkImport()">
+                    <i class="bi bi-upload"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Conflicto (reutilizado)                               -->
+<!-- ============================================================ -->
+<div class="modal fade" id="bulkConflictModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2 bg-warning bg-opacity-10">
+                <h6 class="modal-title">
+                    <i class="bi bi-exclamation-triangle text-warning"></i>
+                    Conflictos detectados
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small mb-2" id="bulk-conflict-message"></p>
+                <p class="small text-muted mb-2">
+                    Marca los modelos que deseas <strong>sobrescribir</strong>.
+                </p>
+                <div id="bulk-conflict-list" class="border rounded p-2"
+                     style="max-height: 300px; overflow-y: auto;"></div>
+            </div>
+            <div class="modal-footer py-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-sm"
+                        onclick="confirmBulkImportWithOverwrite()">
+                    <i class="bi bi-arrow-repeat"></i> Sobrescribir y cargar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA
+// ============================================================
+registerHelpContent({
+    title: "Modelos de Equipos — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                El <strong>catálogo de modelos</strong> centraliza todas
+                las variantes de equipos de red registradas, agrupadas
+                por fabricante. Cada modelo define:
+                <br>
+                • Qué OIDs SNMP se consultan (chasis y radiofrecuencia).
+                <br>
+                • Si tiene interfaces IF-MIB.
+                <br>
+                • Si es un radioenlace (Access Point / CPE wireless).
+                <br><br>
+                Los equipos se asocian a un modelo, y el modelo define
+                cómo se monitorea.
+            `
+        },
+        {
+            heading: "Columnas de la tabla",
+            body: `Cada fila muestra un modelo con:`,
+            list: [
+                "<strong>Fabricante:</strong> marca del equipo (Ubiquiti, MikroTik, etc.).",
+                "<strong>Modelo:</strong> nombre específico (ej. RB4011iGS+, AirMax LiteAP GPS).",
+                "<strong>OIDs propios:</strong> cantidad de OIDs personalizadas definidas (si las hay).",
+                "<strong>Radio-enlace:</strong> si el modelo es wireless (habilita polling de RF y clientes AP).",
+                "<strong>Equipos:</strong> cuántos equipos usan este modelo (activos/total).",
+                "<strong>Activo:</strong> si está disponible para asignar a nuevos equipos."
+            ]
+        },
+        {
+            heading: "OIDs propios vs OIDs por defecto",
+            body: `
+                Cada modelo puede definir sus propios OIDs SNMP. Si no los
+                define, el sistema usa los del <strong>fabricante</strong>
+                (configurados en <code>chassis_oids.py</code>).
+                <br><br>
+                <strong>Ventaja de OIDs propios:</strong> cubren modelos
+                con OIDs no estándar (ej. LiteAP GPS con FROGFOOT-MIB en
+                lugar de UBNT-AirMAX-MIB).
+                <br><br>
+                <strong>Cuándo definir OIDs propios:</strong>
+                <br>
+                • El equipo no responde a los OIDs del fabricante.
+                <br>
+                • El modelo tiene particularidades de firmware.
+                <br>
+                • Quieres monitorear métricas no estándar.
+            `
+        },
+        {
+            heading: "Radioenlaces (is_wireless_link)",
+            body: `
+                Marcar un modelo como <strong>radioenlace</strong> habilita:
+                <br>
+                • Polling de radiofrecuencia (frecuencia, señal, CCQ, tasas).
+                <br>
+                • Descubrimiento de clientes AP.
+                <br>
+                • Bloque de radioenlace en el dashboard.
+                <br><br>
+                Aplicable a: Ubiquiti AirMAX, Cambium ePMP, Mimosa, etc.
+                <br><br>
+                <strong>No marcar</strong> en routers/switches tradicionales,
+                aunque tengan WiFi integrado.
+            `
+        },
+        {
+            heading: "Interfaces SNMP (has_interfaces)",
+            body: `
+                Marcar si el modelo expone la tabla <strong>IF-MIB</strong>
+                (interfaces tradicionales: <code>eth0</code>,
+                <code>wlan0</code>, etc.).
+                <br><br>
+                <strong>Marcar en:</strong> routers, switches, equipos con
+                tráfico monitoreable por interfaz.
+                <br>
+                <strong>Desmarcar en:</strong> CPEs simples, equipos sin
+                interfaces SNMP útiles.
+                <br><br>
+                Si está desmarcado, el bloque "SNMP Tráfico" no se muestra
+                en el monitoreo en vivo para los equipos que usen este modelo.
+            `
+        },
+        {
+            heading: "Filtros y búsqueda",
+            body: `
+                Puedes filtrar por:
+                <br>
+                • <strong>Búsqueda de texto:</strong> nombre o descripción.
+                <br>
+                • <strong>Fabricante:</strong> Ubiquiti, MikroTik, etc.
+                <br>
+                • <strong>Radio-enlace:</strong> solo wireless / solo no wireless.
+                <br>
+                • <strong>Estado:</strong> activos / inactivos.
+                <br><br>
+                Los filtros se combinan con AND y se preservan al paginar
+                y ordenar.
+            `
+        },
+        {
+            heading: "Exportar modelos",
+            body: `
+                Descarga un archivo JSON con la configuración de los modelos.
+                <br><br>
+                <strong>Dos modos:</strong>
+                <br>
+                • <em>Todos los modelos:</em> descarga el catálogo completo.
+                <br>
+                • <em>Solo los seleccionados:</em> marca checkboxes y exporta solo esos.
+                <br><br>
+                El JSON es portable entre instalaciones (usa <code>vendor + name</code>
+                como identificador, no IDs).
+            `
+        },
+        {
+            heading: "Importar modelos",
+            body: `
+                Acepta un JSON con uno o varios modelos. El sistema valida:
+                <br>
+                • Que el JSON tenga la estructura correcta.
+                <br>
+                • Que los OIDs sean válidos (formato numérico con puntos).
+                <br><br>
+                Si un modelo ya existe (mismo <code>name</code>), se muestra
+                un modal de <em>conflictos</em> donde puedes marcar cuáles
+                sobrescribir. Los no marcados se saltan.
+                <br><br>
+                <strong>Importante:</strong> el JSON solo sobrescribe la
+                configuración del modelo. Los equipos que lo usan no se
+                modifican automáticamente (siguen apuntando al modelo
+                actualizado).
+            `
+        },
+        {
+            heading: "Acciones por modelo",
+            body: `Cada fila tiene hasta 3 botones:`,
+            list: [
+                "<i class='bi bi-pause-fill'></i> <strong>Activar/Desactivar:</strong> permite retirar un modelo sin eliminarlo (los equipos que lo usan siguen funcionando pero el modelo no aparece al crear nuevos equipos).",
+                "<i class='bi bi-pencil'></i> <strong>Editar:</strong> modifica los OIDs, descripción y flags del modelo.",
+                "<i class='bi bi-trash'></i> <strong>Eliminar:</strong> solo si no hay equipos usándolo. Si los hay, se debe desactivar en su lugar."
+            ]
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                Algunos consejos para mantener el catálogo limpio:
+                <br>
+                • Usa el <strong>nombre comercial exacto</strong> del modelo (ej. "RB4011iGS+", no "router MikroTik").
+                <br>
+                • Documenta en la <strong>descripción</strong> la versión de firmware si es relevante.
+                <br>
+                • Desactiva (no elimines) modelos viejos que ya no uses pero cuyos equipos siguen en producción.
+                <br>
+                • Exporta el catálogo antes de cambios masivos como respaldo.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// SELECCIÓN PARA EXPORTACIÓN
+// ============================================================
+
+/**
+ * Marca/desmarca todos los checkboxes de modelos.
+ * @param {HTMLInputElement} source - checkbox maestro.
+ */
+function toggleAllModels(source) {
+    document.querySelectorAll('.model-checkbox').forEach(cb => {
+        cb.checked = source.checked;
+    });
+}
+
+/**
+ * Exporta los modelos seleccionados (o todos si no hay selección).
+ */
+function exportSelected() {
+    const checked = document.querySelectorAll('.model-checkbox:checked');
+    const ids = Array.from(checked).map(cb => cb.value);
+
+    if (ids.length === 0) {
+        if (!confirm('No has seleccionado modelos. ¿Exportar TODOS los modelos?')) {
+            return;
+        }
+        window.location.href = "{% url 'inventario:device_models_export_bulk' %}";
+        return;
+    }
+
+    const url = "{% url 'inventario:device_models_export_bulk' %}?ids=" + ids.join(',');
+    window.location.href = url;
+}
+
+// ============================================================
+// IMPORTACIÓN MASIVA
+// ============================================================
+const MAX_FILE_SIZE = 5 * 1024 * 1024;  // 5 MB
+
+let pendingBulkImport = {
+    file: null,
+};
+
+/**
+ * Inicia la importación masiva (primera pasada).
+ */
+function startBulkImport() {
+    const fileInput = document.getElementById('import-bulk-file');
+    const errorBox = document.getElementById('import-bulk-error');
+
+    errorBox.style.display = 'none';
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        errorBox.textContent = 'Selecciona un archivo JSON.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    if (file.size > MAX_FILE_SIZE) {
+        errorBox.textContent =
+            `El archivo es demasiado grande (${Math.round(file.size / 1024)} KB). ` +
+            `Máximo 5 MB.`;
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    pendingBulkImport.file = file;
+    _uploadBulkImport(file, false);
+}
+
+/**
+ * Sube el archivo al backend.
+ * @param {File} file
+ * @param {boolean} isSecondPass
+ * @param {string[]} overwriteNames
+ */
+async function _uploadBulkImport(file, isSecondPass = false, overwriteNames = []) {
+    const errorBox = document.getElementById('import-bulk-error');
+    const btn = document.getElementById('import-bulk-btn');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Importando...';
+
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (isSecondPass) {
+            formData.append('overwrite_names', JSON.stringify(overwriteNames));
+        }
+
+        const csrfToken = getCookie('csrftoken');
+        const response = await fetch("{% url 'inventario:device_models_import' %}", {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData,
+        });
+
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+
+        if (data.ok) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('importBulkModal'));
+            if (modal) modal.hide();
+
+            let msg = '✓ Importación completada\n\n';
+            if (data.created.length) {
+                msg += `Creados (${data.created.length}):\n  ${data.created.join('\n  ')}\n\n`;
+            }
+            if (data.updated.length) {
+                msg += `Actualizados (${data.updated.length}):\n  ${data.updated.join('\n  ')}\n\n`;
+            }
+            if (data.skipped.length) {
+                msg += `Saltados (${data.skipped.length}):\n  ` +
+                    data.skipped.map(s => `${s.name} — ${s.reason}`).join('\n  ') + '\n';
+            }
+            alert(msg);
+            window.location.reload();
+
+        } else if (data.conflicts && data.conflicts.length > 0 && !isSecondPass) {
+            _showBulkConflictModal(data.conflicts, data.message);
+
+        } else {
+            errorBox.textContent = data.error || 'Error desconocido.';
+            errorBox.style.display = 'block';
+        }
+
+    } catch (e) {
+        errorBox.textContent = `Error: ${e.message}`;
+        errorBox.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Importar';
+    }
+}
+
+/**
+ * Muestra el modal de conflictos masivos.
+ * @param {string[]} conflicts
+ * @param {string} message
+ */
+function _showBulkConflictModal(conflicts, message) {
+    document.getElementById('bulk-conflict-message').textContent = message;
+
+    const list = document.getElementById('bulk-conflict-list');
+    list.innerHTML = conflicts.map(name => {
+        const safeId = 'bulk-conflict-' + name.replace(/[^a-z0-9]/gi, '_');
+        const safeVal = name.replace(/"/g, '&quot;');
+        return `
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       id="${safeId}" value="${safeVal}">
+                <label class="form-check-label small" for="${safeId}">
+                    <code>${name}</code>
+                </label>
+            </div>
+        `;
+    }).join('');
+
+    const importModal = bootstrap.Modal.getInstance(document.getElementById('importBulkModal'));
+    if (importModal) importModal.hide();
+
+    const modal = new bootstrap.Modal(document.getElementById('bulkConflictModal'));
+    modal.show();
+}
+
+/**
+ * Confirma la importación masiva con overwrite.
+ */
+function confirmBulkImportWithOverwrite() {
+    const checked = document.querySelectorAll('#bulk-conflict-list input[type="checkbox"]:checked');
+    const overwriteNames = Array.from(checked).map(cb => cb.value);
+
+    if (overwriteNames.length === 0) {
+        const ok = confirm(
+            'No has seleccionado ningún modelo para sobrescribir.\n\n' +
+            '¿Deseas continuar e importar SOLO los modelos nuevos ' +
+            '(ignorando todos los conflictos)?'
+        );
+        if (!ok) return;
+    }
+
+    const modal = bootstrap.Modal.getInstance(document.getElementById('bulkConflictModal'));
+    if (modal) modal.hide();
+
+    if (pendingBulkImport.file) {
+        _uploadBulkImport(pendingBulkImport.file, true, overwriteNames);
+    }
+}
+
+// ============================================================
+// LIMPIEZA DEL ESTADO AL CERRAR EL MODAL
+// ============================================================
+document.getElementById('importBulkModal')?.addEventListener('hidden.bs.modal', () => {
+    // Limpiar input file
+    const fileInput = document.getElementById('import-bulk-file');
+    if (fileInput) fileInput.value = '';
+
+    // Ocultar errores
+    const errorBox = document.getElementById('import-bulk-error');
+    if (errorBox) {
+        errorBox.style.display = 'none';
+        errorBox.textContent = '';
+    }
+
+    // Resetear estado pendiente
+    pendingBulkImport.file = null;
+});
+
+</script>
+{% endblock %}

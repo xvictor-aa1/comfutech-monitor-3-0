@@ -1,0 +1,971 @@
+{% load static breadcrumb %}
+<!DOCTYPE html>
+<html lang="es" data-bs-theme="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Comfutech Monitor{% endblock %}</title>
+
+    <!-- Aplicar tema ANTES de renderizar (evita flash) -->
+    <script>
+        (function() {
+            try {
+                const stored = localStorage.getItem('cf-theme') || 'auto';
+                let theme = stored;
+                if (theme === 'auto') {
+                    theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+                        ? 'dark' : 'light';
+                }
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            } catch (e) {
+                document.documentElement.setAttribute('data-bs-theme', 'light');
+            }
+        })();
+    </script>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+    <!-- ============================================================ -->
+    <!-- ESTILOS DEL SIDEBAR                                          -->
+    <!-- ============================================================ -->
+    <style>
+        /* ============================================================
+           SIDEBAR LATERAL STICKY + RESPONSIVE
+           ------------------------------------------------------------
+           Colapsado: 60px (solo iconos, centrados)
+           Expandido: 220px (icono + texto + chevron)
+           ============================================================ */
+        .cf-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 60px;
+            background-color: #05080c;
+            color: #e8eef5;
+            z-index: 1040;
+            transition: width 0.22s ease, box-shadow 0.22s ease;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--cf-border, #2a3341);
+            /* NO overflow-x: hidden — eso recortaba los dropdowns.
+               Los labels se ocultan con display:none para no
+               afectar el layout. */
+        }
+
+        [data-bs-theme="light"] .cf-sidebar {
+            background-color: #0d1117;
+        }
+
+        .cf-sidebar.expanded {
+            width: 220px;
+            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.25);
+        }
+
+        /* ============================================================
+           BRAND (logo + nombre)
+           Alineado a 56px (misma altura que la topbar mobile)
+           ============================================================ */
+        .cf-sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            color: #fff;
+            text-decoration: none;
+            white-space: nowrap;
+            min-height: 56px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .cf-sidebar-brand:hover { color: #fff; }
+
+        .cf-sidebar-brand i {
+            font-size: 1.45rem;
+            flex-shrink: 0;
+            color: var(--cf-primary, #4d9bff);
+        }
+
+        .cf-sidebar-brand span {
+            display: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+            margin-left: 0.75rem;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-brand {
+            justify-content: flex-start;
+            padding: 0 0.95rem;
+            gap: 0.75rem;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-brand span {
+            display: inline;
+        }
+
+        /* ============================================================
+           NAV ITEMS
+           ------------------------------------------------------------
+           Colapsado: justify-content:center, sin gap, sin padding
+                       horizontal. Icono perfectamente centrado.
+           Expandido: justify-content:flex-start, con padding y gap.
+           ============================================================ */
+        .cf-sidebar-nav {
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 0.5rem 0;
+            scrollbar-width: thin;
+        }
+
+        .cf-sidebar-nav::-webkit-scrollbar { width: 4px; }
+        .cf-sidebar-nav::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+        }
+
+        .cf-sidebar-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding: 0.7rem 0;
+            color: rgba(255, 255, 255, 0.75);
+            text-decoration: none;
+            font-size: 0.88rem;
+            white-space: nowrap;
+            transition: background-color 0.15s ease, color 0.15s ease;
+            cursor: pointer;
+            border: none;
+            border-left: 3px solid transparent;
+            background: none;
+            width: 100%;
+            text-align: left;
+            overflow: hidden;
+        }
+
+        .cf-sidebar-item:hover {
+            background-color: rgba(255, 255, 255, 0.06);
+            color: #fff;
+        }
+
+        .cf-sidebar-item.active {
+            background-color: rgba(77, 155, 255, 0.12);
+            color: #fff;
+            border-left-color: var(--cf-primary, #4d9bff);
+        }
+
+        .cf-sidebar-item > i.bi {
+            font-size: 1.2rem;
+            flex-shrink: 0;
+            width: 20px;
+            text-align: center;
+        }
+
+        .cf-sidebar-item .cf-label {
+            display: none;
+            flex-grow: 1;
+            margin-left: 0.85rem;
+        }
+
+        .cf-sidebar-item .cf-chevron {
+            display: none;
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.45);
+            transition: transform 0.2s ease;
+        }
+
+        /* Estado expandido */
+        .cf-sidebar.expanded .cf-sidebar-item {
+            justify-content: flex-start;
+            padding: 0.7rem 0.95rem;
+            gap: 0;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-item .cf-label {
+            display: inline;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-item .cf-chevron {
+            display: inline-block;
+        }
+
+        .cf-sidebar-item[aria-expanded="true"] .cf-chevron {
+            transform: rotate(90deg);
+        }
+
+        /* ============================================================
+           SUBMENÚS
+           ============================================================ */
+        .cf-sidebar-subnav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            background: rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+
+        .cf-sidebar-subnav a {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.55rem 0.95rem 0.55rem 2.85rem;
+            color: rgba(255, 255, 255, 0.65);
+            text-decoration: none;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            transition: background-color 0.15s ease;
+        }
+
+        .cf-sidebar-subnav a:hover {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+        }
+
+        .cf-sidebar:not(.expanded) .cf-sidebar-subnav {
+            display: none !important;
+        }
+
+        /* ============================================================
+           FOOTER DEL SIDEBAR
+           ============================================================ */
+        .cf-sidebar-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 0.5rem 0;
+        }
+
+        .cf-sidebar-footer .cf-sidebar-item {
+            padding: 0.55rem 0;
+            font-size: 0.85rem;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-footer .cf-sidebar-item {
+            padding: 0.55rem 0.95rem;
+        }
+
+        /* Ocultar el caret (::after) de dropdown-toggle cuando está colapsado */
+        .cf-sidebar:not(.expanded) .cf-sidebar-footer .dropdown-toggle::after {
+            display: none;
+        }
+
+        .cf-sidebar.expanded .cf-sidebar-footer .dropdown-toggle::after {
+            margin-left: auto;
+        }
+
+        /* Separador visual antes del botón de ayuda */
+        .cf-sidebar-footer .cf-help-btn {
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            margin-top: 0.35rem;
+        }
+
+        .cf-sidebar-footer .cf-help-btn > i {
+            color: #ffc107;
+        }
+
+        /* ============================================================
+           WRAPPER DEL CONTENIDO
+           ============================================================ */
+        .cf-main-wrapper {
+            margin-left: 60px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: margin-left 0.22s ease;
+        }
+
+        .cf-sidebar.expanded ~ .cf-main-wrapper {
+            margin-left: 220px;
+        }
+
+        /* ============================================================
+           TOPBAR MOBILE
+           ============================================================ */
+        .cf-topbar-mobile {
+            display: none;
+        }
+
+        .cf-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1035;
+        }
+
+        .cf-overlay.show {
+            display: block;
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 991.98px) {
+            .cf-sidebar {
+                transform: translateX(-100%);
+                width: 240px;
+            }
+
+            .cf-sidebar.mobile-open {
+                transform: translateX(0);
+            }
+
+            /* En móvil, el drawer siempre está "expandido" visualmente */
+            .cf-sidebar.mobile-open .cf-sidebar-brand {
+                justify-content: flex-start;
+                padding: 0 0.95rem;
+                gap: 0.75rem;
+            }
+            .cf-sidebar.mobile-open .cf-sidebar-brand span { display: inline; }
+
+            .cf-sidebar.mobile-open .cf-sidebar-item {
+                justify-content: flex-start;
+                padding: 0.7rem 0.95rem;
+            }
+            .cf-sidebar.mobile-open .cf-sidebar-item .cf-label { display: inline; }
+            .cf-sidebar.mobile-open .cf-sidebar-item .cf-chevron { display: inline-block; }
+            .cf-sidebar.mobile-open .cf-sidebar-footer .cf-sidebar-item {
+                padding: 0.55rem 0.95rem;
+            }
+            .cf-sidebar.mobile-open .cf-sidebar-footer .dropdown-toggle::after {
+                display: inline-block;
+            }
+
+            .cf-sidebar.mobile-open .cf-sidebar-subnav {
+                display: block !important;
+            }
+
+            .cf-main-wrapper {
+                margin-left: 0 !important;
+            }
+
+            .cf-topbar-mobile {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background-color: #0d1117;
+                color: #e8eef5;
+                padding: 0 1rem;
+                position: sticky;
+                top: 0;
+                z-index: 1030;
+                border-bottom: 1px solid var(--cf-border, #2a3341);
+                min-height: 56px;
+            }
+
+            .cf-topbar-mobile .cf-hamburger {
+                background: transparent;
+                border: none;
+                color: inherit;
+                font-size: 1.4rem;
+                cursor: pointer;
+                padding: 0.25rem;
+            }
+
+            .cf-topbar-mobile .cf-title {
+                font-weight: 600;
+                font-size: 0.95rem;
+            }
+
+            body.cf-sidebar-mobile-open .cf-overlay {
+                display: block;
+            }
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<a href="#main-content" class="skip-to-content">Saltar al contenido</a>
+
+<div class="cf-overlay" id="cf-overlay"></div>
+
+<!-- ============================================================ -->
+<!-- SIDEBAR LATERAL                                              -->
+<!-- ============================================================ -->
+<aside class="cf-sidebar" id="cf-sidebar">
+
+    <!-- Brand -->
+    <a class="cf-sidebar-brand" id="cf-sidebar-brand">
+        <i class="bi bi-router"></i>
+        <span>Comfutech Monitor</span>
+    </a>
+
+    {% if user.is_authenticated %}
+    {% with url_name=request.resolver_match.url_name %}
+    <nav class="cf-sidebar-nav">
+
+        <!-- Dashboard -->
+        <a href="{% url 'core:dashboard' %}"
+           class="cf-sidebar-item {% if url_name == 'dashboard' %}active{% endif %}"
+           title="Dashboard">
+            <i class="bi bi-speedometer2"></i>
+            <span class="cf-label">Dashboard</span>
+        </a>
+
+        <!-- Equipos (con dropdown) -->
+        <button type="button"
+                class="cf-sidebar-item {% if 'device' in url_name %}active{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#submenu-equipos"
+                aria-expanded="false"
+                title="Equipos">
+            <i class="bi bi-hdd-network"></i>
+            <span class="cf-label">Equipos</span>
+            <i class="bi bi-chevron-right cf-chevron"></i>
+        </button>
+        <div class="collapse cf-sidebar-subnav" id="submenu-equipos">
+            <a href="{% url 'inventario:device_list' %}">
+                <i class="bi bi-list-ul"></i> Ver todos
+            </a>
+            {% if is_admin %}
+            <a href="{% url 'inventario:device_create' %}">
+                <i class="bi bi-plus-lg"></i> Nuevo equipo
+            </a>
+            {% endif %}
+            <a href="{% url 'inventario:device_model_list' %}">
+                <i class="bi bi-cpu"></i> Modelos de equipos
+            </a>
+        </div>
+
+        <!-- Alertas -->
+        <a href="{% url 'alertas:alert_list' %}"
+           class="cf-sidebar-item {% if url_name == 'alert_list' %}active{% endif %}"
+           title="Alertas">
+            <i class="bi bi-bell"></i>
+            <span class="cf-label">Alertas</span>
+        </a>
+
+        <!-- Reglas (con dropdown) -->
+        <button type="button"
+                class="cf-sidebar-item {% if 'rule' in url_name %}active{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#submenu-reglas"
+                aria-expanded="false"
+                title="Reglas">
+            <i class="bi bi-shield-exclamation"></i>
+            <span class="cf-label">Reglas</span>
+            <i class="bi bi-chevron-right cf-chevron"></i>
+        </button>
+        <div class="collapse cf-sidebar-subnav" id="submenu-reglas">
+            <a href="{% url 'alertas:rule_list' %}">
+                <i class="bi bi-list-ul"></i> Ver todas
+            </a>
+            {% if is_admin %}
+            <a href="{% url 'alertas:rule_create' %}">
+                <i class="bi bi-plus-lg"></i> Nueva regla
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- Monitor (con dropdown) -->
+        <button type="button"
+                class="cf-sidebar-item {% if 'monitor' in url_name %}active{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#submenu-monitor"
+                aria-expanded="false"
+                title="Monitor">
+            <i class="bi bi-cpu"></i>
+            <span class="cf-label">Monitor</span>
+            <i class="bi bi-chevron-right cf-chevron"></i>
+        </button>
+        <div class="collapse cf-sidebar-subnav" id="submenu-monitor">
+            <a href="{% url 'monitoreo:monitor_status' %}">
+                <i class="bi bi-activity"></i> Estado del servicio
+            </a>
+            <a href="{% url 'monitoreo:monitor_live' %}">
+                <i class="bi bi-broadcast"></i> Monitoreo en vivo
+            </a>
+        </div>
+
+        <!-- Configuraciones del Sistema -->
+        {% if is_admin %}
+        <button type="button"
+                class="cf-sidebar-item {% if 'user' in url_name or 'system_settings' in url_name %}active{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#submenu-settings"
+                aria-expanded="false"
+                title="Configuraciones del Sistema">
+            <i class="bi bi-gear"></i>
+            <span class="cf-label">Configuraciones</span>
+            <i class="bi bi-chevron-right cf-chevron"></i>
+        </button>
+        <div class="collapse cf-sidebar-subnav" id="submenu-settings">
+            <a href="{% url 'core:user_list' %}">
+                <i class="bi bi-people"></i> Panel de Usuarios
+            </a>
+            {% if is_superadmin %}
+            <a href="{% url 'core:system_settings' %}">
+                <i class="bi bi-sliders"></i> Configuración
+            </a>
+            <a href="{% url 'mantenimiento:panel' %}">
+                <i class="bi bi-tools"></i> Mantenimiento
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Grafana (condicional) -->
+        {% if grafana_available %}
+        <a href="{{ grafana_url }}" target="_blank" rel="noopener"
+           class="cf-sidebar-item" title="Abrir Grafana">
+            <i class="bi bi-graph-up"></i>
+            <span class="cf-label">Grafana</span>
+            <i class="bi bi-box-arrow-up-right cf-chevron"></i>
+        </a>
+        {% endif %}
+
+    </nav>
+
+    <!-- ============================================================ -->
+    <!-- FOOTER DEL SIDEBAR                                          -->
+    <!-- ============================================================ -->
+    <div class="cf-sidebar-footer">
+
+        <!-- Usuario (dropdown) -->
+        <div class="dropdown w-100">
+            <button type="button"
+                    class="cf-sidebar-item dropdown-toggle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    title="Usuario: {{ user.username }}">
+                <i class="bi bi-person-circle"></i>
+                <span class="cf-label">{{ user.username }}</span>
+            </button>
+            <ul class="dropdown-menu" style="min-width: 200px;">
+                <li>
+                    <a class="dropdown-item" href="{% url 'core:profile' %}">
+                        <i class="bi bi-person"></i> Mi perfil
+                    </a>
+                </li>
+                <li>
+                    <a class="dropdown-item"
+                       href="{% url 'core:user_change_password' user.id %}">
+                        <i class="bi bi-key"></i> Cambiar contraseña
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="dropdown-item">
+                            <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+                        </button>
+                    </form>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Theme switcher -->
+        <div class="dropdown w-100">
+            <button type="button"
+                    class="cf-sidebar-item dropdown-toggle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    title="Cambiar tema">
+                <i class="bi bi-circle-half" id="theme-icon"></i>
+                <span class="cf-label" id="theme-label">Tema</span>
+            </button>
+            <ul class="dropdown-menu" style="min-width: 200px;">
+                <li>
+                    <button type="button" class="dropdown-item"
+                            data-theme="light" onclick="setTheme('light')">
+                        <i class="bi bi-sun-fill"></i> Modo Claro
+                        <i class="bi bi-check2 ms-auto"></i>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item"
+                            data-theme="dark" onclick="setTheme('dark')">
+                        <i class="bi bi-moon-stars-fill"></i> Modo Oscuro
+                        <i class="bi bi-check2 ms-auto"></i>
+                    </button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item"
+                            data-theme="auto" onclick="setTheme('auto')">
+                        <i class="bi bi-circle-half"></i> Automático
+                        <i class="bi bi-check2 ms-auto"></i>
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Botón de Ayuda -->
+        <button type="button"
+                class="cf-sidebar-item cf-help-btn"
+                onclick="openHelpModal()"
+                title="Ayuda de esta página">
+            <i class="bi bi-question-circle"></i>
+            <span class="cf-label">Ayuda</span>
+        </button>
+
+    </div>
+    {% endwith %}
+    {% endif %}
+
+</aside>
+
+<!-- ============================================================ -->
+<!-- WRAPPER DEL CONTENIDO                                        -->
+<!-- ============================================================ -->
+<div class="cf-main-wrapper">
+
+    <!-- Topbar mobile -->
+    <div class="cf-topbar-mobile">
+        <button type="button" class="cf-hamburger" id="cf-hamburger">
+            <i class="bi bi-list"></i>
+        </button>
+        <span class="cf-title">
+            <i class="bi bi-router"></i> Comfutech Monitor
+        </span>
+        <button type="button" class="cf-hamburger"
+                onclick="openHelpModal()"
+                title="Ayuda">
+            <i class="bi bi-question-circle"></i>
+        </button>
+    </div>
+
+    <main class="container-fluid py-4" id="main-content">
+        {% auto_breadcrumb %}
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show"
+                     role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close"
+                            data-bs-dismiss="alert" aria-label="Cerrar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="text-center text-muted py-2 border-top">
+        <small>
+            Comfutech - Sistema de Monitoreo de Red &copy; {% now "Y" %}
+            · Güigüe, Carabobo
+        </small>
+    </footer>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: AYUDA GLOBAL                                          -->
+<!-- ============================================================ -->
+<div class="modal fade" id="helpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-question-circle text-warning"></i>
+                    <span id="help-modal-title">Ayuda</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="help-modal-body">
+                <!-- Contenido inyectado por JS -->
+            </div>
+            <div class="modal-footer">
+                <small class="text-muted me-auto">
+                    <i class="bi bi-info-circle"></i>
+                    Cada página registra su propio contenido de ayuda.
+                </small>
+                <button type="button" class="btn btn-outline-secondary"
+                        data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// ============================================================
+// THEME SWITCHER
+// ============================================================
+function applyTheme(theme) {
+    let effective = theme;
+    if (theme === 'auto') {
+        effective = window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark' : 'light';
+    }
+    document.documentElement.setAttribute('data-bs-theme', effective);
+
+    const icon = document.getElementById('theme-icon');
+    const label = document.getElementById('theme-label');
+    if (icon) {
+        icon.className = 'bi';
+        if (theme === 'light') icon.classList.add('bi-sun-fill');
+        else if (theme === 'dark') icon.classList.add('bi-moon-stars-fill');
+        else icon.classList.add('bi-circle-half');
+    }
+    if (label) {
+        label.textContent = {
+            'light': 'Claro',
+            'dark': 'Oscuro',
+            'auto': 'Automático',
+        }[theme] || 'Tema';
+    }
+
+    document.querySelectorAll('.dropdown-item[data-theme]').forEach(btn => {
+        const check = btn.querySelector('.bi-check2');
+        if (!check) return;
+        check.style.display = (btn.dataset.theme === theme) ? 'inline-block' : 'none';
+    });
+}
+
+function setTheme(theme) {
+    try { localStorage.setItem('cf-theme', theme); } catch (e) {}
+    applyTheme(theme);
+}
+
+if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        const stored = localStorage.getItem('cf-theme') || 'auto';
+        if (stored === 'auto') applyTheme('auto');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    let stored = 'auto';
+    try { stored = localStorage.getItem('cf-theme') || 'auto'; } catch (e) {}
+    applyTheme(stored);
+});
+
+// ============================================================
+// SIDEBAR: EXPANDIR / COLAPSAR
+// ============================================================
+(function() {
+    const sidebar = document.getElementById('cf-sidebar');
+    const brand = document.getElementById('cf-sidebar-brand');
+    const overlay = document.getElementById('cf-overlay');
+    const hamburger = document.getElementById('cf-hamburger');
+    if (!sidebar) return;
+
+    const isMobile = () => window.matchMedia('(max-width: 991.98px)').matches;
+
+    // ---- Brand: click expande/colapsa (desktop) o abre/cierra drawer (móvil)
+    brand.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (isMobile()) {
+            sidebar.classList.toggle('mobile-open');
+            document.body.classList.toggle('cf-sidebar-mobile-open');
+            overlay.classList.toggle('show');
+        } else {
+            sidebar.classList.toggle('expanded');
+            try {
+                localStorage.setItem(
+                    'cf-sidebar-expanded',
+                    sidebar.classList.contains('expanded') ? '1' : '0'
+                );
+            } catch (e) {}
+        }
+    });
+
+    // ---- SOLO los items del nav expanden el sidebar al hacer clic cuando
+    // ---- está colapsado. Los items del footer (usuario, theme, ayuda)
+    // ---- NO expanden, evitando el bug de dropdown desplazado.
+    document.querySelectorAll('.cf-sidebar-nav .cf-sidebar-item').forEach(item => {
+        item.addEventListener('click', () => {
+            if (!isMobile() && !sidebar.classList.contains('expanded')) {
+                sidebar.classList.add('expanded');
+                try { localStorage.setItem('cf-sidebar-expanded', '1'); } catch (e) {}
+            }
+        });
+    });
+
+    // ---- Restaurar estado expandido en desktop
+    if (!isMobile()) {
+        try {
+            if (localStorage.getItem('cf-sidebar-expanded') === '1') {
+                sidebar.classList.add('expanded');
+            }
+        } catch (e) {}
+    }
+
+    // ---- Hamburguesa (móvil)
+    if (hamburger) {
+        hamburger.addEventListener('click', () => {
+            sidebar.classList.toggle('mobile-open');
+            document.body.classList.toggle('cf-sidebar-mobile-open');
+            overlay.classList.toggle('show');
+        });
+    }
+
+    // ---- Overlay cierra el drawer
+    if (overlay) {
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('mobile-open');
+            document.body.classList.remove('cf-sidebar-mobile-open');
+            overlay.classList.remove('show');
+        });
+    }
+
+    // ---- Cerrar drawer al hacer clic en un enlace
+    sidebar.querySelectorAll('a[href]:not([href="#"])').forEach(link => {
+        link.addEventListener('click', () => {
+            if (isMobile()) {
+                sidebar.classList.remove('mobile-open');
+                document.body.classList.remove('cf-sidebar-mobile-open');
+                overlay.classList.remove('show');
+            }
+        });
+    });
+
+    // ---- Ajustes al cambiar de tamaño
+    const handleResize = () => {
+        if (!isMobile()) {
+            sidebar.classList.remove('mobile-open');
+            document.body.classList.remove('cf-sidebar-mobile-open');
+            overlay.classList.remove('show');
+            try {
+                if (localStorage.getItem('cf-sidebar-expanded') === '1') {
+                    sidebar.classList.add('expanded');
+                }
+            } catch (e) {}
+        }
+    };
+    window.addEventListener('resize', handleResize);
+})();
+
+// ============================================================
+// HELPERS GLOBALES
+// ============================================================
+function togglePassword(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn ? btn.querySelector('i') : null;
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
+            icon.classList.remove('bi-eye');
+            icon.classList.add('bi-eye-slash');
+        }
+    } else {
+        input.type = 'password';
+        if (icon) {
+            icon.classList.remove('bi-eye-slash');
+            icon.classList.add('bi-eye');
+        }
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Auto-cerrar alerts después de 6 segundos
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.alert.alert-dismissible').forEach(el => {
+        setTimeout(() => {
+            try {
+                const bsAlert = bootstrap.Alert.getOrCreateInstance(el);
+                bsAlert.close();
+            } catch (e) {}
+        }, 6000);
+    });
+});
+
+// ============================================================
+// SISTEMA DE AYUDA GLOBAL
+// ============================================================
+window._helpContent = null;
+
+/**
+ * Registra el contenido de ayuda de la página actual.
+ * Cada página llama a esto en su bloque `extra_js`.
+ */
+function registerHelpContent(content) {
+    window._helpContent = content;
+}
+
+function escapeHtmlHelp(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Abre el modal de ayuda con el contenido registrado para la página
+ * actual. Si no hay contenido, muestra un fallback.
+ */
+function openHelpModal() {
+    const titleEl = document.getElementById('help-modal-title');
+    const bodyEl = document.getElementById('help-modal-body');
+    const content = window._helpContent;
+
+    if (!content) {
+        titleEl.textContent = 'Ayuda';
+        bodyEl.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i>
+                <strong>No hay contenido de ayuda específico para esta página.</strong>
+                <p class="mb-0 mt-2 small">
+                    Navega a Dashboard, Equipos, Alertas, Reglas o Monitor
+                    para ver la ayuda detallada de cada sección.
+                </p>
+            </div>
+        `;
+    } else {
+        titleEl.textContent = content.title || 'Ayuda';
+        const sections = (content.sections || []).map(section => {
+            let html = `<div class="mb-4 pb-3 border-bottom">
+                <h6 class="text-primary mb-2">
+                    <i class="bi bi-bookmark-fill"></i>
+                    ${escapeHtmlHelp(section.heading || '')}
+                </h6>
+                <div class="small text-body">${section.body || ''}</div>`;
+
+            if (section.list && section.list.length > 0) {
+                html += `<ul class="small mt-2 mb-0">
+                    ${section.list.map(item => `<li>${item}</li>`).join('')}
+                </ul>`;
+            }
+            html += `</div>`;
+            return html;
+        }).join('');
+
+        bodyEl.innerHTML = sections;
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('helpModal'));
+    modal.show();
+}
+
+// Atajo de teclado: F1 o Shift+? abre la ayuda
+document.addEventListener('keydown', (e) => {
+    const tag = (e.target.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    if (e.key === 'F1' || (e.shiftKey && e.key === '?')) {
+        e.preventDefault();
+        openHelpModal();
+    }
+});
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

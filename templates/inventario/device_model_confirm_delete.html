@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Eliminar modelo - Comfutech Monitor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Eliminar modelo
+                </h4>
+            </div>
+            <div class="card-body">
+
+                {% if devices_count > 0 %}
+                <!-- Bloqueo: hay equipos usando el modelo -->
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <strong>No puedes eliminar este modelo.</strong>
+                    Hay {{ devices_count }} equipo(s) que lo están usando.
+                    Considera <strong>desactivarlo</strong> en su lugar.
+                </div>
+                <p>
+                    Modelo: <strong>{{ model_obj.vendor }} - {{ model_obj.name }}</strong>
+                </p>
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'inventario:device_model_list' %}"
+                       class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Volver
+                    </a>
+                    <a href="{% url 'inventario:device_model_edit' model_obj.id %}"
+                       class="btn btn-warning">
+                        <i class="bi bi-pencil"></i> Editar / desactivar
+                    </a>
+                </div>
+
+                {% else %}
+                <!-- Confirmación normal -->
+                <p>¿Eliminar definitivamente el modelo?</p>
+                <ul>
+                    <li><strong>Fabricante:</strong> {{ model_obj.vendor }}</li>
+                    <li><strong>Modelo:</strong> {{ model_obj.name }}</li>
+                    <li>
+                        <strong>OIDs propios:</strong>
+                        {% if model_obj.oids %}
+                            {{ model_obj.oids|length }}
+                        {% else %}
+                            0 (usa los del fabricante)
+                        {% endif %}
+                    </li>
+                </ul>
+                <p class="text-danger"><strong>Esta acción no se puede deshacer.</strong></p>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'inventario:device_model_list' %}"
+                           class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Sí, eliminar
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
