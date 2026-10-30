@@ -36,13 +36,18 @@
         <code>{{ stats.backup_dir }}</code>
         <br>
         <span class="text-muted" style="font-size: 0.72rem;">
-            {% if stats.mysqldump_path %}
-            <i class="bi bi-check-circle-fill text-success"></i>
-            mysqldump detectado: <code>{{ stats.mysqldump_path }}</code>
+            Motor BD: <span class="badge bg-secondary">{{ stats.db_engine }}</span>
+            {% if stats.db_engine == "sqlite" %}
+                — <i class="bi bi-check-circle-fill text-success"></i>
+                SQLite usa copia nativa (no requiere herramienta externa).
+            {% elif stats.dump_tool_path %}
+                — <i class="bi bi-check-circle-fill text-success"></i>
+                Herramienta de dump detectada:
+                <code>{{ stats.dump_tool_path }}</code>
             {% else %}
-            <i class="bi bi-exclamation-triangle-fill text-danger"></i>
-            <strong>mysqldump no encontrado.</strong>
-            Instálalo o configura la ruta más abajo.
+                — <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                <strong>Herramienta de dump no encontrada</strong>
+                (mysqldump o pg_dump). Instálala o configura la ruta más abajo.
             {% endif %}
         </span>
     </div>
@@ -261,15 +266,17 @@
                 <!-- mysqldump path -->
                 <div class="col-md-6">
                     <label class="form-label small mb-1">
-                        Ruta de <code>mysqldump</code> (opcional)
+                        Ruta de la herramienta de dump (opcional)
                     </label>
-                    <input type="text" name="mysql_dump_path"
-                           class="form-control form-control-sm"
-                           value="{{ cfg.mysql_dump_path }}"
-                           placeholder="Vacío = autodetección">
+                    <input type="text" name="dump_tool_path"
+                        class="form-control form-control-sm"
+                        value="{{ cfg.dump_tool_path|default:'' }}"
+                        placeholder="Vacío = autodetección">
                     <div class="form-text small">
                         Solo si la autodetección falla. Ej:
-                        <code>C:\xampp\mysql\bin\mysqldump.exe</code>
+                        <code>C:\xampp\mysql\bin\mysqldump.exe</code> (MySQL) o
+                        <code>C:\Program Files\PostgreSQL\16\bin\pg_dump.exe</code> (Postgres).
+                        <br><strong>SQLite</strong> no necesita esta ruta (se copia el archivo).
                     </div>
                 </div>
 

@@ -11,4 +11,5 @@ openpyxl
 reportlab
 dynaconf
 dynaconf[toml]
+psycopg[binary]
 tomlkit

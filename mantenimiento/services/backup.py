@@ -671,11 +671,23 @@ def apply_retention(days: Optional[int] = None) -> int:
 # ESTADÍSTICAS
 # ============================================================
 def get_stats() -> Dict:
-    """Estadísticas globales."""
+    """
+    Estadísticas globales del servicio de backups.
+
+    Detecta el motor de BD y la herramienta de dump correspondiente
+    (mysqldump / pg_dump / sqlite3 built-in).
+    """
     _ensure_backup_dir()
     backups = list_backups()
     total_size = sum(b["size"] for b in backups)
     meta = config_ini.get_meta()
+    engine = _get_db_engine()
+
+    # Detectar la herramienta de dump según el motor
+    if engine == "sqlite":
+        dump_tool = "sqlite3 (built-in)"
+    else:
+        dump_tool = _find_dump_tool(engine) or ""
 
     return {
         "count": len(backups),
@@ -684,5 +696,6 @@ def get_stats() -> Dict:
         "last_backup_type": meta.get("last_backup_type", ""),
         "last_backup_filename": meta.get("last_backup_filename", ""),
         "backup_dir": str(BACKUP_DIR),
-        "mysqldump_path": _find_mysqldump() or "",
+        "dump_tool_path": dump_tool,     # clave renombrada
+        "db_engine": engine,              # nueva: útil en el template
     }
