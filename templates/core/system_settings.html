@@ -1066,341 +1066,7 @@
 
 {% endblock %}
 
-{% block extra_js %}
-<script>
-// ============================================================
-// AYUDA DE LA PÁGINA (expandida)
-// ============================================================
-registerHelpContent({
-    title: "Configuración del Sistema — Guía",
-    sections: [
-        {
-            heading: "¿Qué es esta página?",
-            body: `
-                Centraliza todos los parámetros globales del sistema:
-                conexión a InfluxDB, intervalos del monitor, bot de Telegram,
-                servidor SMTP y URL de Grafana.
-                <br><br>
-                La configuración se guarda en <strong><code>config.toml</code></strong>,
-                no en la base de datos. Los valores sensibles (tokens,
-                contraseñas) están protegidos por los permisos del archivo.
-            `
-        },
-        {
-            heading: "Navegación del panel",
-            body: `
-                El panel se organiza en <strong>5 secciones</strong> accesibles
-                desde el menú lateral:
-                <br>
-                • <i class="bi bi-database-fill text-danger"></i> <strong>InfluxDB</strong> — base de datos de métricas.
-                <br>
-                • <i class="bi bi-cpu-fill text-success"></i> <strong>Monitor</strong> — pollers e intervalos.
-                <br>
-                • <i class="bi bi-telegram text-primary"></i> <strong>Telegram</strong> — notificaciones push.
-                <br>
-                • <i class="bi bi-envelope-at-fill text-success"></i> <strong>Email</strong> — SMTP para verificación y recuperación.
-                <br>
-                • <i class="bi bi-graph-up-arrow text-warning"></i> <strong>Grafana</strong> — dashboard externo.
-                <br><br>
-                El <strong>badge "!"</strong> en una sección indica que falta
-                configurar un valor crítico (token, contraseña).
-            `
-        },
-        {
-            heading: "Sobre el archivo config.toml",
-            body: `
-                Toda la configuración runtime vive en <code>config.toml</code>
-                en la raíz del proyecto.
-                <br><br>
-                <strong>Ventajas:</strong>
-                <br>
-                • Fácil de respaldar (copias un archivo).
-                <br>
-                • Portable entre instalaciones.
-                <br>
-                • No requiere migraciones de BD.
-                <br>
-                • Preserva comentarios y orden (TOML es legible por humanos).
-                <br><br>
-                <strong>Seguridad:</strong>
-                <br>
-                • El archivo se crea con permisos <code>0600</code>.
-                <br>
-                • Se hace un backup a <code>config.toml.bak</code> antes de
-                cada escritura.
-                <br>
-                • Está excluido del control de versiones (<code>.gitignore</code>).
-                <br>
-                • Los campos con <i class="bi bi-eye"></i> se envían
-                enmascarados y no se sobrescriben si los dejas vacíos.
-            `
-        },
-        {
-            heading: "Tab InfluxDB",
-            body: `
-                Configura la conexión a la base de datos de series temporales
-                donde se almacenan las métricas.
-                <br><br>
-                <strong>Campos:</strong>
-                <br>
-                • <strong>URL:</strong> normalmente <code>http://localhost:8086</code>.
-                <br>
-                • <strong>API Token:</strong> créalo en la UI de InfluxDB con
-                permisos <em>Read &amp; Write</em> sobre el bucket.
-                <br>
-                • <strong>Organización:</strong> el nombre de tu org (default <code>comfutech</code>).
-                <br>
-                • <strong>Bucket:</strong> el contenedor de métricas (default <code>metricas_red</code>).
-                <br><br>
-                <strong>"Probar conexión":</strong> verifica los 3 pasos —
-                servidor en <code>/health</code>, token válido, bucket existe.
-            `
-        },
-        {
-            heading: "Tab Monitor — Los 5 pollers",
-            body: `
-                El monitor ejecuta 5 pollers en paralelo:
-                <br><br>
-                <i class="bi bi-graph-up text-primary"></i>
-                <strong>SNMP Tráfico</strong> — contadores de tráfico por
-                interfaz. Default: <code>60s</code>.
-                <br>
-                <i class="bi bi-heart-pulse text-success"></i>
-                <strong>Core Health</strong> — CPU, memoria, temperatura,
-                uptime. Default: <code>120s</code>.
-                <br>
-                <i class="bi bi-activity text-warning"></i>
-                <strong>ICMP/TCP</strong> — disponibilidad, latencia, pérdida,
-                puertos TCP. Default: <code>120s</code>.
-                <br>
-                <i class="bi bi-broadcast-pin text-info"></i>
-                <strong>Radiofrecuencia</strong> — señal, CCQ, tasas TX/RX.
-                Default: <code>120s</code>.
-                <br>
-                <i class="bi bi-people-fill text-primary"></i>
-                <strong>Clientes AP</strong> — clientes conectados a APs.
-                Default: <code>120s</code>.
-                <br><br>
-                Los cambios se aplican en <strong>≤60s</strong> sin reiniciar
-                el monitor (heartbeat).
-            `
-        },
-        {
-            heading: "Tab Telegram",
-            body: `
-                Configura el bot de Telegram para notificaciones push.
-                <br><br>
-                <strong>Requisitos:</strong>
-                <br>
-                1. Bot creado con <strong>@BotFather</strong>.
-                <br>
-                2. Grupo de Telegram con el bot como administrador.
-                <br>
-                3. Bot Token + Chat ID del grupo.
-                <br><br>
-                El <strong>Chat ID</strong> debe empezar con <code>-</code>
-                para grupos/supergrupos.
-                <br><br>
-                <strong>"Probar":</strong> envía un mensaje al chat configurado
-                para verificar que todo funcione.
-            `
-        },
-        {
-            heading: "Tab Email (SMTP)",
-            body: `
-                Servidor SMTP usado para verificación de cuentas y recuperación
-                de contraseñas.
-                <br><br>
-                <strong>Servidores comunes:</strong>
-                <br>
-                • Gmail: <code>smtp.gmail.com:587</code> + contraseña de aplicación.
-                <br>
-                • Office365: <code>smtp.office365.com:587</code> + SMTP AUTH activo.
-                <br>
-                • Otros: consulta la documentación del proveedor.
-                <br><br>
-                <strong>TLS vs SSL:</strong> mutuamente excluyentes.
-                TLS = puerto 587, SSL = puerto 465.
-                <br><br>
-                <strong>"Probar envío":</strong> abre un modal para enviar un
-                email de prueba al destino que indiques.
-            `
-        },
-        {
-            heading: "Tab Grafana",
-            body: `
-                URL del dashboard que se abre desde el menú lateral.
-                <br><br>
-                <strong>Comportamiento:</strong> si la URL no responde en
-                5 segundos, el botón <strong>Grafana</strong> del menú
-                lateral se oculta automáticamente. La verificación se
-                cachea por 5 minutos.
-                <br><br>
-                Usa <strong>"Probar conexión"</strong> para verificar que
-                responde antes de guardar.
-            `
-        },
-        {
-            heading: "Guardar y descartar",
-            body: `
-                La barra inferior (<strong>sticky save bar</strong>) siempre
-                está visible mientras te mueves por las secciones.
-                <br><br>
-                <strong>Guardar configuración:</strong> envía todos los valores
-                (de los 5 tabs) de una vez. Se escribe en <code>config.toml</code>
-                de forma atómica (con backup previo).
-                <br><br>
-                <strong>Descartar:</strong> restaura el formulario al último
-                estado guardado. Requiere confirmación.
-                <br><br>
-                <strong>Si intentas salir sin guardar,</strong> aparece un
-                warning del navegador (beforeunload).
-            `
-        },
-        {
-            heading: "Buenas prácticas",
-            body: `
-                • <strong>Probar siempre</strong> las conexiones antes de
-                guardar cambios importantes.
-                <br>
-                • <strong>No compartas</strong> el archivo <code>config.toml</code>
-                fuera del servidor.
-                <br>
-                • <strong>Respalda <code>config.toml</code></strong> junto con
-                la BD (son los 2 archivos que necesitas para restaurar una
-                instalación completa).
-                <br>
-                • <strong>Restringe permisos</strong> del archivo a solo tu
-                usuario.
-                <br>
-                • <strong>No lo subas a git</strong> — está en <code>.gitignore</code>.
-                <br>
-                • <strong>Cambia tokens y contraseñas</strong> periódicamente.
-                <br>
-                • <strong>Usa contraseñas de aplicación</strong> para Gmail.
-                <br>
-                • <strong>Si migras de servidor</strong>, copia
-                <code>config.toml</code> + <code>system.toml</code>.
-            `
-        }
-    ]
-});
-
-// ============================================================
-// HELPERS
-// ============================================================
-function toggleVisibility(inputId, btn) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    const icon = btn.querySelector('i');
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.classList.remove('bi-eye');
-        icon.classList.add('bi-eye-slash');
-    } else {
-        input.type = 'password';
-        icon.classList.remove('bi-eye-slash');
-        icon.classList.add('bi-eye');
-    }
-}
-
-function confirmReset() {
-    return confirm('¿Descartar todos los cambios sin guardar?');
-}
-
-// ============================================================
-// MODAL: TEST EMAIL
-// ============================================================
-function showTestEmail() {
-    const map = [
-        ['email_host', 'hidden_email_host'],
-        ['email_port', 'hidden_email_port'],
-        ['email_use_tls', 'hidden_email_use_tls'],
-        ['email_use_ssl', 'hidden_email_use_ssl'],
-        ['email_host_user', 'hidden_email_host_user'],
-        ['email_host_password', 'hidden_email_host_password'],
-        ['default_from_email', 'hidden_default_from_email'],
-    ];
-    map.forEach(([srcName, dstId]) => {
-        const src = document.querySelector(`[name="${srcName}"]`);
-        const dst = document.getElementById(dstId);
-        if (!src || !dst) return;
-        if (src.type === 'checkbox') {
-            dst.value = src.checked ? 'on' : '';
-        } else {
-            dst.value = src.value;
-        }
-    });
-
-    const modal = new bootstrap.Modal(document.getElementById('testEmailModal'));
-    modal.show();
-}
-
-// ============================================================
-// TLS/SSL mutuamente excluyentes
-// ============================================================
-(function() {
-    const tls = document.getElementById('email_tls');
-    const ssl = document.getElementById('email_ssl');
-    if (tls && ssl) {
-        tls.addEventListener('change', () => {
-            if (tls.checked) ssl.checked = false;
-        });
-        ssl.addEventListener('change', () => {
-            if (ssl.checked) tls.checked = false;
-        });
-    }
-})();
-
-// ============================================================
-// Warning si el usuario sale sin guardar
-// ============================================================
-(function() {
-    const form = document.getElementById('settings-form');
-    if (!form) return;
-    let dirty = false;
-    form.addEventListener('input', () => { dirty = true; });
-    form.addEventListener('change', () => { dirty = true; });
-    form.addEventListener('submit', (e) => {
-        const submitter = e.submitter || document.activeElement;
-        if (submitter && submitter.hasAttribute('formaction')) return;
-        dirty = false;
-    });
-    window.addEventListener('beforeunload', (e) => {
-        if (dirty) {
-            e.preventDefault();
-            e.returnValue = '';
-        }
-    });
-})();
-
-// ============================================================
-// Persistir el tab activo en localStorage
-// ============================================================
-(function() {
-    const tabBtns = document.querySelectorAll('[data-bs-toggle="pill"]');
-    if (!tabBtns.length) return;
-
-    // Restaurar el último tab activo
-    try {
-        const lastTab = localStorage.getItem('cf-settings-tab-v2');
-        if (lastTab) {
-            const btn = document.querySelector(`[data-bs-target="${lastTab}"]`);
-            if (btn) new bootstrap.Tab(btn).show();
-        }
-    } catch (e) {}
-
-    // Guardar al cambiar
-    tabBtns.forEach(btn => {
-        btn.addEventListener('shown.bs.tab', (e) => {
-            try {
-                localStorage.setItem('cf-settings-tab-v2', e.target.dataset.bsTarget);
-            } catch (err) {}
-        });
-    });
-})();
-</script>
-
+{% block extra_css %}
 <style>
 /* ============================================================
    BANNER compacto sobre config.toml
@@ -1880,4 +1546,340 @@ function showTestEmail() {
     }
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ============================================================
+// AYUDA DE LA PÁGINA (expandida)
+// ============================================================
+registerHelpContent({
+    title: "Configuración del Sistema — Guía",
+    sections: [
+        {
+            heading: "¿Qué es esta página?",
+            body: `
+                Centraliza todos los parámetros globales del sistema:
+                conexión a InfluxDB, intervalos del monitor, bot de Telegram,
+                servidor SMTP y URL de Grafana.
+                <br><br>
+                La configuración se guarda en <strong><code>config.toml</code></strong>,
+                no en la base de datos. Los valores sensibles (tokens,
+                contraseñas) están protegidos por los permisos del archivo.
+            `
+        },
+        {
+            heading: "Navegación del panel",
+            body: `
+                El panel se organiza en <strong>5 secciones</strong> accesibles
+                desde el menú lateral:
+                <br>
+                • <i class="bi bi-database-fill text-danger"></i> <strong>InfluxDB</strong> — base de datos de métricas.
+                <br>
+                • <i class="bi bi-cpu-fill text-success"></i> <strong>Monitor</strong> — pollers e intervalos.
+                <br>
+                • <i class="bi bi-telegram text-primary"></i> <strong>Telegram</strong> — notificaciones push.
+                <br>
+                • <i class="bi bi-envelope-at-fill text-success"></i> <strong>Email</strong> — SMTP para verificación y recuperación.
+                <br>
+                • <i class="bi bi-graph-up-arrow text-warning"></i> <strong>Grafana</strong> — dashboard externo.
+                <br><br>
+                El <strong>badge "!"</strong> en una sección indica que falta
+                configurar un valor crítico (token, contraseña).
+            `
+        },
+        {
+            heading: "Sobre el archivo config.toml",
+            body: `
+                Toda la configuración runtime vive en <code>config.toml</code>
+                en la raíz del proyecto.
+                <br><br>
+                <strong>Ventajas:</strong>
+                <br>
+                • Fácil de respaldar (copias un archivo).
+                <br>
+                • Portable entre instalaciones.
+                <br>
+                • No requiere migraciones de BD.
+                <br>
+                • Preserva comentarios y orden (TOML es legible por humanos).
+                <br><br>
+                <strong>Seguridad:</strong>
+                <br>
+                • El archivo se crea con permisos <code>0600</code>.
+                <br>
+                • Se hace un backup a <code>config.toml.bak</code> antes de
+                cada escritura.
+                <br>
+                • Está excluido del control de versiones (<code>.gitignore</code>).
+                <br>
+                • Los campos con <i class="bi bi-eye"></i> se envían
+                enmascarados y no se sobrescriben si los dejas vacíos.
+            `
+        },
+        {
+            heading: "Tab InfluxDB",
+            body: `
+                Configura la conexión a la base de datos de series temporales
+                donde se almacenan las métricas.
+                <br><br>
+                <strong>Campos:</strong>
+                <br>
+                • <strong>URL:</strong> normalmente <code>http://localhost:8086</code>.
+                <br>
+                • <strong>API Token:</strong> créalo en la UI de InfluxDB con
+                permisos <em>Read &amp; Write</em> sobre el bucket.
+                <br>
+                • <strong>Organización:</strong> el nombre de tu org (default <code>comfutech</code>).
+                <br>
+                • <strong>Bucket:</strong> el contenedor de métricas (default <code>metricas_red</code>).
+                <br><br>
+                <strong>"Probar conexión":</strong> verifica los 3 pasos —
+                servidor en <code>/health</code>, token válido, bucket existe.
+            `
+        },
+        {
+            heading: "Tab Monitor — Los 5 pollers",
+            body: `
+                El monitor ejecuta 5 pollers en paralelo:
+                <br><br>
+                <i class="bi bi-graph-up text-primary"></i>
+                <strong>SNMP Tráfico</strong> — contadores de tráfico por
+                interfaz. Default: <code>60s</code>.
+                <br>
+                <i class="bi bi-heart-pulse text-success"></i>
+                <strong>Core Health</strong> — CPU, memoria, temperatura,
+                uptime. Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-activity text-warning"></i>
+                <strong>ICMP/TCP</strong> — disponibilidad, latencia, pérdida,
+                puertos TCP. Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-broadcast-pin text-info"></i>
+                <strong>Radiofrecuencia</strong> — señal, CCQ, tasas TX/RX.
+                Default: <code>120s</code>.
+                <br>
+                <i class="bi bi-people-fill text-primary"></i>
+                <strong>Clientes AP</strong> — clientes conectados a APs.
+                Default: <code>120s</code>.
+                <br><br>
+                Los cambios se aplican en <strong>≤60s</strong> sin reiniciar
+                el monitor (heartbeat).
+            `
+        },
+        {
+            heading: "Tab Telegram",
+            body: `
+                Configura el bot de Telegram para notificaciones push.
+                <br><br>
+                <strong>Requisitos:</strong>
+                <br>
+                1. Bot creado con <strong>@BotFather</strong>.
+                <br>
+                2. Grupo de Telegram con el bot como administrador.
+                <br>
+                3. Bot Token + Chat ID del grupo.
+                <br><br>
+                El <strong>Chat ID</strong> debe empezar con <code>-</code>
+                para grupos/supergrupos.
+                <br><br>
+                <strong>"Probar":</strong> envía un mensaje al chat configurado
+                para verificar que todo funcione.
+            `
+        },
+        {
+            heading: "Tab Email (SMTP)",
+            body: `
+                Servidor SMTP usado para verificación de cuentas y recuperación
+                de contraseñas.
+                <br><br>
+                <strong>Servidores comunes:</strong>
+                <br>
+                • Gmail: <code>smtp.gmail.com:587</code> + contraseña de aplicación.
+                <br>
+                • Office365: <code>smtp.office365.com:587</code> + SMTP AUTH activo.
+                <br>
+                • Otros: consulta la documentación del proveedor.
+                <br><br>
+                <strong>TLS vs SSL:</strong> mutuamente excluyentes.
+                TLS = puerto 587, SSL = puerto 465.
+                <br><br>
+                <strong>"Probar envío":</strong> abre un modal para enviar un
+                email de prueba al destino que indiques.
+            `
+        },
+        {
+            heading: "Tab Grafana",
+            body: `
+                URL del dashboard que se abre desde el menú lateral.
+                <br><br>
+                <strong>Comportamiento:</strong> si la URL no responde en
+                5 segundos, el botón <strong>Grafana</strong> del menú
+                lateral se oculta automáticamente. La verificación se
+                cachea por 5 minutos.
+                <br><br>
+                Usa <strong>"Probar conexión"</strong> para verificar que
+                responde antes de guardar.
+            `
+        },
+        {
+            heading: "Guardar y descartar",
+            body: `
+                La barra inferior (<strong>sticky save bar</strong>) siempre
+                está visible mientras te mueves por las secciones.
+                <br><br>
+                <strong>Guardar configuración:</strong> envía todos los valores
+                (de los 5 tabs) de una vez. Se escribe en <code>config.toml</code>
+                de forma atómica (con backup previo).
+                <br><br>
+                <strong>Descartar:</strong> restaura el formulario al último
+                estado guardado. Requiere confirmación.
+                <br><br>
+                <strong>Si intentas salir sin guardar,</strong> aparece un
+                warning del navegador (beforeunload).
+            `
+        },
+        {
+            heading: "Buenas prácticas",
+            body: `
+                • <strong>Probar siempre</strong> las conexiones antes de
+                guardar cambios importantes.
+                <br>
+                • <strong>No compartas</strong> el archivo <code>config.toml</code>
+                fuera del servidor.
+                <br>
+                • <strong>Respalda <code>config.toml</code></strong> junto con
+                la BD (son los 2 archivos que necesitas para restaurar una
+                instalación completa).
+                <br>
+                • <strong>Restringe permisos</strong> del archivo a solo tu
+                usuario.
+                <br>
+                • <strong>No lo subas a git</strong> — está en <code>.gitignore</code>.
+                <br>
+                • <strong>Cambia tokens y contraseñas</strong> periódicamente.
+                <br>
+                • <strong>Usa contraseñas de aplicación</strong> para Gmail.
+                <br>
+                • <strong>Si migras de servidor</strong>, copia
+                <code>config.toml</code> + <code>system.toml</code>.
+            `
+        }
+    ]
+});
+
+// ============================================================
+// HELPERS
+// ============================================================
+function toggleVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+
+function confirmReset() {
+    return confirm('¿Descartar todos los cambios sin guardar?');
+}
+
+// ============================================================
+// MODAL: TEST EMAIL
+// ============================================================
+function showTestEmail() {
+    const map = [
+        ['email_host', 'hidden_email_host'],
+        ['email_port', 'hidden_email_port'],
+        ['email_use_tls', 'hidden_email_use_tls'],
+        ['email_use_ssl', 'hidden_email_use_ssl'],
+        ['email_host_user', 'hidden_email_host_user'],
+        ['email_host_password', 'hidden_email_host_password'],
+        ['default_from_email', 'hidden_default_from_email'],
+    ];
+    map.forEach(([srcName, dstId]) => {
+        const src = document.querySelector(`[name="${srcName}"]`);
+        const dst = document.getElementById(dstId);
+        if (!src || !dst) return;
+        if (src.type === 'checkbox') {
+            dst.value = src.checked ? 'on' : '';
+        } else {
+            dst.value = src.value;
+        }
+    });
+
+    const modal = new bootstrap.Modal(document.getElementById('testEmailModal'));
+    modal.show();
+}
+
+// ============================================================
+// TLS/SSL mutuamente excluyentes
+// ============================================================
+(function() {
+    const tls = document.getElementById('email_tls');
+    const ssl = document.getElementById('email_ssl');
+    if (tls && ssl) {
+        tls.addEventListener('change', () => {
+            if (tls.checked) ssl.checked = false;
+        });
+        ssl.addEventListener('change', () => {
+            if (ssl.checked) tls.checked = false;
+        });
+    }
+})();
+
+// ============================================================
+// Warning si el usuario sale sin guardar
+// ============================================================
+(function() {
+    const form = document.getElementById('settings-form');
+    if (!form) return;
+    let dirty = false;
+    form.addEventListener('input', () => { dirty = true; });
+    form.addEventListener('change', () => { dirty = true; });
+    form.addEventListener('submit', (e) => {
+        const submitter = e.submitter || document.activeElement;
+        if (submitter && submitter.hasAttribute('formaction')) return;
+        dirty = false;
+    });
+    window.addEventListener('beforeunload', (e) => {
+        if (dirty) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+})();
+
+// ============================================================
+// Persistir el tab activo en localStorage
+// ============================================================
+(function() {
+    const tabBtns = document.querySelectorAll('[data-bs-toggle="pill"]');
+    if (!tabBtns.length) return;
+
+    // Restaurar el último tab activo
+    try {
+        const lastTab = localStorage.getItem('cf-settings-tab-v2');
+        if (lastTab) {
+            const btn = document.querySelector(`[data-bs-target="${lastTab}"]`);
+            if (btn) new bootstrap.Tab(btn).show();
+        }
+    } catch (e) {}
+
+    // Guardar al cambiar
+    tabBtns.forEach(btn => {
+        btn.addEventListener('shown.bs.tab', (e) => {
+            try {
+                localStorage.setItem('cf-settings-tab-v2', e.target.dataset.bsTarget);
+            } catch (err) {}
+        });
+    });
+})();
+</script>
 {% endblock %}

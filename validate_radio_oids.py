@@ -1,5 +1,4 @@
 # validate_radio_oids.py
-#!/usr/bin/env python
 """
 Script standalone para validar OIDs SNMP de radiofrecuencia
 contra un equipo Ubiquiti airMAX (LiteAP GPS, LiteBeam, PowerBeam, etc.).

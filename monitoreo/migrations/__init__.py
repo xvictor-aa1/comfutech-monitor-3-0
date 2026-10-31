@@ -1,0 +1,1 @@
+# monitoreo/migrations/__init__.py

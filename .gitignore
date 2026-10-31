@@ -4,6 +4,7 @@ config.toml
 config.toml.bak
 system.toml
 system.toml.bak
+timezone_posix.sql
 *.env
 check_env.py
 prompt.txt
@@ -20,6 +21,7 @@ core/__pycache__/
 core/management/__pycache__/
 core/management/commands/__pycache__/
 core/migrations/__pycache__/
+core/templatetags/__pycache__/
 core/__pycache__/
 documentatacion/
 inventario/__pycache__/
@@ -35,3 +37,4 @@ monitoreo/management/commands/__pycache__/
 monitoreo/migrations/__pycache__/
 monitoreo/services/__pycache__/
 pruebas/
+sistema/__pycache__/

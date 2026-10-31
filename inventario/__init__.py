@@ -1,0 +1,1 @@
+# inventario/__init__.py

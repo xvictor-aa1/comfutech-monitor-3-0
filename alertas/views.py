@@ -176,10 +176,10 @@ def export_alerts_excel(request):
     Exporta las alertas filtradas a Excel (XLSX).
     Respeta los filtros y el ordenamiento aplicados en la lista.
     """
-    from .exports import build_alerts_excel
+    from .exports import export_excel
 
     try:
-        buf = build_alerts_excel(request)
+        buf = export_excel(request)
         filename = f"alertas_comfutech_{datetime.now():%Y%m%d_%H%M}.xlsx"
         response = HttpResponse(
             buf.getvalue(),
@@ -202,10 +202,10 @@ def export_alerts_pdf(request):
     Exporta las alertas filtradas a PDF.
     Respeta los filtros y el ordenamiento aplicados en la lista.
     """
-    from .exports import build_alerts_pdf
+    from .exports import export_pdf
 
     try:
-        buf = build_alerts_pdf(request)
+        buf = export_pdf(request)
         filename = f"alertas_comfutech_{datetime.now():%Y%m%d_%H%M}.pdf"
         response = HttpResponse(buf.getvalue(), content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{filename}"'

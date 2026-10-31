@@ -10,6 +10,5 @@ La configuración se recarga automáticamente por mtime
 (`core.config_ini.reload_if_changed()`), por lo que ya no se
 necesitan signals.
 
-Módulo conservado para no romper `core/apps.py` (que lo importa en
-`ready()`), pero está intencionalmente vacío.
+Reservado para futuras posibles importaciones, pero por ahora esta sin uso.
 """

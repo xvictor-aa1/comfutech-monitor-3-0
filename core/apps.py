@@ -12,13 +12,3 @@ class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "core"
     verbose_name = "Núcleo del sistema"
-
-    def ready(self):
-        """
-        Importa signals (módulo vacío, conservado por compatibilidad).
-        No se necesita registrar ningún receptor.
-        """
-        try:
-            import core.signals  # noqa: F401
-        except Exception:
-            pass
