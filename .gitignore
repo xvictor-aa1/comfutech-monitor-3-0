@@ -17,6 +17,7 @@ alertas/__pycache__/
 alertas/migrations/__pycache__/
 backup/
 backups/
+bin/
 core/__pycache__/
 core/management/__pycache__/
 core/management/commands/__pycache__/
@@ -38,3 +39,4 @@ monitoreo/migrations/__pycache__/
 monitoreo/services/__pycache__/
 pruebas/
 sistema/__pycache__/
+staticfiles/

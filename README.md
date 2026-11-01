@@ -1,12 +1,13 @@
+```markdown
 # 🖥️ Comfutech Monitor
 
 Sistema de monitoreo de red para **Comfutech** en Güigüe, Estado Carabobo, Venezuela.
 
 Permite supervisar en tiempo real el estado de equipos de red (MikroTik, Cisco, Huawei, Ubiquiti, Cambium y genéricos) vía **SNMP**, **ICMP** y **TCP**, con visualización en **Grafana**, notificaciones por **Telegram**, recuperación de contraseña por email y gestión completa desde una interfaz web **Django**.
 
-**Versión actual:** 3.0 (TOML + mantenimiento + alertas v2 con grupos)  
+**Versión actual:** 3.4 (Alertas v4 con auto-resolución + instaladores Windows/Linux + optimización del motor)  
 **Estado:** Producción  
-**Última actualización:** Octubre 2026
+**Última actualización:** Noviembre 2026
 
 ---
 
@@ -20,23 +21,24 @@ Permite supervisar en tiempo real el estado de equipos de red (MikroTik, Cisco, 
 6. [Diagramas de flujo por apartado](#️-diagramas-de-flujo-por-apartado)
 7. [Estructura del proyecto](#-estructura-del-proyecto)
 8. [Requisitos previos](#-requisitos-previos)
-9. [Instalación paso a paso](#-instalación-paso-a-paso)
-10. [Configuración (TOML)](#️-configuración-toml)
-11. [Base de datos](#-base-de-datos)
-12. [Motor de monitoreo](#-motor-de-monitoreo)
-13. [Sistema de alertas v2](#-sistema-de-alertas-v2-grupos--operadores)
-14. [Sistema de usuarios](#-sistema-de-usuarios)
-15. [Panel de Mantenimiento](#-panel-de-mantenimiento-backups)
-16. [Django Admin](#️-django-admin)
-17. [Interfaz web y navegación](#️-interfaz-web-y-navegación)
-18. [Sistema de ayuda (F1)](#-sistema-de-ayuda-f1)
-19. [Integraciones externas](#-integraciones-externas)
-20. [Roles y permisos](#-roles-y-permisos)
-21. [Despliegue en producción](#-despliegue-en-producción)
-22. [Operación y mantenimiento](#-operación-y-mantenimiento)
-23. [Solución de problemas](#-solución-de-problemas)
-24. [Glosario](#-glosario)
-25. [Changelog](#-changelog)
+9. [Instalación automática (Windows y Linux)](#-instalación-automática-windows-y-linux)
+10. [Instalación manual paso a paso](#-instalación-manual-paso-a-paso)
+11. [Configuración (TOML)](#️-configuración-toml)
+12. [Base de datos](#-base-de-datos)
+13. [Motor de monitoreo](#-motor-de-monitoreo)
+14. [Sistema de alertas v4](#-sistema-de-alertas-v4-grupos--auto-resolución)
+15. [Sistema de usuarios](#-sistema-de-usuarios)
+16. [Panel de Mantenimiento](#-panel-de-mantenimiento-backups)
+17. [Django Admin](#️-django-admin)
+18. [Interfaz web y navegación](#️-interfaz-web-y-navegación)
+19. [Sistema de ayuda (F1)](#-sistema-de-ayuda-f1)
+20. [Integraciones externas](#-integraciones-externas)
+21. [Roles y permisos](#-roles-y-permisos)
+22. [Despliegue en producción](#-despliegue-en-producción)
+23. [Operación y mantenimiento](#-operación-y-mantenimiento)
+24. [Solución de problemas](#-solución-de-problemas)
+25. [Glosario](#-glosario)
+26. [Changelog](#-changelog)
 
 ---
 
@@ -47,13 +49,17 @@ Permite supervisar en tiempo real el estado de equipos de red (MikroTik, Cisco, 
 ## Problema que resuelve
 
 - **Antes:** verificación manual equipo por equipo, detección de fallas solo por reclamos.
-- **Después:** panel web centralizado con métricas en tiempo real, alertas automáticas multi-grupo, notificaciones**Fabricantes:** MikroTik, Cisco, Huawei, Ubiquiti, Cambium, Mimosa, TP-Link y EnGenius.
-- **Métricas de tráfico:** capacidad, Rx/Tx y utilización por interfaz.
+- **Después:** panel web centralizado con métricas en tiempo real, alertas automáticas multi-grupo, notificaciones por Telegram y resolución automática configurable.
+
+## Características de los equipos soportados
+
+- **Fabricantes:** MikroTik, Cisco, Huawei, Ubiquiti, Cambium, Mimosa, TP-Link y EnGenius.
+- **Métricas de tráfico:** capacidad, Rx/Tx, utilización por interfaz, bps de entrada y salida.
 - **Métricas de chasis:** CPU, memoria, temperatura y uptime.
 - **Disponibilidad:** latencia ICMP, pérdida de paquetes y puertos TCP.
-- **Radiofrecuencia:** señal, CCQ, ruido, tasas TX/RX y airMAX.
-- **Clientes AP:** lista de clientes conectados con métricas en vivo.
-- **Alertas:** 1-5 grupos de 1-5 condicionales con operadores AND/OR/XOR/NOT.
+- **Radiofrecuencia:** señal, CCQ, ruido, tasas TX/RX, frecuencia, potencia TX, ancho de canal y airMAX.
+- **Clientes AP:** lista de clientes conectados con métricas en vivo y conteo por AP.
+- **Alertas:** 1-5 grupos de 1-5 condicionales con operadores AND/OR/XOR/NOT, con bloque opcional de auto-resolución.
 - **Backups:** manuales y automáticos diarios.
 
 ## Beneficios medibles
@@ -64,6 +70,7 @@ Permite supervisar en tiempo real el estado de equipos de red (MikroTik, Cisco, 
 | Detección de fallas por reclamos | Alertas proactivas |
 | Sin visibilidad histórica | Dashboards con retención de 90 días |
 | Sin notificaciones automáticas | Telegram en menos de 30 s |
+| Sin resolución automática | Auto-resolución por condicionales |
 | Sin backups programados | Backup automático diario |
 | Configuración en base de datos | Configuración centralizada en TOML |
 | Sin acceso de emergencia | Django Admin exclusivo para superadministradores |
@@ -98,10 +105,15 @@ _legacy/
 | **v1.0** | Refactor completo de la UI |
 | **v2.0** | Configuración UI v2 |
 | **v3.0** | TOML, mantenimiento, backups, alertas v2, Django Admin y sistema de ayuda |
+| **v3.1** | Monitoreo de radiofrecuencia y clientes AP |
+| **v3.2** | Dashboard con sparklines, timeframe y toasts |
+| **v3.3** | Interfaz destacada del dashboard y "Destacar WAN" |
+| **v3.4** | Alertas v4 (auto-resolución), desacoplamiento de `Alert`, optimización del motor y scripts de instalación multiplataforma |
 
-**Estado actual:** v3.0, producción estable.
+**Estado actual:** v3.4, producción estable.
 
 ---
+
 # 🏗️ Arquitectura del sistema
 
 ```text
@@ -116,7 +128,7 @@ _legacy/
                                │ HTTP (8000)
                                ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│             DJANGO 4.2 + WAITRESS (Servicio Windows)             │
+│             DJANGO 4.2+ + WAITRESS (Servicio)                    │
 │                                                                  │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌─────────────────┐ │
 │  │ Autenticación    │  │ CRUD (ORM)       │  │ Configuración   │ │
@@ -138,23 +150,25 @@ _legacy/
               ▼                          ▼
 
 ┌───────────────────────────┐    ┌──────────────────────────────┐
-│       MySQL 5.7 / 8.0     │    │     Monitor APScheduler      │
+│       MySQL 8.0           │    │     Monitor APScheduler      │
 ├───────────────────────────┤    ├──────────────────────────────┤
-│ auth_user                │    │ Traffic Poller              │
-│ devices                  │    │ Health Poller               │
-│ device_models            │    │ ICMP/TCP Poller             │
-│ interfaces               │    │ Radio Poller                │
-│ alert_rules              │    │ AP Clients Poller           │
-│ alerts                   │    │ Heartbeat Poller            │
-│ email_verifications      │    │ Backup automático           │
-│ password_reset_codes     │    └──────────────────────────────┘
-│ password_reset_attempts  │
-│ monitor_status           │    ┌──────────────────────────────┐
-│ discovery_jobs           │    │   Motor de Alertas v2       │
-└───────────────────────────┘    │ • 1-5 grupos                │
-                                 │ • 1-5 condiciones/grupo     │
+│ auth_user                 │    │ Traffic Poller              │
+│ devices                   │    │ Health Poller               │
+│ device_models             │    │ ICMP/TCP Poller             │
+│ interfaces                │    │ Radio Poller                │
+│ alert_rules               │    │ AP Clients Poller           │
+│ alerts (sin FKs)          │    │ Heartbeat Poller            │
+│ email_verifications       │    │ Backup automático           │
+│ password_reset_codes      │    │ Discovery semanal           │
+│ password_reset_attempts   │    └──────────────────────────────┘
+│ monitor_status            │
+│ discovery_jobs            │    ┌──────────────────────────────┐
+│ telegram_cooldowns        │    │   Motor de Alertas v4       │
+└───────────────────────────┘    │ • 1-5 grupos de disparo     │
+                                 │ • 1-5 grupos de auto-res.   │
                                  │ • AND / OR / XOR / NOT      │
                                  │ • Warm-up 120 s             │
+                                 │ • UniqueConstraint activa   │
                                  └──────────────────────────────┘
 
             ┌────────────────────┬────────────────────┐
@@ -182,14 +196,15 @@ _legacy/
 
 | Componente | Rol | Servicio | Puerto |
 |------------|------|-----------|---------|
-| **Django + Waitress** | Backend web, ORM e interfaz | `ComfutechDjango` | 8000 |
-| **APScheduler** | Scheduler de polling | `ComfutechMonitor` | — |
-| **MySQL** | Base de datos relacional | `MySQL80` | 3306 |
+| **Django + Waitress** | Backend web, ORM e interfaz | `ComfutechDjango` / `comfutech-django` | 8000 |
+| **APScheduler** | Scheduler de polling | `ComfutechMonitor` / `comfutech-monitor` | — |
+| **MySQL** | Base de datos relacional | `MySQL80` / `mysql` | 3306 |
 | **InfluxDB 2.9** | Base de datos temporal | `influxdb` | 8086 |
 | **Grafana** | Visualización | `grafana` | 3000 |
 | **Telegram Bot API** | Notificaciones | Externo | 443 |
 | **SMTP** | Email transaccional | Externo | 587/465 |
-| **NSSM** | Servicios Windows | Ejecutable | — |
+| **NSSM** | Servicios Windows | `bin/nssm/win64/nssm.exe` | — |
+| **systemd** | Servicios Linux | `ComfutechDjango` / `ComfutechMonitor` | — |
 | **Dynaconf + tomlkit** | Gestión de TOML | Librería | — |
 
 ---
@@ -200,7 +215,7 @@ _legacy/
 
 | Tecnología | Versión | Rol |
 |------------|----------|------|
-| **Python** | 3.11+ (probado en 3.13) | Runtime |
+| **Python** | 3.11+ (probado en 3.15.1) | Runtime |
 | **Django** | 4.2 LTS / 5.x | Framework web |
 | **Waitress** | 2.x | Servidor WSGI |
 | **APScheduler** | 3.10+ | Scheduler |
@@ -226,17 +241,21 @@ _legacy/
 
 | Base | Versión | Rol |
 |--------|----------|------|
-| **MySQL** | 5.7+ / 8.0 | Inventario, usuarios y alertas |
+| **MySQL** | 5.7+ / 8.0 | Inventario, usuarios, alertas y backlogs |
 | **InfluxDB** | 2.9.1+ | Métricas temporales |
 | **config.toml** | N/A | Configuración runtime |
 | **system.toml** | N/A | Bootstrap Django |
+
+Django soporta de forma nativa otros motores de BD como PostgreSQL o SQLite. La configuración por defecto del proyecto está optimizada para MySQL, que es el motor oficialmente probado y soportado en producción.
 
 ## Despliegue
 
 | Herramienta | Rol |
 |-------------|-----|
 | **NSSM 2.24+** | Servicios Windows |
+| **systemd** | Servicios Linux |
 | **Windows** | 10/11 o Server 2016+ |
+| **Linux** | Debian / Ubuntu / CentOS / RHEL |
 
 ---
 
@@ -331,6 +350,7 @@ El sistema ejecuta múltiples jobs concurrentes mediante APScheduler.
 - Fallback a 32 bits.
 - Detección de reboot y wrap.
 - Cálculo de utilización.
+- Envío al motor de alertas del **máximo de utilización, in_bps y out_bps** entre todas las interfaces monitoreadas.
 - Escritura en:
 
 ```text
@@ -400,10 +420,11 @@ measurement: radio
 
 ### 5. AP Clients Poller
 
-- Descubrimiento automático de clientes.
+- Descubrimiento automático de clientes (walk único del subárbol).
 - Actualización de `ap_interfaces`.
 - Almacenamiento de métricas en vivo.
 - Conservación de históricos.
+- Evaluación de alertas de conteo de clientes.
 
 Escritura:
 
@@ -417,6 +438,9 @@ measurement: ap_clients
 - Recarga de configuración TOML.
 - Reprogramación automática de jobs.
 - Reinicio de warm-up de alertas.
+- Limpieza de estados huérfanos del motor de alertas.
+- Limpieza de contadores de tráfico huérfanos.
+- Limpieza de cooldowns de Telegram huérfanos.
 
 ### 7. Backup automático
 
@@ -433,8 +457,16 @@ Características:
 - Programación mediante `CronTrigger`.
 - Recuperación de ejecuciones perdidas.
 - Integración con panel de mantenimiento.
+- Kill del subprocess si el dump excede el timeout.
+
+### 8. Discovery periódico
+
+- Programado semanalmente (domingo 04:00 hora local).
+- Ejecuta discovery de interfaces y clientes AP sobre todos los equipos activos.
+- Complementa el discovery manual y el que corre al arrancar el monitor.
 
 ---
+
 # 🗺️ Diagramas de flujo por apartado
 
 ## 📦 Flujo — Equipos
@@ -481,14 +513,15 @@ Características:
 │    • Traffic                           │
 │    • Health                            │
 │    • ICMP/TCP                          │
-│    • RF                               │
+│    • RF                                │
 └────────────────────┬───────────────────┘
                      │
                      ▼
 ┌────────────────────────────────────────┐
 │ 6. Evaluación de alertas               │
+│    • Bloque de disparo                 │
+│    • Bloque de auto-resolución         │
 │    • Telegram                          │
-│    • Auto resolución                   │
 └────────────────────────────────────────┘
 ```
 
@@ -557,13 +590,14 @@ Características:
 
 ---
 
-## 🚨 Flujo — Alertas (Consumo)
+## 🚨 Flujo — Alertas v4 (disparo + auto-resolución)
 
 ```text
 Traffic Poller
 Health Poller
 ICMP/TCP Poller
 Radio Poller
+AP Clients Poller
         │
         ▼
 ┌──────────────────────────────┐
@@ -573,35 +607,44 @@ Radio Poller
                ▼
 ┌──────────────────────────────┐
 │ Buscar reglas relacionadas   │
+│ (índice by_device_metric)    │
 └──────────────┬───────────────┘
                │
                ▼
 ┌──────────────────────────────┐
-│ Evaluar grupos               │
+│ Evaluar bloque de DISPARO    │
 │ AND / OR / XOR / NOT         │
 └──────────────┬───────────────┘
                │
                ▼
-       ¿Condición válida?
+       ¿Disparo se cumple?
           │         │
          Sí         No
           │         │
           ▼         ▼
-   ¿fire_once?   Resolver
-          │       alertas
-          ▼
-¿Ya fue disparada?
-     │       │
-    Sí      No
-     │       │
-   Skip      ▼
-        Crear alerta
-              │
-              ▼
-     ¿Telegram activo?
-              │
-              ▼
-         send_alert()
+   ¿fire_once?   ¿enable_auto_resolve
+   ¿mark_resolved?  Y condicionales?
+   ¿duplicado?       │
+     │       │      Sí ──► Evaluar bloque AUTO
+    Sí      No       │      ────────────
+     │       │       │      ¿Se cumple?
+   Skip      ▼       │         │       │
+        Crear alerta │        Sí       No
+        (activa o    │         │       │
+         resuelta)   │         ▼       ▼
+              │      │     Resolver  No resolver
+              ▼      │     alertas   (queda activa)
+        ¿Telegram?   │
+              │      │
+              ▼      │
+        send_alert() │
+        (cooldown    │
+        persistente) │
+                     │
+                     ▼
+               Comportamiento clásico:
+               resolver cuando el disparo
+               deja de cumplirse
 ```
 
 ---
@@ -616,25 +659,28 @@ Identificación
 (nombre, prioridad)
      │
      ▼
-Abrir constructor
-de condiciones
+Configurar bloque de DISPARO (obligatorio)
+(grupos + condicionales)
      │
      ▼
-Añadir grupos
-(1 a 5)
+¿Activar auto-resolución?
+     │
+     ├─ No  ──► Comportamiento clásico
+     │
+     └─ Sí ──► Configurar bloque de AUTO-RESOLUCIÓN (opcional)
+                (grupos + condicionales)
      │
      ▼
-Añadir condiciones
-(1 a 5 por grupo)
+Configurar mensaje personalizado (opcional)
      │
      ▼
-Validar límites
+Configurar Telegram (opcional)
      │
      ▼
-Generar JSON v2
-     │
-     ▼
-Configurar Telegram
+Seleccionar flags:
+  • fire_once
+  • skip_on_startup
+  • mark_as_resolved
      │
      ▼
 Guardar regla
@@ -760,8 +806,10 @@ Aplicar retención
 ```text
 comfutech-monitor/
 │
+├── instalador.bat                    # Instalador Windows (raíz)
+├── instalador.sh                     # Instalador Linux (raíz)
 ├── manage.py
-├── requirements.txt
+├── requeriments.txt
 ├── README.md
 │
 ├── system.toml
@@ -769,6 +817,34 @@ comfutech-monitor/
 │
 ├── config.toml
 ├── config.toml.example
+│
+├── bin/                              # Creado por el instalador
+│   ├── python_local/                 # venv
+│   │   ├── Scripts/python.exe        # (Windows)
+│   │   └── bin/python                # (Linux)
+│   └── nssm/                         # (Solo Windows)
+│       └── win64/nssm.exe
+│
+├── scripts/
+│   ├── _detect_venv.bat              # Windows
+│   ├── install_services.bat
+│   ├── deploy.bat
+│   ├── restart_services.bat
+│   ├── run_django.bat
+│   ├── run_monitor.bat
+│   ├── uninstall_services.bat
+│   ├── view_logs.bat
+│   ├── validate_radio_oids.py
+│   │
+│   └── linux/                        # Equivalentes Linux
+│       ├── _detect_venv.sh
+│       ├── install_services.sh
+│       ├── deploy.sh
+│       ├── restart_services.sh
+│       ├── run_django.sh
+│       ├── run_monitor.sh
+│       ├── uninstall_services.sh
+│       └── view_logs.sh
 │
 ├── sistema/
 ├── core/
@@ -782,9 +858,6 @@ comfutech-monitor/
 ├── docs/
 ├── logs/
 ├── backup/
-├── scripts/
-│
-└── python_local/
 ```
 
 ---
@@ -796,11 +869,13 @@ comfutech-monitor/
 | Software | Versión |
 |-----------|----------|
 | Windows | 10 / 11 / Server 2016+ |
+| Linux | Debian / Ubuntu / CentOS / RHEL |
 | Python | 3.11+ |
 | MySQL | 5.7+ / 8.0 |
 | InfluxDB | 2.9.1+ |
 | Grafana | 9.x+ |
-| NSSM | 2.24+ |
+| NSSM (Windows) | 2.24+ (descargado por `instalador.bat`) |
+| systemd (Linux) | Cualquier versión estándar |
 
 ## Cuentas externas
 
@@ -811,32 +886,97 @@ comfutech-monitor/
 
 ---
 
-# 🚀 Instalación paso a paso
+# 🚀 Instalación automática (Windows y Linux)
+
+## Windows
+
+1. Descargar o clonar el proyecto.
+2. Abrir la carpeta raíz del proyecto.
+3. **Clic derecho → Ejecutar como administrador** sobre `instalador.bat`.
+
+El script realiza automáticamente:
+
+1. Verificación de permisos de administrador.
+2. Detección de Python (si no está, descarga e instala Python 3.15.1).
+3. Creación del entorno virtual en `bin/python_local`.
+4. Instalación de dependencias desde `requeriments.txt`.
+5. Descarga de NSSM a `bin/nssm/win64/nssm.exe`.
+6. Instalación de los servicios `ComfutechDjango` y `ComfutechMonitor`.
+
+## Linux
+
+```bash
+chmod +x instalador.sh
+chmod +x scripts/linux/*.sh
+sudo ./instalador.sh
+```
+
+El script realiza automáticamente:
+
+1. Verificación de permisos de root.
+2. Detección de Python 3.11+ (si no está, ofrece compilar Python 3.15.1 desde fuente).
+3. Creación del entorno virtual en `bin/python_local`.
+4. Instalación de dependencias desde `requeriments.txt`.
+5. Creación de los servicios systemd `ComfutechDjango` y `ComfutechMonitor`.
+
+## Post-instalación
+
+Editar los archivos `config.toml` y `system.toml` con las credenciales reales:
+
+```bash
+# Windows
+notepad config.toml
+notepad system.toml
+
+# Linux
+nano config.toml
+nano system.toml
+```
+
+Luego ejecutar las migraciones iniciales:
+
+```bash
+# Windows
+scripts\deploy.bat
+
+# Linux
+sudo scripts/linux/deploy.sh
+```
+
+Acceder al sistema:
+
+```text
+http://localhost:8000/
+```
+
+---
+
+# 🚀 Instalación manual paso a paso
 
 ## 1. Clonar proyecto
 
 ```cmd
-cd C:\Users\TuUsuario\Desktop
-
 git clone <url-del-repo> comfutech-monitor
-
 cd comfutech-monitor
 ```
 
 ## 2. Crear entorno virtual
 
 ```cmd
-python -m venv python_local
+# Windows
+py -m venv bin\python_local
+bin\python_local\Scripts\activate
 
-python_local\Scripts\activate
+# Linux
+python3 -m venv bin/python_local
+source bin/python_local/bin/activate
 ```
 
 ## 3. Instalar dependencias
 
 ```cmd
 python -m pip install --upgrade pip
-
-pip install -r requirements.txt
+pip install -r requeriments.txt
 ```
 
 ## 4. Crear base de datos
@@ -862,7 +1002,6 @@ FLUSH PRIVILEGES;
 
 ```cmd
 copy system.toml.example system.toml
-
 notepad system.toml
 ```
 
@@ -884,7 +1023,6 @@ port = 3306
 
 ```cmd
 copy config.toml.example config.toml
-
 notepad config.toml
 ```
 
@@ -894,7 +1032,6 @@ notepad config.toml
 
 ```cmd
 icacls system.toml /inheritance:r /grant:r "%USERNAME%:F"
-
 icacls config.toml /inheritance:r /grant:r "%USERNAME%:F"
 ```
 
@@ -959,6 +1096,7 @@ python manage.py migrate_config_to_toml --backup-bd
 ```
 
 ---
+
 # ⚙️ Configuración (TOML)
 
 ## Filosofía de configuración
@@ -1008,21 +1146,6 @@ Contiene:
 
 ---
 
-## Ejemplos válidos
-
-```toml
-[influxdb]
-token = "abc123=="
-
-[email]
-host_password = "abcd abcd abcd abcd"
-
-[django]
-secret_key = "MiPassword#2026"
-```
-
----
-
 ## Estructura completa de config.toml
 
 ```toml
@@ -1069,7 +1192,7 @@ backup_db = true
 backup_config = true
 
 retention_days = 30
-mysql_dump_path = ""
+dump_tool_path = ""
 
 [_meta]
 updated_at = ""
@@ -1202,6 +1325,7 @@ Interfaces
 Alertas
 Configuración histórica
 Monitor
+Cooldowns de Telegram
 ```
 
 ### InfluxDB
@@ -1308,7 +1432,10 @@ monitored
 name
 description
 
-conditionals
+conditionals                    # JSON v2 (bloque de DISPARO)
+auto_resolve_conditionals       # JSON v2 (bloque de AUTO-RESOLUCIÓN)
+enable_auto_resolve             # bool
+mark_as_resolved                # bool
 
 severity
 custom_message
@@ -1322,17 +1449,14 @@ skip_on_startup
 enabled
 ```
 
-#### alerts
+#### alerts (sin ForeignKeys)
 
 ```text
-device_id
-interface_id
-
-rule_id
+rule_id                         # IntegerField indexado (no FK)
+rule_name                       # CharField (snapshot)
 
 alert_type
 severity
-
 message
 
 value_observed
@@ -1343,6 +1467,14 @@ status
 created_at
 resolved_at
 ```
+
+**Índice único condicional:**
+
+```sql
+UNIQUE (rule_id) WHERE status = 'activa'
+```
+
+Garantiza que no exista más de una alerta activa por regla.
 
 ---
 
@@ -1404,7 +1536,8 @@ last_icmp_run
 last_radio_run
 last_ap_clients_run
 
-last_error
+last_errors                     # JSON {poller: {msg, ts}}
+last_error                      # Deprecado (compatibilidad)
 ```
 
 #### discovery_jobs
@@ -1425,6 +1558,15 @@ error_message
 
 triggered_by_id
 ```
+
+#### telegram_cooldowns
+
+```text
+key                             # "rule:<id>" o "rule:<id>:device:<id>"
+last_sent_at
+```
+
+Persiste el cooldown de Telegram entre reinicios del monitor.
 
 ---
 
@@ -1626,7 +1768,7 @@ if_index
 
 | Servicio | Archivo | Función |
 |-----------|----------|----------|
-| Cliente SNMP | `snmp_client.py` | Wrapper pysnmp |
+| Cliente SNMP | `snmp_client.py` | Wrapper pysnmp con engine por thread |
 | Discovery | `discovery.py` | Descubrimiento SNMP |
 | Traffic | `traffic.py` | Tráfico de interfaces |
 | Health | `health.py` | Métricas de chasis |
@@ -1634,8 +1776,8 @@ if_index
 | Radio | `radio.py` | Métricas RF |
 | AP Clients | `ap_clients.py` | Clientes inalámbricos |
 | Alerts | `alerts.py` | Motor de alertas |
-| Telegram | `telegram.py` | Notificaciones |
-| Influx Writer | `influx_writer.py` | Escritura |
+| Telegram | `telegram.py` | Notificaciones con cooldown persistente |
+| Influx Writer | `influx_writer.py` | Escritura batch por thread |
 | Influx Reader | `influx_reader.py` | Consultas |
 
 ---
@@ -1672,13 +1814,9 @@ Específica:
 
 ```bash
 python manage.py poll_once --only traffic
-
 python manage.py poll_once --only health
-
 python manage.py poll_once --only icmp
-
 python manage.py poll_once --only radio
-
 python manage.py poll_once --only ap_clients
 ```
 
@@ -1688,13 +1826,9 @@ python manage.py poll_once --only ap_clients
 
 ```bash
 python manage.py poll_snmp
-
 python manage.py poll_health
-
 python manage.py poll_icmp
-
 python manage.py poll_radio
-
 python manage.py poll_ap_clients
 ```
 
@@ -1704,7 +1838,6 @@ python manage.py poll_ap_clients
 
 ```bash
 python manage.py validate_radio_oids <IP>
-
 python manage.py validate_ap_clients <IP>
 ```
 
@@ -1714,16 +1847,15 @@ python manage.py validate_ap_clients <IP>
 
 ```bash
 python manage.py setup_roles
-
 python manage.py load_device_models
-
 python manage.py migrate_config_to_toml --backup-bd
 ```
 
 ---
-# 🚨 Sistema de alertas v2 (Grupos + Operadores)
 
-## Estructura JSON
+# 🚨 Sistema de alertas v4 (Grupos + Auto-resolución)
+
+## Estructura JSON — Bloque de DISPARO
 
 Cada regla puede contener:
 
@@ -1783,6 +1915,39 @@ Semántica:
 ```text
 (cond1 AND cond2) OR NOT(cond3)
 ```
+
+---
+
+## Estructura JSON — Bloque de AUTO-RESOLUCIÓN
+
+Idéntica estructura. Almacenada en `auto_resolve_conditionals`.
+
+Ejemplo (histéresis de CPU):
+
+```json
+{
+  "version": 2,
+  "groups": [
+    {
+      "logic": null,
+      "negate": false,
+      "operators": ["AND"],
+      "conditionals": [
+        {
+          "device_id": 1,
+          "metric": "cpu_pct",
+          "operator": "lte",
+          "threshold": 70,
+          "duration_sec": 120,
+          "negate": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+Solo se evalúa si `enable_auto_resolve = true` y el bloque tiene al menos un condicional. En caso contrario, se aplica el comportamiento clásico: resolver cuando el bloque de disparo deje de cumplirse.
 
 ---
 
@@ -1860,6 +2025,16 @@ wl_rx_rate
 
 airmax_quality
 airmax_capacity
+
+radio_freq
+radio_txpower
+chan_width
+```
+
+### Clientes AP
+
+```text
+ap_client_count
 ```
 
 ---
@@ -1868,9 +2043,7 @@ airmax_capacity
 
 ```text
 {rule_name}
-
 {severity}
-
 {timestamp}
 
 {conditionals_count}
@@ -1891,16 +2064,27 @@ airmax_capacity
 
 ---
 
+## Flags por regla
+
+- **`fire_once`**: la regla dispara una sola vez por periodo de violación.
+- **`skip_on_startup`**: no se evalúa durante el warm-up (120 s).
+- **`mark_as_resolved`**: las alertas se crean ya en estado "resuelta". Se deduplican como `fire_once`.
+
+---
+
 ## Máquina de estados
 
 ```python
 _cond_states[
-    (rule_id, group_index, cond_index)
+    (state_prefix, rule_id, group_index, cond_index)
 ] = {
     "first_seen": timestamp,
+    "last_seen": timestamp,
     "last_value": float
 }
 ```
+
+`state_prefix` distingue entre `"trigger"` (bloque de disparo) y `"auto"` (bloque de auto-resolución).
 
 ---
 
@@ -1931,14 +2115,34 @@ NO se evalúan
 
 ## Auto-resolución
 
+Existen dos modos:
+
+### Modo clásico
+
 ```text
-Condición TRUE
+Condición de DISPARO TRUE
       │
       ▼
 Alerta activa
       │
       ▼
-Condición deja de cumplirse
+Condición de DISPARO deja de cumplirse
+      │
+      ▼
+Alerta resuelta automáticamente
+```
+
+### Modo avanzado (v4)
+
+```text
+Condición de DISPARO TRUE
+      │
+      ▼
+Alerta activa
+      │
+      ▼
+Condición de AUTO-RESOLUCIÓN TRUE
+(y enable_auto_resolve = true)
       │
       ▼
 Alerta resuelta automáticamente
@@ -2237,6 +2441,12 @@ Mínimo:
 
 ---
 
+## Kill de subprocess
+
+Si `mysqldump` excede el timeout de 600 s, el subprocess se termina con `proc.kill()` antes de propagar la excepción. Esto evita procesos huérfanos consumiendo CPU y disco.
+
+---
+
 ## Restauración
 
 ### Base de datos
@@ -2323,38 +2533,28 @@ Alert
 AlertRule
 ```
 
----
-
 ### Core
 
 ```text
 EmailVerification
-
 PasswordResetCode
-
 PasswordResetAttempt
 ```
-
----
 
 ### Inventario
 
 ```text
 DeviceModel
-
 Device
-
 Interface
 ```
-
----
 
 ### Monitoreo
 
 ```text
 DiscoveryJob
-
 MonitorStatus
+TelegramCooldown
 ```
 
 ---
@@ -2460,9 +2660,7 @@ Modos:
 
 ```text
 Claro
-
 Oscuro
-
 Automático
 ```
 
@@ -2523,29 +2721,20 @@ registerHelpContent({
 
 ```text
 Dashboard
-
 Equipos
-
 Modelos
-
 Interfaces
-
 Alertas
-
 Reglas
-
 Usuarios
-
 Perfil
-
 Monitor
-
 Configuración
-
 Mantenimiento
 ```
 
 ---
+
 # 🔌 Integraciones externas
 
 ## InfluxDB 2.9
@@ -2556,6 +2745,7 @@ Mantenimiento
 - Series temporales.
 - Retención de 90 días.
 - Fuente de datos para Grafana.
+- Escritura en batch (buffer por thread).
 
 ### Configuración
 
@@ -2577,6 +2767,8 @@ Timeout: 5 segundos
 Reconexión automática
 
 Recarga dinámica al cambiar config.toml
+
+Buffer por thread (flush al final de cada ciclo)
 ```
 
 ---
@@ -2632,6 +2824,8 @@ Notificaciones de alertas
 Respuestas automáticas
 
 Pruebas desde UI
+
+Cooldown persistente (tabla telegram_cooldowns)
 ```
 
 ### Configuración
@@ -2650,7 +2844,7 @@ chat_id = "-1000000000"
 ```text
 Mensajes HTML
 
-Cooldown configurable
+Cooldown configurable (persistente entre reinicios)
 
 Pruebas desde configuración
 
@@ -2664,6 +2858,9 @@ Alerta
    │
    ▼
 Motor Alertas
+   │
+   ▼
+Cooldown persistente
    │
    ▼
 Telegram
@@ -2717,7 +2914,7 @@ Notificaciones futuras
 
 # 👥 Roles y permisos
 
-## Roles ofíciales
+## Roles oficiales
 
 | Rol | is_superuser | is_staff | Grupo |
 |-------|-------------|-----------|--------|
@@ -2762,7 +2959,7 @@ Usuario
 
 # 🚀 Despliegue en producción
 
-## Arquitectura recomendada
+## Arquitectura recomendada (Windows)
 
 ```text
                 Internet
@@ -2793,19 +2990,52 @@ ComfutechDjango            ComfutechMonitor
            Grafana
 ```
 
+## Arquitectura recomendada (Linux)
+
+```text
+                Internet
+                    │
+                    ▼
+
+              Linux Server
+
+                    │
+
+     ┌──────────────┼──────────────┐
+
+     ▼                             ▼
+
+ComfutechDjango            ComfutechMonitor
+ (systemd + Waitress)       (systemd + Scheduler)
+
+     ▼                             ▼
+
+              MySQL
+
+     ▼                             ▼
+
+           InfluxDB
+
+     ▼
+
+           Grafana
+```
+
 ---
 
 ## Servicios Windows
 
-Instalación:
+Instalación automática:
 
 ```cmd
-cd scripts
-
-install_services.bat
+instalador.bat
 ```
 
----
+o manual:
+
+```cmd
+scripts\install_services.bat
+```
 
 ### ComfutechDjango
 
@@ -2822,8 +3052,6 @@ Puerto:
 8000
 ```
 
----
-
 ### ComfutechMonitor
 
 Ejecuta:
@@ -2834,7 +3062,46 @@ python manage.py run_monitor --silent
 
 ---
 
-## Verificación
+## Servicios Linux
+
+Instalación automática:
+
+```bash
+sudo ./instalador.sh
+```
+
+o manual:
+
+```bash
+sudo scripts/linux/install_services.sh
+```
+
+### ComfutechDjango
+
+Ejecuta:
+
+```text
+Waitress
+Django
+```
+
+Puerto:
+
+```text
+8000
+```
+
+### ComfutechMonitor
+
+Ejecuta:
+
+```bash
+python manage.py run_monitor
+```
+
+---
+
+## Verificación (Windows)
 
 ### Estado del servicio web
 
@@ -2847,8 +3114,6 @@ Resultado esperado:
 ```text
 SERVICE_RUNNING
 ```
-
----
 
 ### Estado del monitor
 
@@ -2864,10 +3129,40 @@ SERVICE_RUNNING
 
 ---
 
+## Verificación (Linux)
+
+### Estado del servicio web
+
+```bash
+systemctl status ComfutechDjango
+```
+
+Resultado esperado:
+
+```text
+Active: active (running)
+```
+
+### Estado del monitor
+
+```bash
+systemctl status ComfutechMonitor
+```
+
+Resultado esperado:
+
+```text
+Active: active (running)
+```
+
+---
+
 ## Actualización completa
 
+### Windows
+
 ```cmd
-deploy.bat
+scripts\deploy.bat
 ```
 
 Proceso:
@@ -2881,6 +3176,14 @@ Reinicio de servicios
 
 Validaciones
 ```
+
+### Linux
+
+```bash
+sudo scripts/linux/deploy.sh
+```
+
+Proceso idéntico.
 
 ---
 
@@ -2982,6 +3285,8 @@ python manage.py shell
 
 ## Logs
 
+### Windows
+
 Ubicación:
 
 ```text
@@ -3001,6 +3306,15 @@ Implementación:
 ```python
 RotatingFileHandler
 ```
+
+### Linux
+
+```bash
+journalctl -u ComfutechDjango -f
+journalctl -u ComfutechMonitor -f
+```
+
+Además de `logs/` (que también se escribe en Linux).
 
 ---
 
@@ -3034,6 +3348,8 @@ APScheduler
 
 ## El monitor no arranca
 
+### Windows
+
 Verificar:
 
 ```cmd
@@ -3045,6 +3361,22 @@ Comprobar:
 ```text
 logs/monitor_err.log
 ```
+
+### Linux
+
+Verificar:
+
+```bash
+systemctl status ComfutechMonitor
+```
+
+Comprobar:
+
+```bash
+journalctl -u ComfutechMonitor -n 50
+```
+
+### Ambos
 
 Validar:
 
@@ -3070,6 +3402,8 @@ Bot dentro del grupo
 Chat ID válido
 
 Token correcto
+
+Cooldown activo (tabla telegram_cooldowns)
 ```
 
 Realizar:
@@ -3103,6 +3437,31 @@ El warm-up terminó
 ```text
 fire_once no bloquea eventos
 ```
+
+```text
+mark_as_resolved no está activo en reglas informativas
+```
+
+---
+
+## Las alertas no se auto-resuelven
+
+Verificar:
+
+```text
+enable_auto_resolve = true
+```
+
+```text
+auto_resolve_conditionals tiene al menos 1 condicional
+```
+
+```text
+La duración del condicional de auto-resolución no es mayor
+que el tiempo que la condición se mantiene
+```
+
+Si no hay auto-resolución configurada, el sistema resuelve cuando el disparo deja de cumplirse.
 
 ---
 
@@ -3182,6 +3541,24 @@ retention_days
 
 o eliminar backups viejos.
 
+Si el dump excede 600 s, el subprocess se mata automáticamente con `proc.kill()`. Revisa el log para confirmar.
+
+---
+
+## El monitor y el servidor Django no arrancan juntos
+
+Verificar:
+
+```text
+Uso de MySQL (motor oficial)
+
+Límite de conexiones de MySQL (max_connections)
+
+Conexiones concurrentes de Waitress + APScheduler
+```
+
+El sistema está diseñado para ejecutarse con MySQL como motor principal.
+
 ---
 
 # 📚 Glosario
@@ -3203,10 +3580,94 @@ o eliminar backups viejos.
 | ifIndex | Índice único de interfaz SNMP |
 | Counter Wrap | Desbordamiento de contador |
 | NSSM | Non-Sucking Service Manager |
+| systemd | Gestor de servicios de Linux |
+| SnmpEngine | Objeto pysnmp reutilizable por thread |
+| Buffer batch | Acumulación de puntos antes de escribir a InfluxDB |
+| Auto-resolución | Resolución automática de alertas por condicionales |
+| `rule_id` | Identificador plano de la regla en la alerta (sin FK) |
+| `rule_name` | Snapshot del nombre de la regla al disparar la alerta |
 
 ---
 
 # 📝 Changelog
+
+## v3.4 — Noviembre 2026
+
+### Alertas v4
+
+- Nuevo bloque de condicionales de **auto-resolución** (`auto_resolve_conditionals`).
+- Nuevo flag **`enable_auto_resolve`** para habilitar la auto-resolución por condicionales.
+- Nuevo flag **`mark_as_resolved`** para crear alertas ya resueltas (útil para Info).
+- Modelo `Alert` **desacoplado de ForeignKeys**: ahora guarda `rule_id` (IntegerField) y `rule_name` (snapshot).
+- **`UniqueConstraint`** en `Alert` que garantiza una sola alerta activa por regla.
+- El motor de alertas maneja `IntegrityError` por concurrencia entre pollers.
+- `value_observed` se toma del **primer condicional que efectivamente disparó** (no del primero de la lista).
+
+### Nuevas métricas en el motor
+
+- Tráfico: `in_bps`, `out_bps` (máximo entre interfaces del equipo).
+- Chasis: `uptime`.
+- RF: `radio_freq`, `radio_txpower`, `chan_width`.
+- Clientes AP: `ap_client_count`.
+
+### Cambios en el motor de monitoreo
+
+- **`SnmpEngine` por thread** (reutilizado). Reduce de ~220 engines nuevos por ciclo a 1 por thread.
+- **Buffer batch en InfluxDB** (un flush por ciclo). Reduce de ~430 requests HTTP a ~5 por ciclo.
+- **Walk único** de `ubntWlStatTable` en AP clients (de 198 walks a 22).
+- **Arranque escalonado** de pollers (30 s entre cada uno).
+- **`close_old_connections()`** en todos los jobs del scheduler.
+- **`influx_writer.flush()`** en el `finally` de cada job y en los comandos CLI.
+- **Cleanup de `_prev_counters`** huérfanos (desde heartbeat).
+- **Cleanup de `TelegramCooldown`** huérfanos (desde heartbeat).
+- **Cleanup de `_cond_states`** huérfanos (desde heartbeat).
+- **Discovery periódico** semanal (domingo 04:00 hora local).
+
+### Cooldown de Telegram persistente
+
+- Nueva tabla `telegram_cooldowns` que sobrevive a reinicios del monitor.
+- El cooldown se aplica por `rule:<rule_id>` (o por `rule:<rule_id>:device:<device_id>` si se pasa device).
+
+### MonitorStatus
+
+- Nuevo campo `last_errors` (JSONField) con el último error por poller.
+- Campo `last_error` marcado como **deprecado** (se conserva por compatibilidad).
+
+### Backups
+
+- `proc.kill()` en `TimeoutExpired` de `mysqldump` y `pg_dump`. El subprocess ya no queda huérfano.
+
+### Scripts e instalación
+
+- Nuevo **`instalador.bat`** en la raíz del proyecto (Windows): detecta/instala Python 3.15.1, crea el venv en `bin/python_local`, instala dependencias, descarga NSSM a `bin/nssm/win64/` e instala los servicios.
+- Nuevo **`instalador.sh`** en la raíz del proyecto (Linux): detecta/compila Python 3.15.1, crea el venv en `bin/python_local`, instala dependencias e instala servicios systemd.
+- Nuevos scripts equivalentes en **`scripts/linux/`**: `_detect_venv.sh`, `install_services.sh`, `deploy.sh`, `restart_services.sh`, `run_django.sh`, `run_monitor.sh`, `uninstall_services.sh`, `view_logs.sh`.
+- `scripts/_detect_venv.bat` ahora busca el venv en `bin\python_local`.
+- `scripts/install_services.bat` ahora usa `bin\nssm\win64\nssm.exe` si existe.
+- `requirements.txt` renombrado a **`requeriments.txt`**.
+
+### Cambios en la UI
+
+- `alert_list.html`: columna "Equipo" reemplazada por "Regla de alerta".
+- `rule_form.html`: nuevo bloque "Condicionales para resolver la Alerta" con editor reutilizado.
+- `rule_list.html`: badges de auto-resolve y `mark_as_resolved`.
+- `device_detail.html`: bloque "Alertas recientes" reemplazado por "Reglas de alertas vinculadas".
+- `dashboard.html`: los toasts y la lista de alertas recientes muestran `rule_name` en lugar de `device`.
+- `monitor_status.html`: errores por poller en `last_errors`.
+
+### Métricas del dashboard
+
+- `recent_alerts_api` incluye `rule_id` y `rule_name` (no `device`).
+
+### Configuración
+
+- `config.toml` y `system.toml` sin cambios estructurales.
+- La migración `0005_unlink_alerts_and_add_auto_resolve` desacopla `Alert`.
+- La migración `0006_add_unique_active_alert_constraint` añade el constraint.
+- La migración `0002_monitorstatus_last_errors` añade `last_errors`.
+- La migración `0003_telegramcooldown` añade la tabla de cooldowns.
+
+---
 
 ## v3.0 — Octubre 2026
 
@@ -3224,11 +3685,8 @@ Eliminados:
 
 ```text
 SystemConfig
-
 EmailConfig
 ```
-
----
 
 ### Nueva aplicación mantenimiento
 
@@ -3246,8 +3704,6 @@ Restauración
 Integración con APScheduler
 ```
 
----
-
 ### Restauración de Django Admin
 
 Características:
@@ -3261,8 +3717,6 @@ Registro completo de modelos
 
 Disponible en producción
 ```
-
----
 
 ### Alertas v2
 
@@ -3280,8 +3734,6 @@ Editor visual
 Migración automática
 ```
 
----
-
 ### Nuevos Pollers
 
 ```text
@@ -3289,8 +3741,6 @@ Radio
 
 Clientes AP
 ```
-
----
 
 ### Dashboard
 
@@ -3306,8 +3756,6 @@ Discovery rápido
 Interfaz destacada
 ```
 
----
-
 ### Sistema de ayuda
 
 ```text
@@ -3318,8 +3766,6 @@ Shift + ?
 registerHelpContent()
 ```
 
----
-
 ### Breadcrumbs
 
 ```text
@@ -3329,8 +3775,6 @@ Mapping centralizado
 
 Enriquecimiento automático
 ```
-
----
 
 ### Mejoras UI
 
@@ -3347,8 +3791,6 @@ Equipos
 
 Modelos
 ```
-
----
 
 ### Correcciones
 
@@ -3430,21 +3872,28 @@ Venezuela
 
 # 🔗 Enlaces de interés
 
-- Django Documentation
-- PySNMP Documentation
-- InfluxDB Documentation
-- Dynaconf Documentation
-- TOML Specification
-- Grafana Documentation
-- APScheduler Documentation
-- NSSM Documentation
-- Telegram Bot API
+- **Django Documentation**: https://docs.djangoproject.com/
+- **PySNMP Documentation**: https://docs.lextudio.com/pysnmp/
+- **InfluxDB Documentation**: https://docs.influxdata.com/influxdb/v2/
+- **Dynaconf Documentation**: https://www.dynaconf.com/
+- **TOML Specification**: https://toml.io/
+- **Grafana Documentation**: https://grafana.com/docs/
+- **APScheduler Documentation**: https://apscheduler.readthedocs.io/
+- **NSSM (Windows)**: https://nssm.cc/
+- **systemd Documentation**: https://www.freedesktop.org/software/systemd/man/
+- **Telegram Bot API**: https://core.telegram.org/bots/api
+- **Python Official**: https://www.python.org/
+- **Python 3.15.1 Downloads**: https://www.python.org/downloads/release/python-3151/
+- **MySQL Documentation**: https://dev.mysql.com/doc/
+- **Waitress Documentation**: https://docs.pylonsproject.org/projects/waitress/
+- **Bootstrap 5.3**: https://getbootstrap.com/docs/5.3/
+- **Bootstrap Icons**: https://icons.getbootstrap.com/
 
 ---
 
-**Última actualización:** Octubre 2026
+**Última actualización:** Noviembre 2026
 
-**Versión del sistema:** 3.0
+**Versión del sistema:** 3.4
 
 **Estado:** Producción
 
@@ -3454,16 +3903,30 @@ Venezuela
 
 | Sección | Cambio |
 |----------|---------|
-| Versión | 2.0 → 3.0 |
-| Stack | Dynaconf + tomlkit |
-| Arquitectura | TOML + backups |
-| Diagramas | Nuevos diagramas ASCII |
-| Alertas | Sistema v2 por grupos |
-| Mantenimiento | Nueva aplicación |
-| Django Admin | Restaurado |
-| Usuarios | Mejoras y estadísticas |
-| Configuración | Migración a TOML |
-| Glosario | Nuevos conceptos |
-| Changelog | Actualizado a v3.0 |
+| Versión | 3.0 → 3.4 |
+| Historia | Añadidas v3.1, v3.2, v3.3, v3.4 |
+| Arquitectura | `bin/python_local`, `bin/nssm`, `TelegramCooldown`, jobs adicionales |
+| Stack | Python 3.15.1, Linux (systemd), NSSM como binario local |
+| Características | Auto-resolución, `mark_as_resolved`, métricas nuevas |
+| Diagramas | Flujo de alertas v4 con auto-resolución |
+| Estructura | `bin/`, `instalador.bat`, `instalador.sh`, `scripts/linux/` |
+| Instalación | Nueva sección "Instalación automática" (Windows + Linux) |
+| Base de datos | Alertas sin FK, `telegram_cooldowns`, `last_errors` |
+| Motor | SnmpEngine por thread, buffer batch, walk único AP, discovery semanal |
+| Alertas | v4 con auto-resolución y métricas extendidas |
+| Integraciones | Cooldown persistente de Telegram |
+| Despliegue | Windows (NSSM) y Linux (systemd) |
+| Glosario | `SnmpEngine`, `buffer batch`, `auto-resolución`, `rule_id` snapshot |
+| Changelog | Añadida entrada v3.4 completa |
+| Enlaces de interés | URLs reales corregidas y ampliadas |
+```
 
 ---
+
+**Notas sobre esta versión del README:**
+
+- **MySQL como motor principal:** se ha eliminado toda mención a PostgreSQL en la instalación y configuración. Solo se mantiene una nota breve aclarando que Django soporta otros motores de forma nativa, sin detallar ajustes específicos.
+- **Enlaces de interés corregidos:** se han añadido URLs reales para todos los enlaces que faltaban, incluyendo Python 3.15.1, Waitress, systemd, Bootstrap 5.3 y Bootstrap Icons.
+- **Versión 3.4** declarada en el header, en la historia y en el changelog.
+- **Estructura actualizada:** refleja `bin/python_local`, `bin/nssm`, `instalador.bat`, `instalador.sh` y `scripts/linux/`.
+- **Todos los cambios del chat** (Alert v4 sin FKs, auto-resolución, métricas nuevas, optimizaciones, cooldown persistente, backups con kill, instaladores multiplataforma) están documentados.

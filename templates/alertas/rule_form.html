@@ -684,6 +684,9 @@
 registerHelpContent({
     title: "Configurar Regla de Alerta — Guía",
     sections: [
+        // ============================================================
+        // 1. INTRODUCCIÓN
+        // ============================================================
         {
             heading: "¿Qué es una regla de alerta?",
             body: `
@@ -692,81 +695,52 @@ registerHelpContent({
                 condiciones durante el tiempo configurado, se genera una
                 alerta y (opcionalmente) se notifica por Telegram.
                 <br><br>
-                A partir de la v4, una regla tiene <strong>dos bloques</strong>
-                de condicionales:
+                Cada regla tiene <strong>dos bloques</strong> de condicionales:
                 <br>
                 • <strong>Disparo</strong> (obligatorio) — cuándo crear la alerta.
                 <br>
                 • <strong>Auto-resolución</strong> (opcional) — cuándo resolverla.
+                <br><br>
+                Si no configuras el bloque de auto-resolución, el sistema
+                resuelve la alerta automáticamente cuando las condiciones
+                de disparo dejen de cumplirse (comportamiento clásico).
             `
         },
         {
             heading: "Cómo crear una regla paso a paso",
             body: `
-                1. <strong>Nombre y prioridad.</strong>
+                1. <strong>Nombre y prioridad.</strong> Sé descriptivo.
                 <br>
-                2. <strong>Configurar Condicionales de Disparo</strong> (obligatorio).
+                2. <strong>Configurar Condicionales de Disparo</strong>
+                (obligatorio): pulsa el botón y añade 1-5 grupos con
+                1-5 condicionales cada uno.
                 <br>
                 3. <strong>Configurar Condicionales de Auto-resolución</strong>
-                (opcional). Si se deja vacío o deshabilitado, el sistema
-                resuelve cuando el disparo deja de cumplirse.
+                (opcional): solo si quieres que las alertas se resuelvan
+                con condiciones distintas a las de disparo (histéresis,
+                vuelta en línea, etc.).
                 <br>
-                4. <strong>Mensaje personalizado (opcional).</strong>
+                4. <strong>Mensaje personalizado</strong> (opcional): usa
+                placeholders para que la notificación sea informativa.
                 <br>
-                5. <strong>Notificación Telegram (opcional).</strong>
+                5. <strong>Notificación Telegram</strong> (opcional): activa
+                si quieres push al grupo.
                 <br>
-                6. <strong>Guardar.</strong> La regla se evalúa en el
+                6. <strong>Flags especiales</strong> (opcional):
+                <em>fire_once</em>, <em>skip_on_startup</em>, <em>mark_as_resolved</em>.
+                <br>
+                7. <strong>Guardar.</strong> La regla se evalúa en el
                 siguiente ciclo del monitor.
             `
         },
         {
-            heading: "Condicionales para disparar la Alerta",
-            body: `
-                Definen <strong>cuándo</strong> la regla dispara la alerta.
-                Son <strong>obligatorios</strong>: sin ellos la regla no
-                puede generar alertas.
-                <br><br>
-                Estructura: 1-5 grupos, cada uno con 1-5 condicionales,
-                máximo 10 condicionales totales. Cada par de condicionales
-                consecutivos tiene su propio operador (AND/OR/XOR).
-                <br><br>
-                Ver la guía completa en <em>Equipos → Reglas → Nueva regla</em>.
-            `
-        },
-        {
-            heading: "Condicionales para resolver la Alerta",
-            body: `
-                Definen <strong>cuándo</strong> se resuelven automáticamente
-                las alertas emitidas por esta regla. Son
-                <strong>opcionales</strong>.
-                <br><br>
-                <strong>Comportamiento:</strong>
-                <br>
-                • <strong>Habilitado + condicionales configurados:</strong>
-                el sistema evalúa este bloque. Si se cumple, resuelve las
-                alertas activas de la regla.
-                <br>
-                • <strong>Deshabilitado o bloque vacío:</strong> el sistema
-                aplica el comportamiento clásico — resuelve las alertas
-                cuando las condiciones de <em>disparo</em> dejen de cumplirse.
-                <br><br>
-                <strong>Casos de uso típicos:</strong>
-                <br>
-                • Disparar por <code>CPU &gt; 85%</code> y resolver por
-                <code>CPU &lt; 70%</code> (histéresis, evita parpadeo).
-                <br>
-                • Disparar por <code>device_down=0</code> y resolver por
-                <code>device_down=1</code> (vuelta en línea).
-                <br>
-                • Disparar por <code>señal &lt; -80</code> y resolver por
-                <code>señal &gt; -70</code> (con margen de histéresis).
-                <br><br>
-                <strong>Nota:</strong> si dejas este bloque vacío o
-                deshabilitado, el sistema aplica el comportamiento clásico
-                (resolver cuando el disparo deje de cumplirse). El switch
-                solo es útil si vas a configurar condiciones de auto-resolución
-                distintas a las de disparo.
-            `
+            heading: "Prioridades de las alertas",
+            body: `Hay 3 niveles de severidad:`,
+            list: [
+                "<span class='badge bg-info'>Info</span> — Informativo, no urgente.",
+                "<span class='badge bg-warning text-dark'>Advertencia</span> — Requiere atención pronto.",
+                "<span class='badge bg-danger'>Crítica</span> — Requiere atención inmediata."
+            ]
         },
         {
             heading: "Estructura de grupos y condicionales",
@@ -784,71 +758,480 @@ registerHelpContent({
                 AND/OR/XOR, evaluados de izquierda a derecha.
                 <br><br>
                 <strong>Negación (NOT):</strong> puedes negar un grupo
-                entero (checkbox <em>NOT</em> en el header del grupo) o un
-                condicional individual (checkbox <em>NOT</em> dentro del
-                condicional).
+                entero o un condicional individual.
+            `
+        },
+
+        // ============================================================
+        // 2. CONCEPTOS CLAVE ANTES DE LAS MÉTRICAS
+        // ============================================================
+        {
+            heading: "Antes de elegir una métrica: 3 reglas de oro",
+            body: `
+                Antes de configurar cualquier condicional, ten en cuenta:
+                <br><br>
+                <strong>1. La métrica debe existir para ese equipo.</strong>
+                No todas las métricas están disponibles en todos los equipos.
+                Las métricas de <em>CPU/Mem/Temp/Uptime</em> solo aplican si
+                el modelo del equipo tiene OIDs de chasis. Las de <em>RF</em>
+                solo aplican a radioenlaces. Las de <em>clientes AP</em> solo
+                a Access Points. Las de <em>tráfico</em> solo si el equipo
+                tiene interfaces monitoreadas.
+                <br><br>
+                <strong>2. La duración debe ser realista.</strong> Una métrica
+                que fluctúa mucho (CPU, señal RF) necesita una duración
+                mayor (120-300 s) para evitar falsos positivos. Una métrica
+                discreta (device_down, uptime) puede usar 30-60 s.
+                <br><br>
+                <strong>3. El umbral debe ser accionable.</strong> No alertes
+                por "CPU al 60%" si tu equipo está siempre al 60%. Configura
+                umbrales que realmente indiquen un problema.
+            `
+        },
+        {
+            heading: "Cómo leer las unidades de cada métrica",
+            body: `
+                Entender las unidades evita configurar umbrales incorrectos:
+                <br><br>
+                <strong>%</strong> (porcentaje): valores entre 0 y 100
+                (o ligeramente más en algunos casos). Ej: CPU al 85%.
+                <br>
+                <strong>ms</strong> (milisegundos): tiempo. 1 segundo = 1000 ms.
+                <br>
+                <strong>dBm</strong> (decibelios-milivatio): potencia de señal.
+                <em>Siempre es negativo</em>. Más cercano a 0 = mejor señal.
+                -40 es excelente, -80 es malo.
+                <br>
+                <strong>bps</strong> (bits por segundo): velocidad de datos.
+                1 Mbps = 1.000.000 bps. 1 Gbps = 1.000.000.000 bps.
+                <br>
+                <strong>MHz</strong> (megahercios): frecuencia de radio o
+                ancho de canal. Ej: 5800 MHz = banda de 5 GHz.
+                <br>
+                <strong>s</strong> (segundos): tiempo transcurrido. Uptime
+                de 86400 s = 1 día.
+                <br>
+                <strong>clientes</strong> (unidades): conteo. Ej: 8 clientes
+                conectados a un AP.
+            `
+        },
+
+        // ============================================================
+        // 3. MÉTRICAS DE DISPONIBILIDAD
+        // ============================================================
+        {
+            heading: "📡 Métricas de Disponibilidad",
+            body: `
+                Miden si el equipo responde a la red. Son las métricas más
+                básicas y críticas. Se obtienen vía ICMP (ping) y TCP.
+                <br><br>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-power text-danger"></i> device_down — Caída del dispositivo</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> si el equipo responde a ICMP (ping).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> booleano — <code>0</code> = caído, <code>1</code> = vivo.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>eq 0</code> con duración 120 s → <span class="badge bg-danger">Crítica</span> (equipo caído).</li>
+                        <li><code>eq 1</code> con duración 60 s + fire_once → <span class="badge bg-success">Info</span> (vuelta en línea).</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo típico:</strong> "Core Güigüe caído por más de 2 minutos".</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-stopwatch text-primary"></i> latency_ms — Latencia ICMP</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> tiempo que tarda un paquete en ir y volver (RTT).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> milisegundos (ms).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 1-20 ms (LAN), 20-80 ms (WAN normal), &gt;150 ms (degradado).</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 80</code> con duración 120 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 150</code> con duración 120 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> la latencia natural de un enlace WAN es mayor que la de LAN. No uses umbrales de LAN en WAN.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-0 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-envelope-dash text-warning"></i> packet_loss_pct — Pérdida de paquetes</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> porcentaje de paquetes ICMP que no llegan a destino.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 0% ideal, &lt;1% normal en WAN, &gt;5% problemático.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 2</code> con duración 60 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 5</code> con duración 60 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> un solo paquete perdido de 5 (20%) no significa problema. Usa duración ≥60 s para promediar.</p>
+                </div>
+            `
+        },
+
+        // ============================================================
+        // 4. MÉTRICAS DE TRÁFICO
+        // ============================================================
+        {
+            heading: "📶 Métricas de Tráfico",
+            body: `
+                Miden el volumen de datos que circula por las interfaces
+                del equipo. Se obtienen vía SNMP de los contadores de
+                octetos. Solo aplican si el equipo tiene interfaces
+                monitoreadas.
+                <br><br>
+                <div class="alert alert-info small py-2 mb-3">
+                    <i class="bi bi-info-circle"></i>
+                    Cuando una regla usa estas métricas, el sistema evalúa
+                    el <strong>máximo</strong> entre todas las interfaces
+                    monitoreadas del equipo. Así, una alerta de
+                    "utilización alta" se dispara si <em>cualquier</em>
+                    interfaz está saturada.
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-speedometer text-primary"></i> utilization_pct — Utilización de enlace</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> porcentaje de uso del enlace respecto a su capacidad.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> &lt;50% holgado, 50-70% normal, 70-85% alto, &gt;85% saturado.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 70</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 85</code> con duración 300 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> requiere que la interfaz tenga <code>if_speed_bps</code> configurado. Si no, no se puede calcular.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-arrow-down-circle text-success"></i> in_bps — Tráfico entrante</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> bits por segundo que <em>entran</em> por la interfaz (descarga).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> bits por segundo (bps).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> depende de la capacidad contratada. Ej: enlace de 100 Mbps, 80 Mbps de bajada es normal.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> usa este umbral como porcentaje de la capacidad. Ej: si contrataste 200 Mbps, alerta a <code>gte 160000000</code> (160 Mbps = 80%).</p>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "Tráfico de bajada supera 80% de la capacidad contratada durante 5 minutos".</p>
+                </div>
+
+                <div class="border rounded p-2 mb-0 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-arrow-up-circle text-warning"></i> out_bps — Tráfico saliente</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> bits por segundo que <em>salen</em> por la interfaz (subida).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> bits por segundo (bps).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> igual que in_bps, depende de la capacidad.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> alerta si supera el 80% de la capacidad contratada durante 5 min.</p>
+                    <p class="mb-0"><strong>Ojo:</strong> in_bps y out_bps son <em>absolutos</em>. Considera usar <code>utilization_pct</code> si la capacidad del enlace cambia entre equipos.</p>
+                </div>
+            `
+        },
+
+        // ============================================================
+        // 5. MÉTRICAS DE CHASIS
+        // ============================================================
+        {
+            heading: "🖥️ Métricas de Chasis",
+            body: `
+                Miden el estado interno del equipo (CPU, memoria,
+                temperatura, uptime). Requieren que el modelo del equipo
+                tenga OIDs de chasis configurados (propios o del fabricante).
+                <br><br>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-cpu text-primary"></i> cpu_pct — Uso de CPU</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> porcentaje de uso del procesador.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 5-40% normal, 40-75% bajo carga, &gt;85% saturado.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 75</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 90</code> con duración 300 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> picos momentáneos de 100% son normales. Usa duración ≥300 s.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-memory text-info"></i> mem_pct — Uso de memoria</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> porcentaje de RAM utilizada.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 30-70% normal, 70-85% alto, &gt;90% crítico.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 80</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 92</code> con duración 300 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> en sistemas Linux/Unix la memoria "usada" incluye caché. Un valor alto no siempre es problema. En RouterOS sí es indicador directo.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-thermometer-half text-danger"></i> temp_c — Temperatura</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> temperatura del chasis del equipo.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> grados Celsius (°C).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 30-50 °C normal, 50-65 °C bajo carga, &gt;70 °C alto.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 70</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte 85</code> con duración 300 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> no todos los equipos tienen sensor de temperatura. Ubiquiti airOS 8.x no lo expone por SNMP.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-0 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-clock-history text-secondary"></i> uptime — Tiempo de actividad</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> segundos transcurridos desde el último reinicio del equipo.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> segundos (s).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> días o semanas sin reiniciar (uptime alto = estabilidad).</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>lte 300</code> con duración 60 s → <span class="badge bg-warning text-dark">Advertencia</span> (el equipo se reinició hace &lt;5 min).</li>
+                        <li><code>lte 60</code> con duración 30 s → <span class="badge bg-danger">Crítica</span> (reinicio en el último minuto).</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "El core se reinició inesperadamente" (alerta cuando uptime &lt; 300 s).</p>
+                </div>
+            `
+        },
+
+        // ============================================================
+        // 6. MÉTRICAS DE RADIOFRECUENCIA
+        // ============================================================
+        {
+            heading: "📻 Métricas de Radiofrecuencia",
+            body: `
+                Solo aplican a equipos cuyo modelo está marcado como
+                <strong>radioenlace</strong> (Ubiquiti AirMAX, Cambium,
+                Mimosa, LiteAP, LiteBeam, etc.). Miden la calidad del
+                enlace inalámbrico punto-a-punto.
+                <br><br>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-reception-4 text-success"></i> wl_signal — Señal de radio</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> nivel de señal recibida del otro extremo del enlace.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> dBm (decibelios-milivatio, <em>siempre negativos</em>).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> -40 a -60 dBm excelente, -60 a -70 bueno, -70 a -80 regular, &lt;-80 malo.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>lte -75</code> con duración 180 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>lte -85</code> con duración 180 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> el operador <code>lte</code> con valores negativos es correcto: -85 es <em>menor</em> que -75.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-volume-mute text-warning"></i> wl_noise_floor — Piso de ruido</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> nivel de ruido/interferencia en el canal.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> dBm (negativo).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> -95 dBm (limpio), -90 a -85 (moderado), &gt;-85 (ruidoso).</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte -85</code> con duración 180 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>gte -80</code> con duración 180 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> un piso de ruido alto puede ser causado por interferencia de otros equipos o por el entorno. Considera cambiar de canal si es recurrente.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-broadcast text-info"></i> wl_ccq — Calidad de enlace (CCQ)</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> porcentaje de calidad del enlace (Client Connection Quality).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> &gt;90% excelente, 70-90% bueno, 50-70% regular, &lt;50% malo.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>lte 70</code> con duración 180 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>lte 50</code> con duración 180 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "Calidad del enlace LiteBeam Norte por debajo de 50%".</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-arrow-up text-success"></i> wl_tx_rate — Tasa de transmisión</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> velocidad actual de transmisión del radio.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> kbps (kilobits por segundo).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> depende de la modulación. Ej: un LiteBeam AC puede dar 100-300 Mbps.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> alerta si cae por debajo del <strong>50%</strong> de la capacidad nominal del enlace. Ej: capacidad 200 Mbps → alerta a <code>lte 100000</code> (100 Mbps = 100000 kbps).</p>
+                    <p class="mb-0"><strong>Ojo:</strong> la tasa fluctúa con las condiciones del aire. Usa duración ≥300 s.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-arrow-down text-info"></i> wl_rx_rate — Tasa de recepción</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> velocidad actual de recepción del radio.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> kbps.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> igual que <code>wl_tx_rate</code>, alerta si cae por debajo del 50% de la capacidad nominal.</p>
+                    <p class="mb-0"><strong>Ojo:</strong> normalmente tx_rate y rx_rate son similares. Si difieren mucho, el enlace está asimétrico.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-star text-warning"></i> airmax_quality — Calidad airMAX</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> calidad global del enlace según el protocolo propietario airMAX de Ubiquiti.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> &gt;80% bueno, 60-80% regular, &lt;40% malo.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>lte 60</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span>.</li>
+                        <li><code>lte 40</code> con duración 300 s → <span class="badge bg-danger">Crítica</span>.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> solo existe en equipos Ubiquiti con airMAX activo. No aplica a Cambium ni Mimosa.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-speedometer2 text-primary"></i> airmax_capacity — Capacidad airMAX</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> capacidad estimada disponible en el enlace airMAX.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> porcentaje (%).</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> alerta si cae por debajo del 50% de la capacidad nominal del enlace.</p>
+                    <p class="mb-0"><strong>Ojo:</strong> solo Ubiquiti. Complementa a airmax_quality (uno mide calidad, otro capacidad).</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-broadcast-pin text-danger"></i> radio_freq — Frecuencia de radio</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> frecuencia de operación actual del radio.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> MHz (megahercios). Ej: 2400 (2.4 GHz) o 5800 (5 GHz).</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> solo útil con operador <code>eq</code> para detectar cambios no autorizados.</p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>eq 5800</code> con duración 60 s → <span class="badge bg-warning text-dark">Advertencia</span> si alguien cambia la frecuencia.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "Alerta si la frecuencia del enlace deja de ser 5800 MHz".</p>
+                </div>
+
+                <div class="border rounded p-2 mb-2 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-broadcast-pin text-warning"></i> radio_txpower — Potencia de TX</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> potencia de transmisión configurada en el radio.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> dBm (positivo, normalmente entre 0 y 30).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> 15-25 dBm típico. &gt;28 puede saturar; &lt;10 puede no alcanzar.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>gte 28</code> → <span class="badge bg-warning text-dark">Advertencia</span> (riesgo de saturación).</li>
+                        <li><code>lte 10</code> → <span class="badge bg-warning text-dark">Advertencia</span> (posible pérdida de enlace).</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ojo:</strong> es la potencia <em>configurada</em>, no la real. Si la antena está desconectada, este valor no lo detecta.</p>
+                </div>
+
+                <div class="border rounded p-2 mb-0 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-arrows-angle-expand text-secondary"></i> chan_width — Ancho de canal</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> ancho del canal configurado (5, 10, 20, 40 u 80 MHz).</p>
+                    <p class="mb-1"><strong>Unidad:</strong> MHz.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong> solo útil con operador <code>eq</code> para detectar cambios no autorizados.</p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>eq 40</code> con duración 60 s → alerta si alguien cambia el ancho de canal.</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "Alerta si el canal del enlace deja de ser 40 MHz".</p>
+                </div>
+            `
+        },
+
+        // ============================================================
+        // 7. MÉTRICAS DE CLIENTES AP
+        // ============================================================
+        {
+            heading: "👥 Métricas de Clientes AP",
+            body: `
+                Solo aplican a equipos que operan en modo <strong>Access
+                Point</strong> (no a CPEs ni a radioenlaces punto-a-punto).
+                Miden cuántos clientes están conectados al AP.
+                <br><br>
+
+                <div class="border rounded p-2 mb-0 bg-light">
+                    <h6 class="mb-1"><i class="bi bi-people text-info"></i> ap_client_count — Clientes AP conectados</h6>
+                    <p class="mb-1"><strong>Qué mide:</strong> cantidad de clientes inalámbricos conectados al AP en este ciclo.</p>
+                    <p class="mb-1"><strong>Unidad:</strong> conteo (número entero).</p>
+                    <p class="mb-1"><strong>Valores saludables:</strong> depende de la capacidad del AP. Un AP de 50 clientes puede estar holgado; uno de 100 puede estar saturado.</p>
+                    <p class="mb-1"><strong>Recomendado:</strong></p>
+                    <ul class="mb-1 ps-3">
+                        <li><code>eq 0</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span> (AP sin clientes, ¿está funcionando?).</li>
+                        <li><code>eq 0</code> con duración 600 s → <span class="badge bg-danger">Crítica</span> (AP caído o sin servicio).</li>
+                        <li><code>gte 50</code> con duración 300 s → <span class="badge bg-warning text-dark">Advertencia</span> (AP cerca de saturación).</li>
+                    </ul>
+                    <p class="mb-0"><strong>Ejemplo:</strong> "AP Sur sin clientes por más de 10 minutos → posible falla del AP".</p>
+                </div>
+            `
+        },
+
+        // ============================================================
+        // 8. COMBINACIONES Y EJEMPLOS
+        // ============================================================
+        {
+            heading: "Combinaciones típicas de métricas",
+            body: `
+                Las métricas sueltas rara vez cuentan la historia completa.
+                Combinar métricas permite detectar patrones más precisos:
+                <br><br>
+
+                <strong>🔴 Core saturado (CPU + memoria):</strong>
+                <br>
+                <code>cpu_pct &gt; 85 AND mem_pct &gt; 90 durante 300 s</code>
+                <br>
+                <small class="text-muted">Detecta estrés real, no picos puntuales.</small>
+                <br><br>
+
+                <strong>🟡 Enlace RF degradado (señal + CCQ):</strong>
+                <br>
+                <code>wl_signal &lt; -80 AND wl_ccq &lt; 50 durante 180 s</code>
+                <br>
+                <small class="text-muted">Detecta degradación real del enlace inalámbrico.</small>
+                <br><br>
+
+                <strong>🔵 CPE caído con vuelta en línea:</strong>
+                <br>
+                Disparo: <code>device_down = 0 durante 120 s</code> (fire_once)
+                <br>
+                Auto-resolución: <code>device_down = 1 durante 60 s</code>
+                <br>
+                <small class="text-muted">Notifica al caer y resuelve al recuperar.</small>
+                <br><br>
+
+                <strong>🟢 Reinicio inesperado:</strong>
+                <br>
+                <code>uptime &lt; 300 AND device_down = 1 durante 60 s</code>
+                <br>
+                <small class="text-muted">Alerta si el equipo está vivo pero se reinició hace poco.</small>
+                <br><br>
+
+                <strong>🟠 AP sin clientes:</strong>
+                <br>
+                <code>ap_client_count = 0 AND device_down = 1 durante 600 s</code>
+                <br>
+                <small class="text-muted">El AP responde pero nadie se le conecta → posible falla.</small>
             `
         },
         {
             heading: "Ejemplos prácticos de auto-resolución",
             body: `
+                La auto-resolución permite definir condiciones distintas a
+                las de disparo para resolver la alerta. Los casos más
+                comunes son:
+
+                <br><br>
                 <strong>Histéresis de CPU:</strong>
                 <br>
-                Disparo: <code>CPU &gt; 85% durante 300s</code>
+                Disparo: <code>cpu_pct &gt; 85% durante 300 s</code>
                 <br>
-                Auto-resolución: <code>CPU &lt; 70% durante 120s</code>
+                Auto-resolución: <code>cpu_pct &lt; 70% durante 120 s</code>
                 <br>
-                Evita que la alerta se resuelva y vuelva a disparar con
-                cada fluctuación alrededor del 85%.
+                <small class="text-muted">Evita que la alerta se resuelva y vuelva a disparar con cada fluctuación alrededor del 85%.</small>
+
                 <br><br>
-                <strong>Vuelta en línea:</strong>
+                <strong>Vuelta en línea de un CPE:</strong>
                 <br>
-                Disparo: <code>device_down = 0 durante 120s</code>
-                con <em>fire_once</em>
+                Disparo: <code>device_down = 0 durante 120 s</code> con <em>fire_once</em>
                 <br>
-                Auto-resolución: <code>device_down = 1 durante 60s</code>
+                Auto-resolución: <code>device_down = 1 durante 60 s</code>
                 <br>
-                Notifica al caer, resuelve al recuperar.
+                <small class="text-muted">Notifica al caer, resuelve al recuperar.</small>
+
                 <br><br>
                 <strong>Señal RF con margen:</strong>
                 <br>
-                Disparo: <code>señal &lt; -80 dBm durante 180s</code>
+                Disparo: <code>wl_signal &lt; -80 dBm durante 180 s</code>
                 <br>
-                Auto-resolución: <code>señal &gt; -70 dBm durante 60s</code>
+                Auto-resolución: <code>wl_signal &gt; -70 dBm durante 60 s</code>
                 <br>
-                El margen de 10 dBm evita el parpadeo.
+                <small class="text-muted">El margen de 10 dBm evita el parpadeo típico de la señal.</small>
+
+                <br><br>
+                <strong>AP sin clientes:</strong>
+                <br>
+                Disparo: <code>ap_client_count = 0 durante 600 s</code>
+                <br>
+                Auto-resolución: <code>ap_client_count &gt; 0 durante 60 s</code>
+                <br>
+                <small class="text-muted">Resuelve la alerta cuando vuelve a tener clientes.</small>
             `
         },
-        {
-            heading: "Comportamiento mark_as_resolved",
-            body: `
-                Cuando está activo, las alertas generadas por esta regla
-                se crean directamente en estado
-                <span class="badge bg-success">Resuelta</span> en lugar de
-                <span class="badge bg-danger">Activa</span>.
-                <br><br>
-                <strong>Cuándo usarlo:</strong>
-                <br>
-                • Reglas puramente <strong>informativas</strong> (severidad
-                <em>Info</em>).
-                <br>
-                • Reglas que solo quieren dejar un registro histórico sin
-                que aparezcan como "pendientes de atender".
-                <br>
-                • Reglas que solo notifican un evento puntual (ej. "el
-                firmware cambió").
-                <br><br>
-                <strong>Deduplicación:</strong> las alertas creadas con
-                <code>mark_as_resolved</code> se tratan como
-                <em>fire_once</em>. Es decir, no se crea una nueva alerta
-                por cada ciclo del monitor mientras la condición siga
-                cumpliéndose.
-                <br><br>
-                <strong>Interacción con Telegram:</strong> la notificación
-                se envía igual (si Telegram está activo), pero la alerta
-                en BD aparece como resuelta.
-            `
-        },
+
+        // ============================================================
+        // 9. CICLO DE VIDA Y FLAGS
+        // ============================================================
         {
             heading: "Duración, cooldown y fire_once — diferencias",
             body: `
@@ -857,18 +1240,134 @@ registerHelpContent({
                 debe mantenerse 60s seguidos. Se rompe un instante y el
                 contador se resetea. Recomendado: 60-300s.
                 <br><br>
+
                 <strong>Fire_once (por regla):</strong>
                 la regla dispara una sola vez por periodo de violación.
                 No vuelve a disparar hasta que la condición deje de
                 cumplirse.
                 <br><br>
+
                 <strong>Cooldown de Telegram (por regla):</strong>
                 tiempo mínimo entre notificaciones de la misma regla.
                 Aplica solo a Telegram, no a la creación de alertas.
                 <br><br>
+
                 <strong>Auto-resolución (por bloque):</strong>
                 condiciones que, al cumplirse, resuelven las alertas
                 emitidas por la regla.
+            `
+        },
+        {
+            heading: "Ciclo de vida de una alerta",
+            body: `
+                Cuando una regla dispara, se crea una alerta con estado
+                <span class="badge bg-danger">Activa</span>.
+                <br><br>
+
+                <strong>Estados posibles:</strong>
+                <br>
+                • <span class="badge bg-danger">Activa</span>: la condición se cumple o aún no se ha atendido.
+                <br>
+                • <span class="badge bg-warning text-dark">Reconocida</span>: un operador la vio pero no se ha resuelto (acción manual).
+                <br>
+                • <span class="badge bg-success">Resuelta</span>: la condición dejó de cumplirse (auto) o se resolvió manualmente.
+                <br><br>
+
+                <strong>Auto-resolución:</strong> cuando la combinación
+                del bloque de auto-resolución se cumple (o, si no hay
+                auto-resolución configurada, cuando el bloque de disparo
+                deja de cumplirse), todas las alertas activas de esa
+                regla se marcan como resueltas automáticamente.
+                <br><br>
+
+                <strong>Anti-duplicados:</strong> no se crean 2 alertas
+                activas idénticas (misma regla). Si ya hay una activa,
+                no se duplica aunque la regla siga disparando.
+            `
+        },
+        {
+            heading: "Flags especiales",
+            body: `
+                <strong>Disparar solo una vez (fire_once):</strong>
+                la regla dispara una sola vez por periodo de violación.
+                Si la condición deja de cumplirse y vuelve a cumplirse,
+                dispara de nuevo. Útil para notificaciones de "vuelta en línea".
+                <br><br>
+
+                <strong>Omitir al iniciar el monitor (skip_on_startup):</strong>
+                no se evalúa durante los primeros 120s tras arrancar el
+                monitor. Evita alertas espurias al reiniciar el servicio.
+                <br><br>
+
+                <strong>Crear alertas ya resueltas (mark_as_resolved):</strong>
+                las alertas se crean con estado <span class="badge bg-success">Resuelta</span>
+                directamente. Se deduplican como <em>fire_once</em>.
+                Útil para reglas informativas (severidad Info) que solo
+                quieren dejar un registro.
+            `
+        },
+
+        // ============================================================
+        // 10. EJEMPLOS Y BUENAS PRÁCTICAS
+        // ============================================================
+        {
+            heading: "Ejemplos de reglas completas",
+            body: `
+                <strong>🖥️ Core con CPU alta sostenida:</strong>
+                <br>
+                Nombre: "CPU core saturada"
+                <br>
+                Severidad: Crítica
+                <br>
+                Disparo: <code>cpu_pct &gt; 85 durante 300 s</code> en Core Güigüe
+                <br>
+                Auto-resolución: <code>cpu_pct &lt; 70 durante 120 s</code>
+                <br>
+                Telegram: sí, cooldown 600 s
+                <br><br>
+
+                <strong>📡 CPE caído:</strong>
+                <br>
+                Nombre: "CPE sector Norte sin respuesta"
+                <br>
+                Severidad: Advertencia
+                <br>
+                Disparo: <code>device_down = 0 durante 120 s</code> con fire_once
+                <br>
+                Telegram: sí, cooldown 300 s
+                <br><br>
+
+                <strong>📻 Enlace RF degradado:</strong>
+                <br>
+                Nombre: "Enlace LiteBeam degradado"
+                <br>
+                Severidad: Advertencia
+                <br>
+                Disparo: <code>wl_signal &lt; -80 AND wl_ccq &lt; 50 durante 180 s</code>
+                <br>
+                Auto-resolución: <code>wl_signal &gt; -70 AND wl_ccq &gt; 80 durante 120 s</code>
+                <br><br>
+
+                <strong>👥 AP sin clientes:</strong>
+                <br>
+                Nombre: "AP Sur sin servicio"
+                <br>
+                Severidad: Advertencia
+                <br>
+                Disparo: <code>ap_client_count = 0 AND device_down = 1 durante 600 s</code>
+                <br>
+                Auto-resolución: <code>ap_client_count &gt; 0 durante 60 s</code>
+                <br><br>
+
+                <strong>⚠️ Equipo reiniciado:</strong>
+                <br>
+                Nombre: "Router se reinició inesperadamente"
+                <br>
+                Severidad: Info (con mark_as_resolved)
+                <br>
+                Disparo: <code>uptime &lt; 300 durante 30 s</code>
+                <br>
+                <small class="text-muted">Solo deja registro histórico, no requiere atención manual.</small>
             `
         },
         {
@@ -876,30 +1375,35 @@ registerHelpContent({
             body: `
                 <strong>La regla no dispara:</strong>
                 <br>
-                1. Verifica que esté <strong>activa</strong>.
+                1. Verifica que esté <strong>activa</strong> (badge verde).
                 <br>
-                2. Verifica que la duración no sea mayor que el tiempo que
-                la condición se mantiene.
+                2. Verifica que la <strong>métrica exista</strong> para el equipo seleccionado.
                 <br>
-                3. Verifica que el equipo esté generando esas métricas.
+                3. Verifica que la duración no sea mayor que el tiempo que la condición se mantiene.
                 <br>
-                4. Si tiene <em>skip_on_startup</em>, espera 120s tras el
-                último reinicio del monitor.
+                4. Si tiene <em>skip_on_startup</em>, espera 120 s tras el último reinicio del monitor.
+                <br>
+                5. Si tiene <em>fire_once</em>, verifica que no haya disparado ya.
                 <br><br>
+
                 <strong>La alerta no se auto-resuelve:</strong>
                 <br>
-                1. Verifica que <code>enable_auto_resolve</code> esté
-                activo Y haya condicionales configurados.
+                1. Verifica que <code>enable_auto_resolve</code> esté activo Y haya condicionales configurados.
                 <br>
-                2. Verifica que la duración de los condicionales de
-                auto-resolución no sea mayor que el tiempo que la
-                condición se mantiene.
+                2. Verifica que la duración de los condicionales de auto-resolución no sea mayor que el tiempo que la condición se mantiene.
                 <br>
-                3. Si no hay auto-resolución configurada, el sistema
-                resuelve cuando el disparo deja de cumplirse. Si el
-                disparo nunca deja de cumplirse, la alerta se queda
-                activa (esto es lo esperado).
+                3. Si no hay auto-resolución configurada, el sistema resuelve cuando el disparo deja de cumplirse.
                 <br><br>
+
+                <strong>Telegram no llega:</strong>
+                <br>
+                1. Verifica que Telegram esté configurado en Configuración del sistema.
+                <br>
+                2. Verifica que el switch <em>Enviar por Telegram</em> esté activo en la regla.
+                <br>
+                3. Verifica que el cooldown no esté bloqueando (espera el tiempo configurado).
+                <br><br>
+
                 <strong>Muchas alertas duplicadas:</strong>
                 <br>
                 Activa <em>fire_once</em> o aumenta el cooldown de Telegram.
@@ -908,21 +1412,29 @@ registerHelpContent({
         {
             heading: "Buenas prácticas",
             body: `
+                • <strong>Empieza simple:</strong> 1 grupo, 1 condicional,
+                verifica que dispare. Luego añade complejidad.
+                <br>
                 • <strong>Usa auto-resolución con histéresis</strong> para
                 evitar parpadeo en métricas ruidosas (CPU, señal RF).
                 <br>
-                • <strong>No configures auto-resolución idéntica al disparo</strong>:
-                el sistema ya resuelve cuando el disparo deja de cumplirse.
-                Solo configura auto-resolución si las condiciones de
-                resolución son <em>distintas</em> (típicamente, más laxas).
+                • <strong>No alertes en cada fluctuación:</strong> usa
+                duración mínima 60-300s.
                 <br>
-                • <strong>Empieza simple:</strong> 1 grupo, 1 condicional,
-                verifica que dispare. Luego añade auto-resolución.
+                • <strong>No uses <code>mark_as_resolved</code> en reglas
+                críticas</strong>: solo en informativas.
                 <br>
                 • <strong>Documenta el propósito</strong> en la descripción.
                 <br>
-                • <strong>Prueba con severidad "Info"</strong> antes de
-                usar "Critical" en producción.
+                • <strong>Prueba primero con prioridad "Info"</strong> y
+                ajusta después.
+                <br>
+                • <strong>Usa el bloque de auto-resolución solo si las
+                condiciones de resolución son distintas a las de disparo.</strong>
+                Si son iguales, el sistema ya resuelve automáticamente.
+                <br>
+                • <strong>Revisa el listado de alertas</strong> periódicamente
+                para detectar patrones y ajustar umbrales.
             `
         }
     ]

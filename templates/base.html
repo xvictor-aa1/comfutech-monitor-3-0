@@ -61,7 +61,9 @@
 
         .cf-sidebar.expanded {
             width: 220px;
-            box-shadow: 4px 0 20px rgba(0, 0, 0, 0.25);
+            /* Sombra un poco más marcada para que se lea como overlay
+            sobre el contenido (que ahora queda parcialmente cubierto). */
+            box-shadow: 6px 0 24px rgba(0, 0, 0, 0.35);
         }
 
         /* ============================================================
@@ -271,15 +273,12 @@
            WRAPPER DEL CONTENIDO
            ============================================================ */
         .cf-main-wrapper {
+            /* Fijo siempre: el sidebar expandido es un overlay y NO empuja
+            el contenido. Evita que la página "salte" al expandir. */
             margin-left: 60px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            transition: margin-left 0.22s ease;
-        }
-
-        .cf-sidebar.expanded ~ .cf-main-wrapper {
-            margin-left: 220px;
         }
 
         /* ============================================================
@@ -413,6 +412,7 @@
                 class="cf-sidebar-item {% if 'device' in url_name %}active{% endif %}"
                 data-bs-toggle="collapse"
                 data-bs-target="#submenu-equipos"
+                data-main-url="{% url 'inventario:device_list' %}"
                 aria-expanded="false"
                 title="Equipos">
             <i class="bi bi-hdd-network"></i>
@@ -446,6 +446,7 @@
                 class="cf-sidebar-item {% if 'rule' in url_name %}active{% endif %}"
                 data-bs-toggle="collapse"
                 data-bs-target="#submenu-reglas"
+                data-main-url="{% url 'alertas:rule_list' %}"
                 aria-expanded="false"
                 title="Reglas">
             <i class="bi bi-shield-exclamation"></i>
@@ -468,6 +469,7 @@
                 class="cf-sidebar-item {% if 'monitor' in url_name %}active{% endif %}"
                 data-bs-toggle="collapse"
                 data-bs-target="#submenu-monitor"
+                data-main-url="{% url 'monitoreo:monitor_status' %}"
                 aria-expanded="false"
                 title="Monitor">
             <i class="bi bi-cpu"></i>
@@ -489,6 +491,7 @@
                 class="cf-sidebar-item {% if 'user' in url_name or 'system_settings' in url_name %}active{% endif %}"
                 data-bs-toggle="collapse"
                 data-bs-target="#submenu-settings"
+                data-main-url="{% url 'core:user_list' %}"
                 aria-expanded="false"
                 title="Configuraciones del Sistema">
             <i class="bi bi-gear"></i>
@@ -769,16 +772,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ---- SOLO los items del nav expanden el sidebar al hacer clic cuando
-    // ---- está colapsado. Los items del footer (usuario, theme, ayuda)
-    // ---- NO expanden, evitando el bug de dropdown desplazado.
-    document.querySelectorAll('.cf-sidebar-nav .cf-sidebar-item').forEach(item => {
-        item.addEventListener('click', () => {
+    // ---- En modo colapsado (solo desktop), los botones con submenú
+    // ---- navegan directamente a su apartado principal, sin expandir
+    // ---- el sidebar. El sidebar solo se expande/colapsa con el logo.
+    document.querySelectorAll('.cf-sidebar-nav .cf-sidebar-item[data-main-url]').forEach(item => {
+        item.addEventListener('click', (e) => {
             if (!isMobile() && !sidebar.classList.contains('expanded')) {
-                sidebar.classList.add('expanded');
-                try { localStorage.setItem('cf-sidebar-expanded', '1'); } catch (e) {}
+                e.preventDefault();
+                e.stopImmediatePropagation();  // evita que Bootstrap abra el collapse
+                window.location.href = item.dataset.mainUrl;
             }
-        });
+        }, true);  // capture phase: corre antes que Bootstrap
     });
 
     // ---- Restaurar estado expandido en desktop
