@@ -64,7 +64,7 @@ def _get_radio_metrics(device) -> Dict[str, Optional[float]]:
                      "airmax_capacity", "chan_width"):
             result[name] = to_float(val)
         elif name in ("wl_tx_rate", "wl_rx_rate"):
-            # Las tasas pueden venir como Integer32 (kbps) o Gauge32
+            # Las tasas pueden venir como Integer32 (kbps) o Gauge32.
             result[name] = to_float(val)
 
     return result
@@ -83,7 +83,7 @@ def poll_radio() -> dict:
     start = time.time()
     stats = {"devices": 0, "errors": 0, "alerts": 0, "skipped": 0, "duration_s": 0.0}
 
-    # Solo equipos activos con modelo wireless
+    # Solo equipos activos con modelo wireless.
     devices = (
         Device.objects
         .filter(active=True, device_model__is_wireless_link=True)
@@ -112,7 +112,7 @@ def poll_radio() -> dict:
             stats["errors"] += 1
             continue
 
-        # Escribir a InfluxDB
+        # Escribir a InfluxDB.
         try:
             influx_writer.write_radio(
                 device_name=device.name,
@@ -125,7 +125,7 @@ def poll_radio() -> dict:
         except Exception as e:
             log.error("Error escribiendo radio en InfluxDB: %s", e)
 
-        # Evaluar alertas (métricas de RF)
+        # Evaluar alertas (métricas de RF).
         try:
             alerts.evaluate_metrics(device, {
                 "wl_signal": metrics.get("wl_signal"),
@@ -135,6 +135,9 @@ def poll_radio() -> dict:
                 "wl_rx_rate": metrics.get("wl_rx_rate"),
                 "airmax_quality": metrics.get("airmax_quality"),
                 "airmax_capacity": metrics.get("airmax_capacity"),
+                "radio_freq": metrics.get("radio_freq"),
+                "radio_txpower": metrics.get("radio_txpower"),
+                "chan_width": metrics.get("chan_width"),
             })
         except Exception as e:
             log.exception("Error evaluando alertas RF para %s: %s", device.name, e)

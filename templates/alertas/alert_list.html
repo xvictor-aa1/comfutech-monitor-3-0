@@ -62,7 +62,7 @@
     condición durante el tiempo configurado. Puedes reconocer, resolver
     o eliminar cada alerta desde los botones de la derecha.
     Usa el buscador avanzado para filtrar por estado, severidad,
-    equipo o fecha.
+    regla o fecha.
 </div>
 
 <!-- ============================================================ -->
@@ -159,10 +159,10 @@
                 <input type="hidden" name="order" value="{{ order }}">
 
                 <div class="col-md-4">
-                    <label class="form-label small">Buscar mensaje</label>
+                    <label class="form-label small">Buscar mensaje o regla</label>
                     <input type="text" name="q" value="{{ search }}"
                            class="form-control"
-                           placeholder="Texto del mensaje...">
+                           placeholder="Texto del mensaje o nombre de la regla...">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small">Estado</label>
@@ -195,13 +195,13 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label small">Equipo</label>
-                    <select name="device" class="form-select">
-                        <option value="">Todos</option>
-                        {% for d in devices %}
-                        <option value="{{ d.id }}"
-                                {% if device_filter == d.id|stringformat:"s" %}selected{% endif %}>
-                            {{ d.name }}
+                    <label class="form-label small">Regla de alerta</label>
+                    <select name="rule_id" class="form-select">
+                        <option value="">Todas las reglas</option>
+                        {% for r in rules_for_filter %}
+                        <option value="{{ r.id }}"
+                                {% if rule_filter == r.id|stringformat:"s" %}selected{% endif %}>
+                            {{ r.name }}
                         </option>
                         {% endfor %}
                     </select>
@@ -250,7 +250,7 @@
                     {% sortable_th "fecha" "Fecha" "130px" %}
                     {% sortable_th "severidad" "Severidad" "120px" %}
                     {% sortable_th "tipo" "Tipo" "150px" %}
-                    {% sortable_th "equipo" "Equipo" "140px" %}
+                    {% sortable_th "regla" "Regla de alerta" "180px" %}
                     {% sortable_th "mensaje" "Mensaje" %}
                     {% sortable_th "valor" "Valor" "90px" %}
                     {% sortable_th "estado" "Estado" "120px" %}
@@ -274,20 +274,25 @@
                     </td>
                     <td>
                         <code class="small">{{ alert.alert_type }}</code>
-                        {% if alert.rule %}
-                        <br><small class="text-muted"
-                                   title="{{ alert.rule.name }}">
-                            <i class="bi bi-shield-check"></i>
-                            {{ alert.rule.name|truncatechars:25 }}
-                        </small>
-                        {% endif %}
                     </td>
                     <td>
-                        {% if alert.device %}
-                        <a href="{% url 'inventario:device_detail' alert.device.id %}">
-                            {{ alert.device.name }}
-                        </a>
-                        {% else %}—{% endif %}
+                        {% if alert.rule_name %}
+                            <div class="d-flex align-items-center gap-1">
+                                <i class="bi bi-shield-check text-primary"></i>
+                                <span class="text-truncate"
+                                      title="{{ alert.rule_name }}"
+                                      style="max-width: 160px;">
+                                    {{ alert.rule_name }}
+                                </span>
+                            </div>
+                            {% if alert.rule_id %}
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                <i class="bi bi-hash"></i> Regla #{{ alert.rule_id }}
+                            </small>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
                     </td>
                     <td>
                         <div class="text-break">{{ alert.message }}</div>
@@ -455,6 +460,25 @@ registerHelpContent({
             `
         },
         {
+            heading: "¿Por qué la columna dice 'Regla de alerta'?",
+            body: `
+                A partir de la v4, las alertas ya <strong>no están
+                vinculadas a un equipo específico</strong>. Son registros
+                históricos y auditables que se conservan aunque el equipo
+                o la regla se eliminen.
+                <br><br>
+                La columna muestra el <strong>nombre de la regla</strong>
+                que disparó la alerta (snapshot guardado al momento del
+                disparo) y su ID. El mensaje de la alerta sí incluye la
+                información del equipo mediante los placeholders
+                configurados.
+                <br><br>
+                <strong>Ventaja:</strong> si mañana eliminas una regla o
+                un equipo, el registro histórico de la alerta se conserva
+                intacto con toda su información.
+            `
+        },
+        {
             heading: "Estados de las alertas",
             body: `
                 Cada alerta tiene uno de 3 estados:
@@ -466,8 +490,10 @@ registerHelpContent({
                 • <span class="badge bg-success">Resuelta</span>: la condición dejó de cumplirse (o se resolvió manualmente).
                 <br><br>
                 Las alertas <strong>activas</strong> se auto-resuelven cuando
-                la condición deja de cumplirse. Las <strong>reconocidas</strong>
-                deben resolverse manualmente.
+                la condición deja de cumplirse (o cuando se cumplen los
+                condicionales de auto-resolución de la regla, si están
+                configurados). Las <strong>reconocidas</strong> deben
+                resolverse manualmente.
             `
         },
         {
@@ -484,13 +510,13 @@ registerHelpContent({
             body: `
                 Puedes filtrar por:
                 <br>
-                • <strong>Búsqueda de texto:</strong> en el mensaje de la alerta.
+                • <strong>Búsqueda de texto:</strong> en el mensaje o en el nombre de la regla.
                 <br>
                 • <strong>Estado:</strong> activa, reconocida, resuelta.
                 <br>
                 • <strong>Severidad:</strong> info, advertencia, crítica.
                 <br>
-                • <strong>Equipo:</strong> alertas de un device específico.
+                • <strong>Regla de alerta:</strong> alertas de una regla específica.
                 <br>
                 • <strong>Rango de fechas:</strong> desde/hasta.
                 <br><br>
@@ -527,6 +553,8 @@ registerHelpContent({
                 • Panel congelado en encabezados.
                 <br>
                 • Filtros y orden actuales preservados.
+                <br>
+                • Columna <em>"Regla de alerta"</em> con el snapshot.
                 <br><br>
                 El botón <strong>PDF</strong> descarga un reporte en A4 landscape con:
                 <br>
@@ -575,6 +603,10 @@ registerHelpContent({
                 • Si una alerta se dispara constantemente sin ser un problema real, ajusta el umbral de la regla correspondiente.
                 <br>
                 • <strong>No elimines alertas históricas</strong> sin razón: sirven para auditoría y análisis de tendencias.
+                <br>
+                • <strong>Usa el filtro por regla</strong> para investigar
+                patrones específicos (ej. "¿cuántas alertas generó la regla
+                de CPU alta este mes?").
             `
         }
     ]

@@ -9,6 +9,9 @@ Uso:
 Útil para validar manualmente la recolección de métricas de radio
 (frecuencia, capacidad RX/TX, señal, ruido, CCQ, etc.) antes de
 integrarlo en el scheduler.
+
+v4: antes de cerrar el cliente de InfluxDB, se hace `flush()` para
+volcar el buffer batch acumulado por el poller.
 """
 from django.core.management.base import BaseCommand
 from monitoreo.services.radio import poll_radio
@@ -33,7 +36,8 @@ class Command(BaseCommand):
         - Imprime un encabezado.
         - Ejecuta `poll_radio()` capturando cualquier excepción para
           que el comando no termine con un traceback crudo.
-        - En el bloque `finally`, cierra el cliente de InfluxDB.
+        - En el bloque `finally`, vuelca el buffer batch a InfluxDB
+          (`flush`) y cierra el cliente (`close`).
         - Muestra las métricas de rendimiento del ciclo.
         """
         self.stdout.write(self.style.MIGRATE_HEADING(
@@ -46,6 +50,11 @@ class Command(BaseCommand):
             # No relanzamos: mostramos el error de forma legible.
             self.stdout.write(self.style.ERROR(f"Error en poll_radio: {e}"))
         finally:
+            # v4: volcar el buffer batch a InfluxDB antes de cerrar.
+            try:
+                influx_writer.flush()
+            except Exception:
+                pass
             # Cierre defensivo del cliente InfluxDB.
             try:
                 influx_writer.close()

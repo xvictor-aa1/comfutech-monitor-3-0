@@ -315,12 +315,18 @@
                                     style="font-size: 0.65rem;">
                                     {{ alert.get_severity_display }}
                                 </span>
-                                {% if alert.device %}
-                                <a href="{% url 'inventario:device_detail' alert.device.id %}"
+                                {% if alert.rule_name %}
+                                <a href="{% url 'alertas:alert_list' %}?rule_id={{ alert.rule_id }}"
                                    class="small text-decoration-none text-truncate"
-                                   style="max-width: 130px;">
-                                    {{ alert.device.name }}
+                                   style="max-width: 130px;"
+                                   title="Regla: {{ alert.rule_name }}">
+                                    <i class="bi bi-shield-check"></i>
+                                    {{ alert.rule_name }}
                                 </a>
+                                {% else %}
+                                <span class="small text-muted">
+                                    <i class="bi bi-shield"></i> Regla eliminada
+                                </span>
                                 {% endif %}
                             </div>
                             <div class="small text-truncate" title="{{ alert.message }}">
@@ -544,6 +550,53 @@ registerHelpContent({
                 Los toasts persisten en el tiempo y pueden cerrarse
                 individualmente. El sistema recuerda qué alertas ya se
                 mostraron para no repetirlas.
+            `
+        },
+        {
+            heading: "¿Por qué las alertas no muestran 'Equipo'?",
+            body: `
+                A partir de la v4, las <strong>alertas no están
+                vinculadas a equipos</strong>. Son registros históricos
+                y auditables que se conservan aunque el equipo o la
+                regla se eliminen.
+                <br><br>
+                Por eso el bloque <em>"Alertas recientes"</em> muestra
+                el <strong>nombre de la regla</strong> que disparó la
+                alerta (snapshot guardado al momento del disparo), no
+                el equipo. El mensaje de la alerta sí incluye la
+                información del equipo mediante los placeholders
+                configurados en la regla (ej. <code>{device1}</code>,
+                <code>{ip1}</code>).
+                <br><br>
+                <strong>Ventaja:</strong> si mañana eliminas un equipo
+                o una regla, el registro histórico de la alerta se
+                conserva intacto con toda su información.
+            `
+        },
+        {
+            heading: "Toasts y alertas recientes",
+            body: `
+                El dashboard hace polling cada <strong>30 segundos</strong>
+                para detectar alertas nuevas. Cuando aparece una alerta
+                crítica o de advertencia, se muestra un <em>toast</em>
+                (notificación flotante) en la esquina superior derecha.
+                <br><br>
+                Cada toast muestra:
+                <br>
+                • La severidad (crítica / advertencia / info).
+                <br>
+                • El nombre de la regla que disparó (con link para
+                filtrar el listado por esa regla).
+                <br>
+                • El mensaje de la alerta (que sí incluye la info del
+                equipo vía placeholders).
+                <br>
+                • Un botón "Ver alertas" para ir al listado filtrado.
+                <br><br>
+                Los toasts persisten en el tiempo y pueden cerrarse
+                individualmente. El sistema recuerda qué alertas ya se
+                mostraron (en <code>localStorage</code>) para no
+                repetirlas al recargar.
             `
         },
         {
@@ -1080,9 +1133,15 @@ function showAlertToast(alert) {
     }
 
     const toastId = `toast-alert-${alert.id}`;
-    const deviceLink = alert.device_id
-        ? `<a href="/equipos/${alert.device_id}/" class="text-decoration-none">${escapeHtmlJs(alert.device)}</a>`
-        : '';
+
+    // v4: el payload trae `rule_id` y `rule_name` (no hay device).
+    const ruleLink = (alert.rule_id && alert.rule_name)
+        ? `<a href="/alertas/?rule_id=${alert.rule_id}" class="text-decoration-none">
+               <i class="bi bi-shield-check"></i> ${escapeHtmlJs(alert.rule_name)}
+           </a>`
+        : (alert.rule_name
+            ? `<span class="text-muted"><i class="bi bi-shield"></i> ${escapeHtmlJs(alert.rule_name)}</span>`
+            : '');
 
     const html = `
         <div id="${toastId}" class="toast" role="alert" aria-live="assertive"
@@ -1095,10 +1154,11 @@ function showAlertToast(alert) {
                         data-bs-dismiss="toast"></button>
             </div>
             <div class="toast-body small">
-                ${deviceLink ? `<div class="mb-1"><strong>${deviceLink}</strong></div>` : ''}
+                ${ruleLink ? `<div class="mb-1"><strong>${ruleLink}</strong></div>` : ''}
                 <div>${escapeHtmlJs(alert.message)}</div>
                 <div class="mt-2 text-end">
-                    <a href="/alertas/" class="btn btn-sm btn-outline-secondary">
+                    <a href="/alertas/${alert.rule_id ? '?rule_id=' + alert.rule_id : ''}"
+                       class="btn btn-sm btn-outline-secondary">
                         Ver alertas <i class="bi bi-arrow-right"></i>
                     </a>
                 </div>

@@ -1,11 +1,17 @@
 # monitoreo/management/commands/poll_once.py
 """
-Ejecuta una pasada de los 4 pollers (traffic, health, icmp, radio).
+Ejecuta una pasada de los 5 pollers (traffic, health, icmp, radio, ap_clients).
 
 Uso:
     python manage.py poll_once
     python manage.py poll_once --only traffic
     python manage.py poll_once --only radio
+
+v4: el `flush()` de InfluxDB se hace UNA sola vez al final del comando
+(después de todos los pollers ejecutados), no entre pollers. Esto
+mantiene el buffer batch y reduce aún más las requests HTTP, pero
+implica que si un poller falla a mitad de ciclo, sus puntos ya
+acumulados se escribirán junto con los de los demás pollers.
 """
 from django.core.management.base import BaseCommand
 
@@ -17,7 +23,7 @@ from monitoreo.services import influx_writer
 
 
 class Command(BaseCommand):
-    help = "Ejecuta una pasada de los 4 pollers (o el indicado con --only)"
+    help = "Ejecuta una pasada de los 5 pollers (o el indicado con --only)"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -45,7 +51,7 @@ class Command(BaseCommand):
             if not only or only == "radio":
                 self.stdout.write(self.style.MIGRATE_HEADING("\n=== RADIO ==="))
                 self.stdout.write(str(poll_radio()))
-            
+
             if not only or only == "ap_clients":
                 from monitoreo.services.ap_clients import poll_ap_clients
                 self.stdout.write(self.style.MIGRATE_HEADING("\n=== AP CLIENTS ==="))
@@ -53,8 +59,15 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS("\nListo."))
         finally:
+            # v4: volcar el buffer batch a InfluxDB antes de cerrar.
+            # Se hace UNA sola vez al final del comando (no entre pollers),
+            # para mantener el buffer batch y reducir requests HTTP.
+            try:
+                influx_writer.flush()
+            except Exception:
+                pass
             # Cerrar el cliente de InfluxDB para evitar el TypeError
-            # del __del__ cuando el intérprete esté cerrando
+            # del __del__ cuando el intérprete esté cerrando.
             try:
                 influx_writer.close()
             except Exception:

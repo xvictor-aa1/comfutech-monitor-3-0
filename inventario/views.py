@@ -18,6 +18,14 @@ Incluye:
       · device_model_edit   — editar modelo.
       · device_model_delete — eliminar modelo (bloqueado si hay equipos).
       · device_model_toggle — activar/desactivar modelo.
+
+A partir de la v4:
+  · `Alert` ya no tiene FK a `Device`. `device_detail` reemplaza el
+    bloque "Alertas recientes" por "Reglas de alertas vinculadas"
+    (reglas que usan este device en `conditionals` o en
+    `auto_resolve_conditionals`).
+  · El conteo de alertas se hace por `rule_id` (IntegerField) en
+    lugar de reverse relation.
 """
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -28,6 +36,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from alertas.models import Alert, AlertRule
 from core.decorators import require_admin_or_super
 from core.sorting import apply_sort, has_active_filters, ROLE_ORDER
 from .forms import DeviceForm, DeviceModelForm
@@ -237,20 +246,101 @@ def device_list(request):
 @login_required
 def device_detail(request, device_id):
     """
-    Muestra el detalle de un equipo, sus interfaces y sus últimas alertas.
+    Muestra el detalle de un equipo, sus interfaces, sus reglas
+    vinculadas y sus últimos discovery jobs.
+
+    A partir de la v4:
+      · Las alertas NO pertenecen al device (no hay FK). En su lugar
+        se muestran las **reglas vinculadas** (las que usan este
+        device en `conditionals` o en `auto_resolve_conditionals`).
+      · Para cada regla vinculada se incluye el conteo de alertas
+        activas y totales (por `rule_id`), precalculado en una sola
+        query para evitar N+1 en el template.
+      · El bloque `alerts` / `active_alerts_count` / `total_alerts_count`
+        original se elimina del contexto (el template lo reemplaza por
+        `linked_rules` + totales).
     """
     device = get_object_or_404(
         Device.objects.select_related("device_model"), pk=device_id
     )
     interfaces = device.interfaces.all().order_by("if_index")
     monitored = interfaces.filter(monitored=True)
-    alerts = device.alerts.order_by("-created_at")[:10]
 
-    # Alertas activas vs totales
-    active_alerts_count = device.alerts.filter(status="activa").count()
-    total_alerts_count = device.alerts.count()
+    # ------------------------------------------------------------
+    # Reglas vinculadas al device
+    # ------------------------------------------------------------
+    # Para el tamaño actual del proyecto (~22 equipos, pocas reglas),
+    # filtrar en Python es aceptable y evita depender del soporte
+    # JSON de cada motor de BD. Si el número de reglas crece, se
+    # puede optimizar con `conditionals__contains` o un índice
+    # auxiliar.
+    all_rules = AlertRule.objects.all().order_by("name")
+    linked_rules = []
+    for rule in all_rules:
+        ids = rule.all_device_ids  # disparo + auto-resolución
+        if device.id not in ids:
+            continue
 
-    # Últimos 5 discovery jobs
+        # ¿En qué bloque aparece el device?
+        in_trigger = device.id in rule.device_ids
+        in_auto = any(
+            c.get("device_id") == device.id
+            for g in rule.get_auto_resolve_groups()
+            for c in g.get("conditionals", [])
+        )
+
+        linked_rules.append({
+            "rule": rule,
+            "in_trigger": in_trigger,
+            "in_auto_resolve": in_auto,
+            "has_auto_resolve": rule.has_auto_resolve,
+            "conditionals_count": rule.conditionals_count,
+            "auto_resolve_conditionals_count": rule.auto_resolve_conditionals_count,
+            "enabled": rule.enabled,
+            "severity": rule.severity,
+        })
+
+    # ------------------------------------------------------------
+    # Conteos de alertas por rule_id (una sola query para evitar N+1)
+    # ------------------------------------------------------------
+    linked_rule_ids = [item["rule"].id for item in linked_rules]
+
+    if linked_rule_ids:
+        active_counts = (
+            Alert.objects
+            .filter(rule_id__in=linked_rule_ids, status="activa")
+            .values("rule_id")
+            .annotate(c=Count("id"))
+        )
+        total_counts = (
+            Alert.objects
+            .filter(rule_id__in=linked_rule_ids)
+            .values("rule_id")
+            .annotate(c=Count("id"))
+        )
+        active_map = {row["rule_id"]: row["c"] for row in active_counts}
+        total_map = {row["rule_id"]: row["c"] for row in total_counts}
+    else:
+        active_map = {}
+        total_map = {}
+
+    # Enriquecer cada regla vinculada con sus conteos.
+    for item in linked_rules:
+        rid = item["rule"].id
+        item["active_alerts_count"] = active_map.get(rid, 0)
+        item["total_alerts_count"] = total_map.get(rid, 0)
+
+    # Totales agregados para el header de la sección.
+    linked_active_alerts_total = sum(
+        item["active_alerts_count"] for item in linked_rules
+    )
+    linked_alerts_total = sum(
+        item["total_alerts_count"] for item in linked_rules
+    )
+
+    # ------------------------------------------------------------
+    # Últimos 5 discovery jobs (sigue vinculado por FK a Device)
+    # ------------------------------------------------------------
     discovery_jobs = device.discovery_jobs.order_by("-started_at")[:5]
 
     context = {
@@ -258,9 +348,12 @@ def device_detail(request, device_id):
         "interfaces": interfaces,
         "monitored_count": monitored.count(),
         "total_count": interfaces.count(),
-        "alerts": alerts,
-        "active_alerts_count": active_alerts_count,
-        "total_alerts_count": total_alerts_count,
+        # Reglas vinculadas (reemplaza a `alerts`).
+        "linked_rules": linked_rules,
+        "linked_rules_count": len(linked_rules),
+        "linked_active_alerts_total": linked_active_alerts_total,
+        "linked_alerts_total": linked_alerts_total,
+        # Discovery jobs se mantiene.
         "discovery_jobs": discovery_jobs,
     }
     return render(request, "inventario/device_detail.html", context)

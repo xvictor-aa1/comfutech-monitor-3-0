@@ -1,4 +1,13 @@
 # monitoreo/management/commands/poll_icmp.py
+"""
+Ejecuta una sola pasada del poller ICMP/TCP.
+
+Uso:
+    python manage.py poll_icmp
+
+v4: antes de cerrar el cliente de InfluxDB, se hace `flush()` para
+volcar el buffer batch acumulado por el poller.
+"""
 from django.core.management.base import BaseCommand
 
 from monitoreo.services.icmp_tcp import poll_icmp_tcp
@@ -17,6 +26,11 @@ class Command(BaseCommand):
         try:
             stats = poll_icmp_tcp()
         finally:
+            # v4: volcar el buffer batch a InfluxDB antes de cerrar.
+            try:
+                influx_writer.flush()
+            except Exception:
+                pass
             try:
                 influx_writer.close()
             except Exception:

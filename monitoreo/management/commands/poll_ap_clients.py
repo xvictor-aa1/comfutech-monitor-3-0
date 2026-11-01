@@ -1,5 +1,13 @@
 # monitoreo/management/commands/poll_ap_clients.py
-"""Ejecuta una sola pasada del poller de clientes AP."""
+"""
+Ejecuta una sola pasada del poller de clientes AP.
+
+Uso:
+    python manage.py poll_ap_clients
+
+v4: antes de cerrar el cliente de InfluxDB, se hace `flush()` para
+volcar el buffer batch acumulado por el poller.
+"""
 from django.core.management.base import BaseCommand
 from monitoreo.services.ap_clients import poll_ap_clients
 from monitoreo.services import influx_writer
@@ -16,6 +24,11 @@ class Command(BaseCommand):
         try:
             stats = poll_ap_clients()
         finally:
+            # v4: volcar el buffer batch a InfluxDB antes de cerrar.
+            try:
+                influx_writer.flush()
+            except Exception:
+                pass
             try:
                 influx_writer.close()
             except Exception:

@@ -1,4 +1,13 @@
 # monitoreo/management/commands/poll_health.py
+"""
+Ejecuta una sola pasada del poller de Core Health.
+
+Uso:
+    python manage.py poll_health
+
+v4: antes de cerrar el cliente de InfluxDB, se hace `flush()` para
+volcar el buffer batch acumulado por el poller.
+"""
 from django.core.management.base import BaseCommand
 
 from monitoreo.services.health import poll_health
@@ -17,6 +26,11 @@ class Command(BaseCommand):
         try:
             stats = poll_health()
         finally:
+            # v4: volcar el buffer batch a InfluxDB antes de cerrar.
+            try:
+                influx_writer.flush()
+            except Exception:
+                pass
             # Cerrar el cliente de InfluxDB ANTES de que Python
             # destruya los módulos (evita el TypeError del __del__)
             try:

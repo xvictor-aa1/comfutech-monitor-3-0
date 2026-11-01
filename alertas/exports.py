@@ -1,5 +1,17 @@
 # alertas/exports.py
-"""Exportación de alertas a Excel y PDF."""
+"""
+Exportación de alertas a Excel y PDF.
+
+A partir de la v4:
+  · `Alert` no tiene FK a `Device` ni a `AlertRule`. La información de
+    la regla se lee de `alert.rule_name` (snapshot) y `alert.rule_id`.
+  · La columna "Equipo" del reporte se reemplaza por "Regla de alerta".
+  · El ordenamiento por columna "equipo" se reemplaza por "regla".
+  · `_get_alerts` ya no necesita `select_related` (no hay relaciones).
+
+El resto (colores por severidad/estado, formato, filtros) se mantiene
+idéntico al comportamiento previo.
+"""
 import io
 from datetime import datetime
 from django.utils import timezone
@@ -20,17 +32,37 @@ from reportlab.platypus import (
 # HELPERS
 # ============================================================
 def _apply_filters(qs, filters):
-    """Aplica filtros del request al queryset."""
+    """
+    Aplica filtros del request al queryset.
+
+    A partir de la v4, el filtro por `device` se reemplaza por
+    `rule_id` (IntegerField). También se permite búsqueda por
+    `rule_name` dentro de `q`.
+
+    Args:
+        qs: queryset base de `Alert`.
+        filters: dict con los valores de `request.GET`.
+
+    Returns:
+        QuerySet filtrado.
+    """
     if filters.get("status"):
         qs = qs.filter(status=filters["status"])
     if filters.get("severity"):
         qs = qs.filter(severity=filters["severity"])
-    if filters.get("device"):
-        qs = qs.filter(device_id=filters["device"])
+    if filters.get("rule_id"):
+        try:
+            qs = qs.filter(rule_id=int(filters["rule_id"]))
+        except (ValueError, TypeError):
+            pass
     if filters.get("metric"):
         qs = qs.filter(alert_type=filters["metric"])
     if filters.get("q"):
-        qs = qs.filter(message__icontains=filters["q"])
+        from django.db.models import Q
+        q = filters["q"]
+        qs = qs.filter(
+            Q(message__icontains=q) | Q(rule_name__icontains=q)
+        )
     if filters.get("date_from"):
         qs = qs.filter(created_at__date__gte=filters["date_from"])
     if filters.get("date_to"):
@@ -54,11 +86,12 @@ STATUS_ORDER = Case(
     output_field=IntegerField(),
 )
 
+# A partir de la v4, "equipo" se reemplaza por "regla".
 SORTABLE_FIELDS = {
     "fecha":     "created_at",
     "severidad": "severity_order",
     "tipo":      "alert_type",
-    "equipo":    "device__name",
+    "regla":     "rule_name",
     "mensaje":   "message",
     "valor":     "value_observed",
     "estado":    "status_order",
@@ -66,27 +99,33 @@ SORTABLE_FIELDS = {
 
 
 def _get_alerts(request):
-    """Devuelve el queryset de alertas filtrado y ordenado según el request."""
+    """
+    Devuelve el queryset de alertas filtrado y ordenado según el request.
+
+    A partir de la v4, no hay `select_related` (no hay FKs). Se
+    mantiene el `annotate` de orden para los sortables por severidad
+    y estado.
+    """
     from .models import Alert
 
     filters = {
         "status":    request.GET.get("status", ""),
         "severity":  request.GET.get("severity", ""),
-        "device":    request.GET.get("device", ""),
+        "rule_id":   request.GET.get("rule_id", ""),
         "metric":    request.GET.get("metric", ""),
         "q":         request.GET.get("q", "").strip(),
         "date_from": request.GET.get("date_from", ""),
         "date_to":   request.GET.get("date_to", ""),
     }
 
-    qs = Alert.objects.select_related("device", "rule").annotate(
+    qs = Alert.objects.annotate(
         severity_order=SEVERITY_ORDER,
         status_order=STATUS_ORDER,
     )
 
     qs = _apply_filters(qs, filters)
 
-    # Aplicar el mismo ordenamiento que la vista
+    # Aplicar el mismo ordenamiento que la vista.
     sort_key = request.GET.get("sort", "fecha")
     order = request.GET.get("order", "desc")
     if sort_key in SORTABLE_FIELDS:
@@ -103,7 +142,15 @@ def _get_alerts(request):
 # EXCEL
 # ============================================================
 def export_excel(request):
-    """Genera un archivo Excel con las alertas filtradas."""
+    """
+    Genera un archivo Excel con las alertas filtradas.
+
+    Columnas: ID, Fecha, Hora, Severidad, Tipo, Regla de alerta,
+    Mensaje, Valor, Estado.
+
+    A partir de la v4, la columna "Equipo" se reemplaza por
+    "Regla de alerta" (usa `alert.rule_name`).
+    """
     alerts, filters = _get_alerts(request)
 
     wb = Workbook()
@@ -125,8 +172,8 @@ def export_excel(request):
         filter_parts.append(f"Estado: {filters['status']}")
     if filters["severity"]:
         filter_parts.append(f"Severidad: {filters['severity']}")
-    if filters["device"]:
-        filter_parts.append(f"Equipo ID: {filters['device']}")
+    if filters["rule_id"]:
+        filter_parts.append(f"Regla ID: {filters['rule_id']}")
     if filters["metric"]:
         filter_parts.append(f"Tipo: {filters['metric']}")
     if filters["q"]:
@@ -141,8 +188,8 @@ def export_excel(request):
     order_label = "↓ Descendente" if order == "desc" else "↑ Ascendente"
     sort_labels = {
         "fecha": "Fecha", "severidad": "Severidad", "tipo": "Tipo",
-        "equipo": "Equipo", "mensaje": "Mensaje", "valor": "Valor",
-        "estado": "Estado",
+        "regla": "Regla de alerta", "mensaje": "Mensaje",
+        "valor": "Valor", "estado": "Estado",
     }
     order_parts = [f"Ordenado por: {sort_labels.get(sort_key, sort_key)} {order_label}"]
 
@@ -158,9 +205,10 @@ def export_excel(request):
     ws["A3"].font = Font(italic=True, size=9, color="0D6EFD")
 
     # --- Encabezados ---
+    # "Equipo" → "Regla de alerta".
     headers = ["ID", "Fecha", "Hora", "Severidad", "Tipo",
-               "Equipo", "Mensaje", "Valor", "Estado"]
-    ws.append([])  # fila vacía
+               "Regla de alerta", "Mensaje", "Valor", "Estado"]
+    ws.append([])  # fila vacía.
     ws.append(headers)
     header_row = 5
     header_fill = PatternFill("solid", fgColor="E7F1FF")
@@ -183,7 +231,8 @@ def export_excel(request):
             alert.get_severity_display(),
             alert.get_alert_type_display() if hasattr(alert, "get_alert_type_display")
                 else alert.alert_type,
-            alert.device.name if alert.device else "—",
+            # Snapshot de la regla (reemplaza a `alert.device.name`).
+            alert.rule_name or "—",
             alert.message or "",
             float(alert.value_observed) if alert.value_observed is not None else "",
             alert.get_status_display(),
@@ -210,10 +259,11 @@ def export_excel(request):
         if status_cell.value in status_colors:
             status_cell.fill = PatternFill("solid", fgColor=status_colors[status_cell.value])
 
-        # Wrap en mensaje
+        # Wrap en mensaje.
         ws.cell(row=row_num, column=7).alignment = Alignment(wrap_text=True, vertical="top")
 
     # --- Anchos de columna ---
+    # "Regla de alerta" hereda el ancho de "Equipo" (20).
     widths = [8, 12, 10, 14, 26, 20, 60, 12, 12]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
@@ -232,6 +282,14 @@ def export_excel(request):
 # PDF
 # ============================================================
 def export_pdf(request):
+    """
+    Genera un PDF (A4 landscape) con las alertas filtradas.
+
+    A partir de la v4, la columna "Equipo" se reemplaza por
+    "Regla de alerta" (usa `alert.rule_name`). El resto del layout
+    (colores por severidad, encabezados repetidos, footer) se
+    mantiene idéntico.
+    """
     alerts, filters = _get_alerts(request)
 
     buf = io.BytesIO()
@@ -263,8 +321,8 @@ def export_pdf(request):
     order_label = "↓" if order == "desc" else "↑"
     sort_labels = {
         "fecha": "Fecha", "severidad": "Severidad", "tipo": "Tipo",
-        "equipo": "Equipo", "mensaje": "Mensaje", "valor": "Valor",
-        "estado": "Estado",
+        "regla": "Regla de alerta", "mensaje": "Mensaje",
+        "valor": "Valor", "estado": "Estado",
     }
 
     story = []
@@ -280,7 +338,8 @@ def export_pdf(request):
     ))
 
     # --- Encabezados ---
-    headers = ["ID", "Fecha/Hora", "Sev.", "Tipo", "Equipo", "Mensaje", "Valor", "Estado"]
+    # "Equipo" → "Regla de alerta".
+    headers = ["ID", "Fecha/Hora", "Sev.", "Tipo", "Regla de alerta", "Mensaje", "Valor", "Estado"]
     data = [headers]
 
     for alert in alerts:
@@ -300,7 +359,8 @@ def export_pdf(request):
             local_dt.strftime("%d/%m %H:%M"),
             severity_short,
             alert.alert_type[:18],
-            (alert.device.name if alert.device else "—")[:22],
+            # Snapshot de la regla (reemplaza a `alert.device.name`).
+            (alert.rule_name or "—")[:22],
             Paragraph(message, styles["Normal"]),
             f"{float(alert.value_observed):.2f}" if alert.value_observed is not None else "—",
             alert.get_status_display(),

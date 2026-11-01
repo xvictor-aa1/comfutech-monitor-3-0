@@ -5,24 +5,64 @@ Modelos de la app `alertas`.
 Incluye:
   - AlertRule: regla configurable con 1-5 grupos de 1-5 condicionales
     lógicos cada uno, combinables con AND / OR / XOR y negación NOT.
+    A partir de la v4, incorpora un **segundo bloque opcional** de
+    condicionales (`auto_resolve_conditionals`) que define cuándo se
+    resuelven automáticamente las alertas emitidas por la regla, más
+    dos flags: `enable_auto_resolve` (habilita el nuevo bloque) y
+    `mark_as_resolved` (crea alertas ya resueltas, útil para Info).
+
   - Alert: alerta generada por una regla.
-  - Threshold: umbral legacy (mantenido por compatibilidad).
+
+IMPORTANTE (refactor v4):
+  El modelo `Alert` **NO tiene ForeignKeys** hacia `Device`, `Interface`
+  ni `AlertRule`. Es una decisión arquitectónica intencional:
+
+    · Las alertas son registros históricos y auditables. No deben verse
+      afectados por la eliminación de equipos, interfaces o reglas.
+    · El `rule_id` se guarda como `IntegerField` plano (`db_index=True`)
+      para que el motor de auto-resolución pueda seguir agrupando
+      alertas por regla.
+    · `rule_name` se guarda como **snapshot** para preservar el nombre
+      de la regla incluso si ésta se elimina posteriormente.
+    · NO se guardan snapshots de `device_name`, `device_ip` ni
+      `interface_name` (serían inconsistentes y redundantes: los
+      placeholders de `custom_message` ya incluyen la info de devices
+      en el mensaje).
+
+  Como consecuencia:
+    · `device.alerts` / `interface.alerts` / `rule.alerts` dejan de
+      existir como reverse relations.
+    · Las consultas por alerta se hacen por `rule_id` (no por FK).
+    · El `device_detail.html` muestra las **reglas vinculadas** al
+      equipo (no sus alertas), porque las alertas ya no pertenecen al
+      device.
 """
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
 
 
 class AlertRule(models.Model):
     """
     Regla de alerta configurable.
 
-    Una regla combina 1-5 **grupos**. Cada grupo contiene 1-5
-    **condicionales** lógicos combinables con un operador interno
+    Una regla combina 1-5 **grupos** de disparo. Cada grupo contiene
+    1-5 **condicionales** lógicos combinables con un operador interno
     (AND / OR / XOR). Los grupos se combinan entre sí con un operador
     externo (AND / OR / XOR). Tanto los grupos como los condicionales
     pueden negarse individualmente con NOT.
 
-    Los condicionales se guardan como un dict v2 en `conditionals`:
+    A partir de la v4, la regla también puede tener un **bloque
+    opcional de auto-resolución** (`auto_resolve_conditionals`), con
+    la misma estructura de grupos, que define las condiciones bajo
+    las cuales las alertas emitidas por la regla se resuelven
+    automáticamente. Este bloque es opcional: si está vacío o si
+    `enable_auto_resolve=False`, el sistema aplica el comportamiento
+    clásico (resolver cuando las condiciones de disparo dejen de
+    cumplirse).
+
+    Los condicionales de disparo se guardan como un dict v2 en
+    `conditionals`:
 
         {
           "version": 2,
@@ -30,7 +70,7 @@ class AlertRule(models.Model):
             {
               "logic": null,           # el primer grupo no tiene lógica
               "negate": false,         # NOT aplicado al grupo entero
-              "operator": "AND",       # operador entre condicionales del grupo
+              "operators": ["AND"],    # operadores entre condicionales
               "conditionals": [
                 {
                   "device_id": 1,
@@ -40,24 +80,16 @@ class AlertRule(models.Model):
                   "duration_sec": 60,
                   "negate": false
                 },
-                {
-                  "device_id": 1,
-                  "metric": "mem_pct",
-                  "operator": "gte",
-                  "threshold": 85.0,
-                  "duration_sec": 60,
-                  "negate": false
-                }
+                ...
               ]
             },
-            {
-              "logic": "OR",           # operador con el grupo anterior
-              "negate": true,          # NOT (grupo entero)
-              "operator": "XOR",       # operador entre condicionales
-              "conditionals": [ ... ]
-            }
+            ...
           ]
         }
+
+    Los condicionales de auto-resolución (`auto_resolve_conditionals`)
+    usan exactamente la misma estructura v2, pero se evalúan por
+    separado, con su propio estado en `_cond_states`.
 
     Se evalúa como:
         NOT (c1 XOR c2) OR NOT NOT (c3 XOR c4) → ...
@@ -90,10 +122,13 @@ class AlertRule(models.Model):
         ("packet_loss_pct",  "Pérdida de paquetes (%)"),
         # --- Métricas de tráfico ---
         ("utilization_pct",  "Utilización de enlace (%)"),
+        ("in_bps",           "Tráfico entrante (bps)"),
+        ("out_bps",          "Tráfico saliente (bps)"),
         # --- Métricas de chasis ---
         ("cpu_pct",          "CPU (%)"),
         ("mem_pct",          "Memoria (%)"),
         ("temp_c",           "Temperatura (°C)"),
+        ("uptime",           "Uptime (segundos)"),
         # --- Métricas de radiofrecuencia (wireless) ---
         ("wl_signal",        "Señal de radio (dBm)"),
         ("wl_noise_floor",   "Piso de ruido (dBm)"),
@@ -102,6 +137,11 @@ class AlertRule(models.Model):
         ("wl_rx_rate",       "Tasa de RX (kbps)"),
         ("airmax_quality",   "Calidad airMAX (%)"),
         ("airmax_capacity",  "Capacidad airMAX (%)"),
+        ("radio_freq",       "Frecuencia de radio (MHz)"),
+        ("radio_txpower",    "Potencia TX (dBm)"),
+        ("chan_width",       "Ancho de canal (MHz)"),
+        # --- Métricas de clientes AP ---
+        ("ap_client_count",  "Clientes AP conectados"),
     ]
 
     OPERATOR_CHOICES = [
@@ -125,20 +165,61 @@ class AlertRule(models.Model):
     description = models.TextField(blank=True, verbose_name="Descripción")
 
     # ------------------------------------------------------------
-    # CONDICIONALES (JSON v2)
+    # CONDICIONALES DE DISPARO (JSON v2) — OBLIGATORIOS
     # ------------------------------------------------------------
     conditionals = models.JSONField(
         default=dict,
-        verbose_name="Condicionales",
+        verbose_name="Condicionales para disparar la Alerta",
         help_text=(
             "Estructura v2: {'version': 2, 'groups': [...]}. "
             "Cada grupo tiene 1-5 condicionales, hasta 5 grupos, "
-            "10 condicionales totales máximo."
+            "10 condicionales totales máximo. "
+            "Son OBLIGATORIOS: sin ellos la regla no puede disparar "
+            "alertas."
         ),
     )
 
     # ------------------------------------------------------------
-    # COMPORTAMIENTO
+    # CONDICIONALES DE AUTO-RESOLUCIÓN (JSON v2) — OPCIONALES
+    # ------------------------------------------------------------
+    auto_resolve_conditionals = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Condicionales para resolver la Alerta",
+        help_text=(
+            "Estructura v2 idéntica a 'conditionals'. Si está vacío "
+            "o 'enable_auto_resolve' está desactivado, el sistema "
+            "aplica el comportamiento clásico: resuelve las alertas "
+            "cuando las condiciones de disparo dejen de cumplirse."
+        ),
+    )
+    enable_auto_resolve = models.BooleanField(
+        default=False,
+        verbose_name="Habilitar auto-resolución por condicionales",
+        help_text=(
+            "Si está activo Y existen condicionales de auto-resolución, "
+            "se evaluarán para resolver las alertas de esta regla. "
+            "Si está desactivado o el bloque JSON está vacío, se usa "
+            "el comportamiento clásico."
+        ),
+    )
+
+    # ------------------------------------------------------------
+    # COMPORTAMIENTO AL DISPARAR
+    # ------------------------------------------------------------
+    mark_as_resolved = models.BooleanField(
+        default=False,
+        verbose_name="Crear alertas ya resueltas",
+        help_text=(
+            "Útil para reglas puramente informativas. Las alertas se "
+            "crean con estado 'resuelta' en lugar de 'activa', y se "
+            "deduplican como 'fire_once' para no generar una alerta "
+            "por cada ciclo."
+        ),
+    )
+
+    # ------------------------------------------------------------
+    # SEVERIDAD Y MENSAJE
     # ------------------------------------------------------------
     severity = models.CharField(
         max_length=20, choices=SEVERITY_CHOICES, default="warning",
@@ -156,7 +237,9 @@ class AlertRule(models.Model):
         ),
     )
 
-    # Telegram
+    # ------------------------------------------------------------
+    # TELEGRAM
+    # ------------------------------------------------------------
     telegram_enabled = models.BooleanField(
         default=True, verbose_name="Notificar por Telegram",
     )
@@ -164,7 +247,9 @@ class AlertRule(models.Model):
         default=600, verbose_name="Cooldown Telegram (s)",
     )
 
-    # Modos de disparo
+    # ------------------------------------------------------------
+    # MODOS DE DISPARO
+    # ------------------------------------------------------------
     fire_once = models.BooleanField(
         default=False, verbose_name="Disparar solo una vez",
     )
@@ -172,7 +257,9 @@ class AlertRule(models.Model):
         default=False, verbose_name="Omitir al iniciar el monitor",
     )
 
-    # Estado
+    # ------------------------------------------------------------
+    # ESTADO
+    # ------------------------------------------------------------
     enabled = models.BooleanField(default=True, verbose_name="Activa")
 
     # ------------------------------------------------------------
@@ -195,14 +282,14 @@ class AlertRule(models.Model):
         return f"{self.name} ({self.groups_count} grupo(s), {self.conditionals_count} cond.)"
 
     # ============================================================
-    # GRUPOS (v2)
+    # GRUPOS DE DISPARO (v2)
     # ============================================================
     def get_groups(self) -> list:
         """
-        Devuelve los grupos de la regla.
+        Devuelve los grupos de condicionales de DISPARO.
 
         Returns:
-            list: [{logic, negate, operator, conditionals: [...]}, ...]
+            list: [{logic, negate, operators, conditionals: [...]}, ...]
                   Lista vacía si el campo no tiene el formato v2.
         """
         cond = self.conditionals
@@ -210,21 +297,78 @@ class AlertRule(models.Model):
             return cond.get("groups", [])
         return []
 
+    # ============================================================
+    # GRUPOS DE AUTO-RESOLUCIÓN (v2)
+    # ============================================================
+    def get_auto_resolve_groups(self) -> list:
+        """
+        Devuelve los grupos de condicionales de AUTO-RESOLUCIÓN.
+
+        Returns:
+            list: [{logic, negate, operators, conditionals: [...]}, ...]
+                  Lista vacía si el bloque está vacío o no es v2.
+        """
+        cond = self.auto_resolve_conditionals
+        if isinstance(cond, dict) and "groups" in cond:
+            return cond.get("groups", [])
+        return []
+
     @property
     def conditionals_count(self) -> int:
-        """Total de condicionales en todos los grupos."""
+        """Total de condicionales de DISPARO en todos los grupos."""
         return sum(len(g.get("conditionals", [])) for g in self.get_groups())
 
     @property
+    def auto_resolve_conditionals_count(self) -> int:
+        """Total de condicionales de AUTO-RESOLUCIÓN."""
+        return sum(len(g.get("conditionals", [])) for g in self.get_auto_resolve_groups())
+
+    @property
     def groups_count(self) -> int:
-        """Número de grupos."""
+        """Número de grupos de DISPARO."""
         return len(self.get_groups())
 
     @property
+    def auto_resolve_groups_count(self) -> int:
+        """Número de grupos de AUTO-RESOLUCIÓN."""
+        return len(self.get_auto_resolve_groups())
+
+    @property
+    def has_auto_resolve(self) -> bool:
+        """
+        True si la auto-resolución por condicionales está efectivamente
+        habilitada: `enable_auto_resolve=True` Y existe al menos un
+        condicional en `auto_resolve_conditionals`.
+        """
+        return bool(
+            self.enable_auto_resolve
+            and self.auto_resolve_conditionals_count > 0
+        )
+
+    @property
     def device_ids(self) -> list:
-        """IDs únicos de equipos involucrados en cualquier condicional."""
+        """
+        IDs únicos de equipos involucrados en cualquier condicional de
+        DISPARO (no incluye auto-resolución). Se usa para búsquedas
+        inversas desde `Device`.
+        """
         ids = []
         for g in self.get_groups():
+            for c in g.get("conditionals", []):
+                did = c.get("device_id")
+                if did and did not in ids:
+                    ids.append(did)
+        return ids
+
+    @property
+    def all_device_ids(self) -> list:
+        """
+        IDs únicos de equipos en cualquier condicional (DISPARO +
+        AUTO-RESOLUCIÓN). Útil para `device_detail.html` (reglas
+        vinculadas).
+        """
+        ids = list(self.device_ids)
+        for g in self.get_auto_resolve_groups():
             for c in g.get("conditionals", []):
                 did = c.get("device_id")
                 if did and did not in ids:
@@ -241,28 +385,37 @@ class AlertRule(models.Model):
 
     @property
     def primary_device(self):
-        """Instancia del primer equipo."""
+        """Instancia del primer equipo (de disparo)."""
         from inventario.models import Device
         did = self.primary_device_id
         if not did:
             return None
         return Device.objects.filter(pk=did).first()
 
+    # ============================================================
+    # CONTADORES DE ALERTAS (por rule_id, sin FK)
+    # ============================================================
     @property
     def active_alerts_count(self) -> int:
-        """Alertas activas generadas por esta regla."""
-        return self.alerts.filter(status="activa").count()
+        """
+        Alertas activas generadas por esta regla.
+
+        A partir de v4, no existe FK `alerts`; se consulta por `rule_id`.
+        """
+        return Alert.objects.filter(
+            rule_id=self.id, status="activa",
+        ).count()
 
     @property
     def last_fired_at(self):
-        """Fecha de la última alerta disparada."""
-        last = self.alerts.order_by("-created_at").first()
+        """Fecha de la última alerta disparada por esta regla."""
+        last = Alert.objects.filter(rule_id=self.id).order_by("-created_at").first()
         return last.created_at if last else None
 
     @property
     def total_fired_count(self) -> int:
         """Total histórico de alertas disparadas por esta regla."""
-        return self.alerts.count()
+        return Alert.objects.filter(rule_id=self.id).count()
 
     # ============================================================
     # HELPERS DE FORMULARIO
@@ -271,6 +424,7 @@ class AlertRule(models.Model):
     def get_valid_operators(metric: str) -> list:
         """
         Devuelve los operadores válidos para una métrica.
+
         El primero es el default.
         """
         valid_map = {
@@ -278,10 +432,13 @@ class AlertRule(models.Model):
             "latency_ms":       ["gte", "gt"],
             "packet_loss_pct":  ["gte", "gt"],
             "utilization_pct":  ["gte", "gt"],
+            "in_bps":           ["gte", "gt"],
+            "out_bps":          ["gte", "gt"],
             "cpu_pct":          ["gte", "gt"],
             "mem_pct":          ["gte", "gt"],
             "temp_c":           ["gte", "gt"],
-            # RF: señal y CCQ alertan con <, ruido y tasas con >
+            "uptime":           ["lte", "lt", "gte", "gt"],
+            # RF: señal y CCQ alertan con <, ruido y tasas con >.
             "wl_signal":        ["lte", "lt"],
             "wl_noise_floor":   ["gte", "gt"],
             "wl_ccq":           ["lte", "lt"],
@@ -289,25 +446,24 @@ class AlertRule(models.Model):
             "wl_rx_rate":       ["lte", "lt"],
             "airmax_quality":   ["lte", "lt"],
             "airmax_capacity":  ["lte", "lt"],
+            "radio_freq":       ["eq"],
+            "radio_txpower":    ["gte", "gt", "lte", "lt"],
+            "chan_width":       ["eq"],
+            "ap_client_count":  ["lte", "lt", "eq"],
         }
         ops = valid_map.get(metric, ["gte", "gt", "lt", "lte", "eq"])
         labels = dict(AlertRule.OPERATOR_CHOICES)
         return [(op, labels[op]) for op in ops if op in labels]
 
-    def get_conditionals_with_devices(self) -> list:
+    def _enrich_groups(self, groups: list) -> list:
         """
-        Devuelve los grupos con conditionals enriquecidos para templates.
+        Enriquecer grupos de condicionales con instancias de `Device`,
+        etiquetas legibles y `global_index`.
 
-        Returns:
-            list: [{index, logic, negate, operators, conditionals: [...]}, ...]
-                  `operators` es la lista de N-1 operadores entre
-                  condicionales consecutivos del grupo.
-                  Cada condicional incluye device, labels legibles y
-                  `global_index` (posición global entre todos los grupos).
+        Helper interno compartido por `get_conditionals_with_devices()`
+        y `get_auto_resolve_conditionals_with_devices()`.
         """
         from inventario.models import Device
-
-        groups = self.get_groups()
 
         all_dev_ids = set()
         for g in groups:
@@ -362,9 +518,36 @@ class AlertRule(models.Model):
             })
         return result
 
+    def get_conditionals_with_devices(self) -> list:
+        """
+        Devuelve los grupos de DISPARO enriquecidos para templates.
+        Estructura: [{index, logic, negate, operators, conditionals: [...]}, ...]
+        """
+        return self._enrich_groups(self.get_groups())
+
+    def get_auto_resolve_conditionals_with_devices(self) -> list:
+        """
+        Devuelve los grupos de AUTO-RESOLUCIÓN enriquecidos para templates.
+        Estructura idéntica a `get_conditionals_with_devices()`.
+        """
+        return self._enrich_groups(self.get_auto_resolve_groups())
+
 
 class Alert(models.Model):
-    """Alerta generada por una regla."""
+    """
+    Alerta generada por una regla.
+
+    IMPORTANTE (refactor v4):
+      Este modelo NO tiene ForeignKeys. Es intencional:
+        · Las alertas son registros históricos/auditables y no deben
+          verse afectados por el borrado de equipos, interfaces o reglas.
+        · Se guarda `rule_id` (IntegerField plano, db_index) para que
+          el motor de auto-resolución pueda agrupar alertas por regla.
+        · Se guarda `rule_name` como snapshot para preservar el nombre
+          incluso si la regla se elimina.
+        · NO se guardan snapshots de device/interface (son redundantes:
+          el mensaje ya incluye la info de devices vía placeholders).
+    """
 
     SEVERITY_CHOICES = [
         ("info", "Info"),
@@ -377,20 +560,26 @@ class Alert(models.Model):
         ("resuelta", "Resuelta"),
     ]
 
-    device = models.ForeignKey(
-        "inventario.Device", on_delete=models.SET_NULL,
-        null=True, blank=True, db_column="device_id",
-        related_name="alerts",
+    # ------------------------------------------------------------
+    # IDENTIFICACIÓN DE LA REGLA (SIN FK)
+    # ------------------------------------------------------------
+    rule_id = models.IntegerField(
+        null=True, blank=True, db_index=True,
+        verbose_name="ID de la regla (snapshot)",
+        help_text=(
+            "ID de la AlertRule que disparó esta alerta. NO es FK: se "
+            "guarda como entero plano para desacoplar el histórico."
+        ),
     )
-    interface = models.ForeignKey(
-        "inventario.Interface", on_delete=models.SET_NULL,
-        null=True, blank=True, db_column="interface_id",
-        related_name="alerts",
+    rule_name = models.CharField(
+        max_length=150, blank=True,
+        verbose_name="Nombre de la regla (snapshot)",
+        help_text="Nombre de la regla al momento del disparo.",
     )
-    rule = models.ForeignKey(
-        AlertRule, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name="alerts",
-    )
+
+    # ------------------------------------------------------------
+    # DATOS DEL DISPARO
+    # ------------------------------------------------------------
     alert_type = models.CharField(max_length=50)
     severity = models.CharField(
         max_length=20, choices=SEVERITY_CHOICES, default="warning",
@@ -402,6 +591,10 @@ class Alert(models.Model):
     threshold_value = models.DecimalField(
         max_digits=20, decimal_places=4, null=True, blank=True,
     )
+
+    # ------------------------------------------------------------
+    # ESTADO
+    # ------------------------------------------------------------
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default="activa",
     )
@@ -413,6 +606,13 @@ class Alert(models.Model):
         ordering = ["-created_at"]
         verbose_name = "Alerta"
         verbose_name_plural = "Alertas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rule_id"],
+                condition=models.Q(status="activa"),
+                name="unique_active_alert_per_rule",
+            ),
+        ]
 
     def __str__(self):
-        return f"[{self.severity}] {self.alert_type} - {self.device or 'N/A'}"
+        return f"[{self.severity}] {self.alert_type} - {self.rule_name or 'N/A'}"

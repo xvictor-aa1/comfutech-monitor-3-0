@@ -4,10 +4,13 @@ Escritura en InfluxDB 2.x.
 
 Características:
   - Cliente compartido (se recrea si cambia la configuración).
+  - **Buffer por thread** (v4): los puntos se acumulan en memoria y se
+    escriben en una sola request HTTP al final de cada ciclo del poller
+    (llamando a `flush()`). Reduce de ~430 requests por ciclo a ~5.
   - Escritura tolerante a fallos: NUNCA propaga excepciones a los
     pollers (se loguea a DEBUG y se devuelve False).
   - Cierre automático con atexit.
-  - Measurements: traffic, health, icmp, tcp, radio.
+  - Measurements: traffic, health, icmp, tcp, radio, ap_clients.
 """
 import atexit
 import logging
@@ -27,6 +30,7 @@ log = logging.getLogger(__name__)
 # ============================================================
 INFLUX_TIMEOUT_MS = 5000    # timeout por escritura
 POOL_MAXSIZE = 10           # pool de conexiones
+MAX_BUFFER_SIZE = 500       # flush automático si el buffer crece
 
 
 # ============================================================
@@ -39,6 +43,27 @@ _cached_url: Optional[str] = None
 _cached_token: Optional[str] = None
 
 
+# ============================================================
+# BUFFER POR THREAD (v4)
+# ============================================================
+# Cada thread (job del scheduler) tiene su propio buffer de puntos.
+# Al final del ciclo, el poller llama `flush()` y se escribe todo en
+# una sola request HTTP. Esto reduce de N requests a 1 por ciclo.
+_write_buffer = threading.local()
+
+
+def _get_buffer() -> list:
+    """Devuelve el buffer de puntos del thread actual."""
+    buf = getattr(_write_buffer, "points", None)
+    if buf is None:
+        buf = []
+        _write_buffer.points = buf
+    return buf
+
+
+# ============================================================
+# CLIENTE
+# ============================================================
 def _get_write_api():
     """
     Devuelve el write_api compartido, recreándolo si la config cambió.
@@ -93,6 +118,8 @@ def close():
     Cierra el cliente InfluxDB y limpia la caché.
 
     Se llama con atexit y desde `reset()` cuando cambia la config.
+    También vacía el buffer del thread actual para no perder puntos
+    pendientes (aunque si se llama al cerrar el proceso, se descartan).
     """
     global _client, _write_api, _cached_url, _cached_token
     with _client_lock:
@@ -113,20 +140,23 @@ def reset():
 
 
 # ============================================================
-# ESCRITURA GENÉRICA
+# FLUSH (v4): volcado del buffer
 # ============================================================
-def _write_point(point: Point) -> bool:
+def _flush_buffer() -> bool:
     """
-    Escribe un punto. NUNCA propaga excepciones.
-
-    Args:
-        point: instancia de Point configurada.
+    Escribe todos los puntos acumulados en una sola request HTTP.
 
     Returns:
-        bool: True si se escribió correctamente.
+        bool: True si se escribió al menos un punto correctamente.
     """
     api = _get_write_api()
     if api is None:
+        # Sin cliente: descartar buffer para no acumular indefinidamente.
+        _get_buffer().clear()
+        return False
+
+    buf = _get_buffer()
+    if not buf:
         return False
 
     try:
@@ -134,13 +164,56 @@ def _write_point(point: Point) -> bool:
         api.write(
             bucket=cfg["bucket"],
             org=cfg["org"],
-            record=point,
+            record=buf,
         )
+        buf.clear()
         return True
     except Exception as e:
-        # Nivel DEBUG para evitar spam; los fallos son recuperables
-        log.debug("InfluxDB write falló: %s", e)
+        # Nivel DEBUG para evitar spam; los fallos son recuperables.
+        log.debug("InfluxDB batch write falló: %s", e)
+        buf.clear()
         return False
+
+
+def flush():
+    """
+    Fuerza el volcado del buffer del thread actual.
+
+    Debe llamarse al final de cada ciclo de polling (en el `finally`
+    del job, para asegurar el flush incluso si el poller falló).
+    """
+    _flush_buffer()
+
+
+# ============================================================
+# ESCRITURA GENÉRICA (ahora acumula en buffer)
+# ============================================================
+def _write_point(point: Point) -> bool:
+    """
+    Acumula un punto en el buffer del thread actual.
+
+    El buffer se vuelca (flush) al final de cada ciclo del poller
+    llamando a `flush()`. Esto reduce de N requests HTTP a 1 por
+    ciclo.
+
+    Si el buffer crece demasiado (>MAX_BUFFER_SIZE), se hace un
+    flush automático de seguridad.
+
+    Args:
+        point: instancia de Point configurada.
+
+    Returns:
+        bool: True (siempre, porque la escritura real se confirma
+              en el flush).
+    """
+    buf = _get_buffer()
+    buf.append(point)
+
+    # Volcado automático si el buffer crece demasiado (seguridad).
+    if len(buf) >= MAX_BUFFER_SIZE:
+        _flush_buffer()
+
+    return True
 
 
 # ============================================================
@@ -170,7 +243,7 @@ def write_traffic(
         timestamp: datetime UTC naive.
 
     Returns:
-        bool: True si se escribió.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("traffic")
@@ -209,7 +282,7 @@ def write_health(
         timestamp: datetime UTC naive.
 
     Returns:
-        bool: True si se escribió algo.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("health")
@@ -250,7 +323,7 @@ def write_icmp(
         timestamp: datetime UTC naive.
 
     Returns:
-        bool: True si se escribió.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("icmp")
@@ -282,7 +355,7 @@ def write_tcp(
         timestamp: datetime UTC naive.
 
     Returns:
-        bool: True si se escribió.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("tcp")
@@ -316,7 +389,7 @@ def write_radio(
         timestamp: datetime UTC naive.
 
     Returns:
-        bool: True si se escribió algo.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("radio")
@@ -374,7 +447,7 @@ def write_ap_client(
         timestamp: datetime UTC.
 
     Returns:
-        bool: True si se escribió.
+        bool: True si se acumuló en el buffer.
     """
     point = (
         Point("ap_clients")

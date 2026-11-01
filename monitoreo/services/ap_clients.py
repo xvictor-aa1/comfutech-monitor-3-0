@@ -6,6 +6,10 @@ Solo procesa equipos con device_model.is_wireless_link=True.
 Los clientes se guardan en Device.ap_interfaces (config estática).
 Las métricas en vivo se escriben a InfluxDB (measurement "ap_clients").
 
+El walk SNMP se realiza sobre el subárbol completo de ubntWlStatTable
+(1 sola consulta por AP), y luego se agrupan los valores por columna
+e índice en Python.
+
 Formato de ap_interfaces (JSONField en Device):
     [
       {
@@ -49,6 +53,9 @@ AP_COLUMNS = {
     "rx_rate":      "1.3.6.1.4.1.41112.1.4.5.1.10",
 }
 
+# Subárbol completo de la tabla (contiene todas las columnas anteriores).
+TABLE_BASE = "1.3.6.1.4.1.41112.1.4.5.1"
+
 
 def _utcnow() -> datetime:
     """Hora actual en UTC (aware)."""
@@ -78,11 +85,12 @@ def _format_mac(raw) -> str:
 
 
 # ============================================================
-# WALK DE COLUMNAS
+# WALK DE LA TABLA COMPLETA
 # ============================================================
 def _walk_all_columns(device) -> Dict[str, Dict[int, object]]:
     """
-    Hace walk de cada columna de ubntWlStatTable.
+    Hace un único walk del subárbol ubntWlStatTable y agrupa los
+    valores por columna e índice.
 
     Args:
         device: instancia de Device.
@@ -90,23 +98,37 @@ def _walk_all_columns(device) -> Dict[str, Dict[int, object]]:
     Returns:
         dict: {col_name: {index: value}}.
     """
-    raw = {}
-    for col_name, base_oid in AP_COLUMNS.items():
-        values = {}
+    # Mapa inverso: OID completo de columna → nombre corto.
+    column_map = {oid: name for name, oid in AP_COLUMNS.items()}
+
+    raw: Dict[str, Dict[int, object]] = {name: {} for name in AP_COLUMNS}
+
+    try:
+        pairs = snmp_walk(device, TABLE_BASE)
+    except Exception as e:
+        log.debug("[%s] Walk ubntWlStatTable falló: %s", device.name, e)
+        return raw
+
+    prefix = TABLE_BASE + "."
+    for oid_str, val in pairs:
+        if not oid_str.startswith(prefix):
+            continue
+        suffix = oid_str[len(prefix):]
+        parts = suffix.split(".")
+        if len(parts) < 2:
+            continue
         try:
-            pairs = snmp_walk(device, base_oid)
-            prefix = base_oid + "."
-            for oid_str, val in pairs:
-                if not oid_str.startswith(prefix):
-                    continue
-                try:
-                    idx = int(oid_str[len(prefix):].split(".")[0])
-                except (ValueError, IndexError):
-                    continue
-                values[idx] = val
-        except Exception as e:
-            log.debug("[%s] Walk %s falló: %s", device.name, col_name, e)
-        raw[col_name] = values
+            col_num = int(parts[0])
+            idx = int(parts[1])
+        except (ValueError, IndexError):
+            continue
+
+        # El OID de la columna es TABLE_BASE + "." + col_num
+        col_oid = f"{TABLE_BASE}.{col_num}"
+        col_name = column_map.get(col_oid)
+        if col_name:
+            raw[col_name][idx] = val
+
     return raw
 
 
@@ -184,7 +206,7 @@ def discover_ap_clients(device) -> dict:
         clients = _parse_clients(raw)
         result["clients_found"] = len(clients)
 
-        # Mapa de clientes existentes por MAC
+        # Mapa de clientes existentes por MAC.
         existing = {
             c.get("mac", "").upper(): c
             for c in (device.ap_interfaces or [])
@@ -196,7 +218,7 @@ def discover_ap_clients(device) -> dict:
             mac = c["mac"].upper()
             if mac in existing:
                 prev = existing[mac]
-                # Preservar first_seen y hostname; actualizar el resto
+                # Preservar first_seen y hostname; actualizar el resto.
                 prev["ip"] = c["ip"] or prev.get("ip", "")
                 prev["essid"] = c["essid"] or prev.get("essid", "")
                 prev["if_index"] = c["index"]
@@ -215,7 +237,7 @@ def discover_ap_clients(device) -> dict:
                 })
                 result["added"] += 1
 
-        # Añadir los que estaban pero no aparecieron (offline)
+        # Añadir los que estaban pero no aparecieron (offline).
         seen_macs = {c["mac"].upper() for c in clients}
         for mac, prev in existing.items():
             if mac not in seen_macs:
@@ -250,6 +272,7 @@ def poll_ap_clients() -> dict:
       1. Hace walk de ubntWlStatTable.
       2. Actualiza ap_interfaces (nuevos clientes).
       3. Escribe métricas a InfluxDB.
+      4. Evalúa alertas de conteo de clientes AP.
 
     Returns:
         dict: {devices, clients, errors, skipped, duration_s}.
@@ -285,15 +308,20 @@ def poll_ap_clients() -> dict:
         if not clients:
             log.debug("[%s] Sin clientes AP conectados.", device.name)
             stats["skipped"] += 1
+            # Aun sin clientes, se evalúan alertas (para detectar "AP vacío").
+            try:
+                alerts.evaluate_metrics(device, {"ap_client_count": 0})
+            except Exception as e:
+                log.error("[%s] Error evaluando alertas AP: %s", device.name, e)
             continue
 
-        # Actualizar ap_interfaces
+        # Actualizar ap_interfaces.
         try:
             _sync_ap_interfaces(device, clients)
         except Exception as e:
             log.error("[%s] Error actualizando ap_interfaces: %s", device.name, e)
 
-        # Escribir métricas a InfluxDB
+        # Escribir métricas a InfluxDB.
         for c in clients:
             try:
                 snr = None
@@ -321,6 +349,12 @@ def poll_ap_clients() -> dict:
                     "[%s/%s] Error escribiendo cliente a InfluxDB: %s",
                     device.name, c["mac"], e,
                 )
+
+        # Evaluar alertas con el conteo de clientes online.
+        try:
+            alerts.evaluate_metrics(device, {"ap_client_count": len(clients)})
+        except Exception as e:
+            log.error("[%s] Error evaluando alertas AP: %s", device.name, e)
 
         log.info(
             "[%s] AP clients: %d conectados",
@@ -367,7 +401,7 @@ def _sync_ap_interfaces(device, clients: List[dict]):
                 "last_seen": now_iso,
             })
 
-    # Preservar offline
+    # Preservar offline.
     seen_macs = {c["mac"].upper() for c in clients}
     for mac, prev in existing.items():
         if mac not in seen_macs:

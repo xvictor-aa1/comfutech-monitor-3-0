@@ -103,7 +103,6 @@ def dashboard(request):
     recent_alerts = (
         Alert.objects
         .filter(created_at__gte=range_start)
-        .select_related("device", "rule")
         .order_by("-created_at")[:8]
     )
 
@@ -172,6 +171,10 @@ def recent_alerts_api(request):
     """
     Devuelve alertas nuevas desde un timestamp (para mostrar toasts).
 
+    A partir de la v4, el payload incluye `rule_id` y `rule_name`
+    (snapshot) en lugar de `device` / `device_id`, porque las alertas
+    ya no están vinculadas a equipos.
+
     Query params:
         since: timestamp ISO. Solo devuelve alertas con
                created_at > since.
@@ -189,11 +192,11 @@ def recent_alerts_api(request):
         # Fallback: últimos 30s
         since_dt = timezone.now() - timedelta(seconds=30)
 
-    # Traer alertas activas creadas después del timestamp
+    # Traer alertas activas creadas después del timestamp.
+    # v4: sin select_related (no hay FKs).
     alerts = (
         Alert.objects
         .filter(created_at__gt=since_dt, status="activa")
-        .select_related("device")
         .order_by("-created_at")[:10]
     )
 
@@ -202,8 +205,9 @@ def recent_alerts_api(request):
         "severity": a.severity,
         "severity_label": a.get_severity_display(),
         "message": a.message[:200],
-        "device": a.device.name if a.device else None,
-        "device_id": a.device.id if a.device else None,
+        # Snapshot de la regla (reemplaza a device/device_id).
+        "rule_id": a.rule_id,
+        "rule_name": a.rule_name or "",
         "created_at": a.created_at.isoformat(),
     } for a in alerts]
 

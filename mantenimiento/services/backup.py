@@ -3,7 +3,8 @@
 Servicio de respaldos (backups) del sistema.
 
 Responsabilidades:
-  - Crear backups de la BD MySQL (mysqldump + gzip).
+  - Crear backups de la BD (MySQL: mysqldump, Postgres: pg_dump,
+    SQLite: sqlite3.backup) con gzip.
   - Crear backups de los archivos .toml (config.toml + system.toml).
   - Crear backups completos (BD + .toml en un .zip).
   - Listar backups existentes.
@@ -22,8 +23,14 @@ Formato de nombre:
 Seguridad:
   - Archivos con permisos 0600, directorio con 0700 (Unix).
   - Credenciales MySQL vía `--defaults-extra-file` (no visibles en `ps`).
+  - Credenciales Postgres vía `PGPASSWORD` env var.
   - Nombres validados contra regex estricta (no path traversal).
   - Lock para evitar backups concurrentes.
+
+Robustez v4:
+  - Si mysqldump/pg_dump excede MYSQLDUMP_TIMEOUT, el subprocess se
+    MATA (`proc.kill()`) antes de propagar la excepción. Antes quedaba
+    huérfano consumiendo CPU y disco.
 """
 import gzip
 import json
@@ -266,7 +273,7 @@ def _dump_sqlite_to_path(db_path, output_path: Path) -> None:
     if not db_path.is_file():
         raise Exception(f"Archivo SQLite no encontrado: {db_path}")
 
-    # Copia temporal descomprimida
+    # Copia temporal descomprimida.
     fd, tmp_sqlite = tempfile.mkstemp(prefix=".sqlite_", suffix=".db")
     os.close(fd)
     try:
@@ -279,7 +286,7 @@ def _dump_sqlite_to_path(db_path, output_path: Path) -> None:
             src.close()
             dst.close()
 
-        # Comprimir
+        # Comprimir.
         with open(tmp_sqlite, "rb") as f_in:
             with gzip.open(output_path, "wb", compresslevel=6) as f_out:
                 shutil.copyfileobj(f_in, f_out)
@@ -332,18 +339,35 @@ def _dump_mysql_to_path(db: dict, output_path: Path) -> None:
                 proc.stdout.close()
                 stderr_bytes = proc.stderr.read()
                 proc.stderr.close()
-                proc.wait(timeout=MYSQLDUMP_TIMEOUT)
+                # v4: matar el subprocess si excede el timeout.
+                try:
+                    proc.wait(timeout=MYSQLDUMP_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()  # esperar a que muera realmente
+                    try:
+                        output_path.unlink()
+                    except Exception:
+                        pass
+                    raise Exception(
+                        f"mysqldump excedió el timeout de "
+                        f"{MYSQLDUMP_TIMEOUT}s y fue abortado."
+                    )
 
         if proc.returncode != 0:
-            try: output_path.unlink()
-            except Exception: pass
+            try:
+                output_path.unlink()
+            except Exception:
+                pass
             raise Exception(
                 f"mysqldump falló: {stderr_bytes.decode('utf-8', errors='replace')[:500]}"
             )
     finally:
         if os.path.exists(temp_defaults):
-            try: os.unlink(temp_defaults)
-            except Exception: pass
+            try:
+                os.unlink(temp_defaults)
+            except Exception:
+                pass
 
 
 def _dump_postgres_to_path(db: dict, output_path: Path) -> None:
@@ -373,7 +397,7 @@ def _dump_postgres_to_path(db: dict, output_path: Path) -> None:
         "--format=plain",
     ]
 
-    # Credenciales vía env (no aparecen en `ps`)
+    # Credenciales vía env (no aparecen en `ps`).
     env = os.environ.copy()
     if password:
         env["PGPASSWORD"] = password
@@ -389,11 +413,26 @@ def _dump_postgres_to_path(db: dict, output_path: Path) -> None:
             proc.stdout.close()
             stderr_bytes = proc.stderr.read()
             proc.stderr.close()
-            proc.wait(timeout=MYSQLDUMP_TIMEOUT)
+            # v4: matar el subprocess si excede el timeout.
+            try:
+                proc.wait(timeout=MYSQLDUMP_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()  # esperar a que muera realmente
+                try:
+                    output_path.unlink()
+                except Exception:
+                    pass
+                raise Exception(
+                    f"pg_dump excedió el timeout de "
+                    f"{MYSQLDUMP_TIMEOUT}s y fue abortado."
+                )
 
     if proc.returncode != 0:
-        try: output_path.unlink()
-        except Exception: pass
+        try:
+            output_path.unlink()
+        except Exception:
+            pass
         raise Exception(
             f"pg_dump falló: {stderr_bytes.decode('utf-8', errors='replace')[:500]}"
         )
@@ -494,13 +533,13 @@ def backup_full() -> Dict:
         _check_disk_space()
         _ensure_backup_dir()
 
-        # 1. Dump de la BD a un archivo temporal
+        # 1. Dump de la BD a un archivo temporal.
         fd, db_temp = tempfile.mkstemp(prefix=".db_", suffix=".sql.gz")
         os.close(fd)
         try:
             _dump_db_to_path(Path(db_temp))
 
-            # 2. Crear el ZIP con dump + .toml + manifest
+            # 2. Crear el ZIP con dump + .toml + manifest.
             timestamp = _timestamp()
             filename = f"full_{timestamp}.zip"
             filepath = BACKUP_DIR / filename
@@ -683,7 +722,7 @@ def get_stats() -> Dict:
     meta = config_ini.get_meta()
     engine = _get_db_engine()
 
-    # Detectar la herramienta de dump según el motor
+    # Detectar la herramienta de dump según el motor.
     if engine == "sqlite":
         dump_tool = "sqlite3 (built-in)"
     else:
@@ -696,6 +735,6 @@ def get_stats() -> Dict:
         "last_backup_type": meta.get("last_backup_type", ""),
         "last_backup_filename": meta.get("last_backup_filename", ""),
         "backup_dir": str(BACKUP_DIR),
-        "dump_tool_path": dump_tool,     # clave renombrada
-        "db_engine": engine,              # nueva: útil en el template
+        "dump_tool_path": dump_tool,
+        "db_engine": engine,
     }

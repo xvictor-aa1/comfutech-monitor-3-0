@@ -5,6 +5,9 @@ Cliente SNMP para PySNMP 7.x.
 Características:
   - API asíncrona de pysnmp 7.x con wrapper síncrono por thread.
   - Event loop por thread (evita conflictos en APScheduler).
+  - **Engine SNMP por thread** (v4): reutiliza el `SnmpEngine` en
+    lugar de crear uno nuevo por consulta. Reduce drásticamente el
+    consumo de sockets UDP y dispatchers en ciclos con muchos OIDs.
   - Construcción de autenticación según versión SNMP (1, 2c, 3).
   - Conversión robusta de tipos SNMP (Integer32, Counter64, Gauge32, TimeTicks).
   - Soporte de GET (múltiples OIDs) y WALK (bulk).
@@ -46,11 +49,16 @@ MAX_RESULTS = 1024      # límite de seguridad para walk
 
 
 # ============================================================
-# EVENT LOOP POR THREAD
+# EVENT LOOP Y ENGINE POR THREAD
 # ============================================================
 # APScheduler ejecuta jobs en threads distintos. Cada thread debe tener
 # su propio event loop porque asyncio no permite dos loops en el mismo
 # thread al mismo tiempo.
+#
+# Además, el `SnmpEngine` se reutiliza por thread (v4): crear un engine
+# nuevo por consulta implica abrir un socket UDP y un dispatcher nuevos,
+# lo que degrada drásticamente el rendimiento en ciclos con cientos de
+# consultas (ej. 110 interfaces × 2 OIDs = 220 engines por ciclo).
 _loop_local = threading.local()
 
 
@@ -69,6 +77,24 @@ def _get_loop() -> asyncio.AbstractEventLoop:
         loop = asyncio.new_event_loop()
         _loop_local.loop = loop
     return loop
+
+
+def _get_engine() -> SnmpEngine:
+    """
+    Devuelve (o crea) el `SnmpEngine` del thread actual.
+
+    Reutilizar el engine evita crear un socket UDP y un dispatcher
+    nuevos por cada consulta SNMP. En un ciclo de traffic con 110
+    interfaces, esto reduce de ~220 engines nuevos a 1 por thread.
+
+    Returns:
+        SnmpEngine: engine listo para usar.
+    """
+    engine = getattr(_loop_local, "engine", None)
+    if engine is None:
+        engine = SnmpEngine()
+        _loop_local.engine = engine
+    return engine
 
 
 def _run_async(coro):
@@ -177,7 +203,7 @@ async def _snmp_get_async(device, oids: List[str]) -> List[Optional[object]]:
 
     try:
         errInd, errStat, errIdx, varBinds = await get_cmd(
-            SnmpEngine(),
+            _get_engine(),                    # ← v4: reutilizar engine
             auth,
             transport,
             ContextData(),
@@ -250,7 +276,7 @@ async def _snmp_walk_async(device, base_oid: str) -> List[Tuple[str, object]]:
         log.debug("Error creando transporte SNMP %s: %s", device.ip, e)
         return []
 
-    engine = SnmpEngine()
+    engine = _get_engine()                    # ← v4: reutilizar engine
     context = ContextData()
 
     results: List[Tuple[str, object]] = []
@@ -335,7 +361,7 @@ def to_int(value) -> Optional[int]:
         return int(value)
     except (ValueError, TypeError):
         pass
-    # Fallback para objetos que solo exponen prettyPrint
+    # Fallback para objetos que solo exponen prettyPrint.
     try:
         return int(str(value))
     except (ValueError, TypeError):

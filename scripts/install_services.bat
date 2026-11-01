@@ -24,17 +24,29 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- Verificar NSSM ---
-where nssm >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] NSSM no esta en PATH.
+REM --- Localizar NSSM (preferir el de bin\nssm, fallback a PATH) ---
+set "NSSM_EXE="
+if exist "%PROJECT_ROOT%\bin\nssm\win64\nssm.exe" (
+    set "NSSM_EXE=%PROJECT_ROOT%\bin\nssm\win64\nssm.exe"
+) else (
+    where nssm >nul 2>&1
+    if not errorlevel 1 (
+        set "NSSM_EXE=nssm"
+    )
+)
+
+if "!NSSM_EXE!"=="" (
+    echo [ERROR] No se encontro nssm.exe.
     echo.
-    echo         Descarga: https://nssm.cc/download
-    echo         Descomprime y copia nssm.exe a C:\Windows\System32\
+    echo         Ejecuta primero: scripts\installer.bat
+    echo         (descarga NSSM en bin\nssm\win64)
     echo.
     pause
     exit /b 1
 )
+
+echo   NSSM:   !NSSM_EXE!
+echo.
 
 REM --- Detectar Python del venv ---
 call "%PROJECT_ROOT%\scripts\_detect_venv.bat"
@@ -60,10 +72,10 @@ if not exist "%PROJECT_ROOT%\logs" mkdir "%PROJECT_ROOT%\logs"
 
 REM --- Eliminar servicios previos si existen ---
 echo === Limpiando servicios previos ===
-nssm stop ComfutechDjango >nul 2>&1
-nssm stop ComfutechMonitor >nul 2>&1
-nssm remove ComfutechDjango confirm >nul 2>&1
-nssm remove ComfutechMonitor confirm >nul 2>&1
+"!NSSM_EXE!" stop ComfutechDjango >nul 2>&1
+"!NSSM_EXE!" stop ComfutechMonitor >nul 2>&1
+"!NSSM_EXE!" remove ComfutechDjango confirm >nul 2>&1
+"!NSSM_EXE!" remove ComfutechMonitor confirm >nul 2>&1
 
 REM ============================================================
 REM SERVICIO 1: ComfutechDjango (Waitress)
@@ -71,19 +83,19 @@ REM ============================================================
 echo.
 echo === Instalando ComfutechDjango ===
 
-nssm install ComfutechDjango "%PYTHON_EXE%"
-nssm set ComfutechDjango AppDirectory "%PROJECT_ROOT%"
-nssm set ComfutechDjango AppParameters "-m waitress --listen=0.0.0.0:8000 --threads=16 sistema.wsgi:application"
-nssm set ComfutechDjango DisplayName "Comfutech Django (Waitress)"
-nssm set ComfutechDjango Description "Servidor web Django para Comfutech Monitor"
-nssm set ComfutechDjango Start SERVICE_AUTO_START
-nssm set ComfutechDjango AppStdout "%PROJECT_ROOT%\logs\django_out.log"
-nssm set ComfutechDjango AppStderr "%PROJECT_ROOT%\logs\django_err.log"
-nssm set ComfutechDjango AppRotateFiles 1
-nssm set ComfutechDjango AppRotateBytes 10485760
-nssm set ComfutechDjango AppExit Default Restart
-nssm set ComfutechDjango AppRestartDelay 5000
-nssm set ComfutechDjango AppEnvironmentExtra PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
+"!NSSM_EXE!" install ComfutechDjango "%PYTHON_EXE%"
+"!NSSM_EXE!" set ComfutechDjango AppDirectory "%PROJECT_ROOT%"
+"!NSSM_EXE!" set ComfutechDjango AppParameters "-m waitress --listen=0.0.0.0:8000 --threads=16 sistema.wsgi:application"
+"!NSSM_EXE!" set ComfutechDjango DisplayName "Comfutech Django (Waitress)"
+"!NSSM_EXE!" set ComfutechDjango Description "Servidor web Django para Comfutech Monitor"
+"!NSSM_EXE!" set ComfutechDjango Start SERVICE_AUTO_START
+"!NSSM_EXE!" set ComfutechDjango AppStdout "%PROJECT_ROOT%\logs\django_out.log"
+"!NSSM_EXE!" set ComfutechDjango AppStderr "%PROJECT_ROOT%\logs\django_err.log"
+"!NSSM_EXE!" set ComfutechDjango AppRotateFiles 1
+"!NSSM_EXE!" set ComfutechDjango AppRotateBytes 10485760
+"!NSSM_EXE!" set ComfutechDjango AppExit Default Restart
+"!NSSM_EXE!" set ComfutechDjango AppRestartDelay 5000
+"!NSSM_EXE!" set ComfutechDjango AppEnvironmentExtra PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 
 REM ============================================================
 REM SERVICIO 2: ComfutechMonitor
@@ -91,35 +103,35 @@ REM ============================================================
 echo.
 echo === Instalando ComfutechMonitor ===
 
-nssm install ComfutechMonitor "%PYTHON_EXE%"
-nssm set ComfutechMonitor AppDirectory "%PROJECT_ROOT%"
-nssm set ComfutechMonitor AppParameters "manage.py run_monitor"
-nssm set ComfutechMonitor DisplayName "Comfutech Monitor de Red"
-nssm set ComfutechMonitor Description "Monitor SNMP/ICMP/TCP de Comfutech"
-nssm set ComfutechMonitor Start SERVICE_AUTO_START
-nssm set ComfutechMonitor AppStdout "%PROJECT_ROOT%\logs\monitor_out.log"
-nssm set ComfutechMonitor AppStderr "%PROJECT_ROOT%\logs\monitor_err.log"
-nssm set ComfutechMonitor AppRotateFiles 1
-nssm set ComfutechMonitor AppRotateBytes 10485760
-nssm set ComfutechMonitor AppExit Default Restart
-nssm set ComfutechMonitor AppRestartDelay 10000
-nssm set ComfutechMonitor AppEnvironmentExtra PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
+"!NSSM_EXE!" install ComfutechMonitor "%PYTHON_EXE%"
+"!NSSM_EXE!" set ComfutechMonitor AppDirectory "%PROJECT_ROOT%"
+"!NSSM_EXE!" set ComfutechMonitor AppParameters "manage.py run_monitor"
+"!NSSM_EXE!" set ComfutechMonitor DisplayName "Comfutech Monitor de Red"
+"!NSSM_EXE!" set ComfutechMonitor Description "Monitor SNMP/ICMP/TCP de Comfutech"
+"!NSSM_EXE!" set ComfutechMonitor Start SERVICE_AUTO_START
+"!NSSM_EXE!" set ComfutechMonitor AppStdout "%PROJECT_ROOT%\logs\monitor_out.log"
+"!NSSM_EXE!" set ComfutechMonitor AppStderr "%PROJECT_ROOT%\logs\monitor_err.log"
+"!NSSM_EXE!" set ComfutechMonitor AppRotateFiles 1
+"!NSSM_EXE!" set ComfutechMonitor AppRotateBytes 10485760
+"!NSSM_EXE!" set ComfutechMonitor AppExit Default Restart
+"!NSSM_EXE!" set ComfutechMonitor AppRestartDelay 10000
+"!NSSM_EXE!" set ComfutechMonitor AppEnvironmentExtra PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 
 REM ============================================================
 REM Arrancar servicios
 REM ============================================================
 echo.
 echo === Arrancando servicios ===
-nssm start ComfutechDjango
-nssm start ComfutechMonitor
+"!NSSM_EXE!" start ComfutechDjango
+"!NSSM_EXE!" start ComfutechMonitor
 
 REM --- Verificar despues de 3 segundos ---
 timeout /t 3 /nobreak >nul
 
 echo.
 echo === Estado final ===
-echo Django:  & nssm status ComfutechDjango
-echo Monitor: & nssm status ComfutechMonitor
+echo Django:  & "!NSSM_EXE!" status ComfutechDjango
+echo Monitor: & "!NSSM_EXE!" status ComfutechMonitor
 
 echo.
 echo ============================================================

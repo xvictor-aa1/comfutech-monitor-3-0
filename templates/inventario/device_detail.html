@@ -94,19 +94,32 @@
         </div>
     </div>
 
+    <!--
+        Card 3: REEMPLAZADA (v4).
+        Antes: "Alertas activas" (del device, vía FK reverse).
+        Ahora: "Reglas vinculadas" + subtexto con alertas activas agregadas.
+        El conteo se calcula por rule_id (no hay FK).
+    -->
     <div class="col-md-3">
-        <div class="card card-metric">
-            <div class="card-body">
-                <div class="metric-label">Alertas activas</div>
-                <div class="metric-value
-                    {% if active_alerts_count > 0 %}text-danger{% else %}text-success{% endif %}">
-                    {{ active_alerts_count }}
+        <a href="#linked-rules" class="text-decoration-none">
+            <div class="card card-metric">
+                <div class="card-body">
+                    <div class="metric-label">Reglas vinculadas</div>
+                    <div class="metric-value
+                        {% if linked_rules_count > 0 %}text-primary{% else %}text-muted{% endif %}">
+                        {{ linked_rules_count }}
+                    </div>
+                    <small class="text-muted">
+                        {% if linked_active_alerts_total > 0 %}
+                            <i class="bi bi-bell-fill text-danger"></i>
+                            {{ linked_active_alerts_total }} alerta{{ linked_active_alerts_total|pluralize:"s" }} activa{{ linked_active_alerts_total|pluralize:"s" }}
+                        {% else %}
+                            {{ linked_alerts_total }} histórica{{ linked_alerts_total|pluralize:"s" }}
+                        {% endif %}
+                    </small>
                 </div>
-                <small class="text-muted">
-                    {{ total_alerts_count }} históricas
-                </small>
             </div>
-        </div>
+        </a>
     </div>
 
     <div class="col-md-3">
@@ -329,7 +342,7 @@
     </div>
 
     <!-- ======================================================== -->
-    <!-- COLUMNA DERECHA: estado en vivo + alertas + discovery    -->
+    <!-- COLUMNA DERECHA: estado en vivo + reglas vinculadas + discovery -->
     <!-- ======================================================== -->
     <div class="col-lg-8">
 
@@ -344,7 +357,6 @@
                         <small class="text-muted" id="live-timestamp">—</small>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <!-- Toggle modo vista -->
                         <div class="btn-group btn-group-sm" role="group" aria-label="Modo de vista">
                             <input type="radio" class="btn-check" name="view-mode"
                                    id="mode-static" value="static" autocomplete="off" checked>
@@ -376,52 +388,144 @@
         </div>
 
         <!-- ==================================================== -->
-        <!-- Alertas recientes                                    -->
+        <!-- REEMPLAZADO (v4): Reglas de alertas vinculadas      -->
+        <!-- (antes: Alertas recientes, que usaba alert.device)  -->
         <!-- ==================================================== -->
-        <div class="card mb-4">
+        <div class="card mb-4" id="linked-rules">
             <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                <strong><i class="bi bi-bell text-warning"></i> Alertas recientes</strong>
-                <a href="{% url 'alertas:alert_list' %}?device={{ device.id }}"
+                <strong>
+                    <i class="bi bi-shield-exclamation text-warning"></i>
+                    Reglas de alertas vinculadas
+                    <span class="badge bg-secondary ms-1">{{ linked_rules_count }}</span>
+                </strong>
+                <a href="{% url 'alertas:rule_list' %}"
                    class="btn btn-sm btn-outline-secondary">
-                    Ver todas <i class="bi bi-arrow-right"></i>
+                    Ver todas las reglas <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
-            <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
-                {% for alert in alerts %}
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="mb-1">
+
+            {% if linked_rules %}
+            <div class="list-group list-group-flush" style="max-height: 500px; overflow-y: auto;">
+                {% for item in linked_rules %}
+                {% with rule=item.rule %}
+                <div class="list-group-item py-2">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <!-- Nombre + badges de severidad/estado -->
+                            <div class="mb-1 d-flex align-items-center gap-1 flex-wrap">
+                                <a href="{% url 'alertas:rule_edit' rule.id %}"
+                                   class="text-decoration-none"
+                                   title="Editar regla">
+                                    <strong>{{ rule.name }}</strong>
+                                </a>
                                 <span class="badge
-                                    {% if alert.severity == 'critical' %}bg-danger
-                                    {% elif alert.severity == 'warning' %}bg-warning text-dark
-                                    {% else %}bg-info{% endif %}">
-                                    {{ alert.get_severity_display }}
+                                    {% if rule.severity == 'critical' %}bg-danger
+                                    {% elif rule.severity == 'warning' %}bg-warning text-dark
+                                    {% else %}bg-info{% endif %}"
+                                    style="font-size: 0.65rem;">
+                                    {{ rule.get_severity_display }}
                                 </span>
-                                <code class="ms-1 small">{{ alert.alert_type }}</code>
-                                {% if alert.status == "activa" %}
-                                    <span class="badge bg-danger ms-1">Activa</span>
-                                {% elif alert.status == "reconocida" %}
-                                    <span class="badge bg-warning text-dark ms-1">Reconocida</span>
+                                {% if rule.enabled %}
+                                <span class="badge bg-success" style="font-size: 0.65rem;">
+                                    <i class="bi bi-check-circle"></i> Activa
+                                </span>
                                 {% else %}
-                                    <span class="badge bg-success ms-1">Resuelta</span>
+                                <span class="badge bg-secondary" style="font-size: 0.65rem;">
+                                    <i class="bi bi-pause-circle"></i> Inactiva
+                                </span>
                                 {% endif %}
                             </div>
-                            <div class="small">{{ alert.message|truncatechars:120 }}</div>
-                            <small class="text-muted">
-                                <i class="bi bi-clock"></i>
-                                {{ alert.created_at|timesince }} atrás
+
+                            <!-- Badges de vinculación -->
+                            <div class="mb-1 d-flex align-items-center gap-1 flex-wrap">
+                                {% if item.in_trigger %}
+                                <span class="badge bg-primary"
+                                      title="Este equipo participa en los condicionales de DISPARO">
+                                    <i class="bi bi-diagram-3"></i> Disparo
+                                </span>
+                                {% endif %}
+                                {% if item.in_auto_resolve %}
+                                <span class="badge bg-success"
+                                      title="Este equipo participa en los condicionales de AUTO-RESOLUCIÓN">
+                                    <i class="bi bi-check2-circle"></i> Auto-resolve
+                                </span>
+                                {% endif %}
+                                {% if item.has_auto_resolve %}
+                                <span class="badge bg-info text-dark"
+                                      title="La regla tiene auto-resolución habilitada con condicionales">
+                                    <i class="bi bi-arrow-repeat"></i> AR {{ item.auto_resolve_conditionals_count }}C
+                                </span>
+                                {% endif %}
+                                {% if not item.in_trigger and not item.in_auto_resolve %}
+                                <span class="badge bg-warning text-dark"
+                                      title="La regla menciona al equipo pero no participa en ningún condicional (posible inconsistencia)">
+                                    <i class="bi bi-exclamation-triangle"></i> Sin uso
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            <!-- Conteo de condicionales -->
+                            <small class="text-muted d-block" style="font-size: 0.72rem;">
+                                <i class="bi bi-list-check"></i>
+                                {{ item.conditionals_count }} cond. de disparo
+                                {% if item.auto_resolve_conditionals_count > 0 %}
+                                · {{ item.auto_resolve_conditionals_count }} cond. de auto-resolve
+                                {% endif %}
                             </small>
+
+                            <!-- Alertas activas / totales -->
+                            <div class="mt-1">
+                                {% if item.active_alerts_count > 0 %}
+                                <a href="{% url 'alertas:alert_list' %}?rule_id={{ rule.id }}&status=activa"
+                                   class="badge bg-danger text-decoration-none"
+                                   title="{{ item.active_alerts_count }} alerta(s) activa(s) de esta regla">
+                                    <i class="bi bi-bell-fill"></i> {{ item.active_alerts_count }} activa{{ item.active_alerts_count|pluralize:"s" }}
+                                </a>
+                                {% endif %}
+                                {% if item.total_alerts_count > 0 %}
+                                <a href="{% url 'alertas:alert_list' %}?rule_id={{ rule.id }}"
+                                   class="badge bg-secondary text-decoration-none"
+                                   title="{{ item.total_alerts_count }} alerta(s) totales de esta regla">
+                                    <i class="bi bi-collection"></i> {{ item.total_alerts_count }} total{{ item.total_alerts_count|pluralize:"es" }}
+                                </a>
+                                {% endif %}
+                                {% if item.active_alerts_count == 0 and item.total_alerts_count == 0 %}
+                                <small class="text-muted" style="font-size: 0.72rem;">
+                                    <i class="bi bi-dash-circle"></i> Sin alertas registradas
+                                </small>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Botón editar regla -->
+                        <div>
+                            <a href="{% url 'alertas:rule_edit' rule.id %}"
+                               class="btn btn-sm btn-outline-secondary"
+                               title="Editar regla">
+                                <i class="bi bi-pencil"></i>
+                            </a>
                         </div>
                     </div>
                 </div>
-                {% empty %}
-                <div class="list-group-item text-center text-muted py-4">
-                    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-                    <p class="mb-0 mt-2 small">Sin alertas registradas</p>
-                </div>
+                {% endwith %}
                 {% endfor %}
             </div>
+            <div class="card-footer bg-white small text-muted">
+                <i class="bi bi-info-circle"></i>
+                A partir de la v4, las alertas no están vinculadas a equipos.
+                Este bloque muestra las <strong>reglas</strong> que usan a
+                este equipo en sus condicionales de disparo o auto-resolución.
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">
+                <i class="bi bi-shield-slash" style="font-size: 2.5rem;"></i>
+                <p class="mb-2 mt-2">Este equipo no participa en ninguna regla de alerta.</p>
+                <a href="{% url 'alertas:rule_create' %}"
+                   class="btn btn-sm btn-primary">
+                    <i class="bi bi-plus-lg"></i> Crear regla con este equipo
+                </a>
+            </div>
+            {% endif %}
         </div>
 
         <!-- ==================================================== -->
@@ -586,9 +690,33 @@ registerHelpContent({
             body: `
                 El detalle de un equipo concentra toda su información
                 en una sola vista: configuración, SNMP, capacidades,
-                estado en vivo, alertas recientes y últimos discovery jobs.
+                estado en vivo, reglas de alerta vinculadas y últimos
+                discovery jobs.
                 <br><br>
                 Es la pantalla principal para diagnosticar un equipo.
+            `
+        },
+        {
+            heading: "¿Por qué dice 'Reglas vinculadas' y no 'Alertas'?",
+            body: `
+                A partir de la v4, las <strong>alertas ya no están
+                vinculadas a equipos</strong>. Son registros históricos
+                y auditables que se conservan aunque el equipo o la regla
+                se eliminen.
+                <br><br>
+                Por eso esta página muestra las <strong>reglas de alerta
+                que usan a este equipo</strong> en sus condicionales de
+                disparo o auto-resolución. Para cada regla se indica:
+                <br>
+                • Si participa en el <strong>disparo</strong>.
+                <br>
+                • Si participa en la <strong>auto-resolución</strong>.
+                <br>
+                • Cuántas alertas activas / totales ha generado.
+                <br><br>
+                Para ver las alertas de una regla específica, haz clic en
+                los badges de conteo. Se abrirá el listado de alertas
+                filtrado por esa regla.
             `
         },
         {
@@ -629,9 +757,34 @@ registerHelpContent({
                 • <strong>Interfaces:</strong> contador monitoreadas/totales
                 (o clientes AP para radioenlaces).
                 <br>
-                • <strong>Alertas activas:</strong> alertas sin resolver de este equipo.
+                • <strong>Reglas vinculadas:</strong> cuántas reglas usan a
+                este equipo, con el total de alertas activas agregadas.
                 <br>
                 • <strong>Última actualización:</strong> timestamp del último fetch.
+            `
+        },
+        {
+            heading: "Reglas de alertas vinculadas",
+            body: `
+                Cada fila muestra una regla que usa a este equipo. Los
+                badges indican:
+                <br>
+                • <span class="badge bg-primary"><i class="bi bi-diagram-3"></i> Disparo</span>:
+                el equipo participa en los condicionales de disparo.
+                <br>
+                • <span class="badge bg-success"><i class="bi bi-check2-circle"></i> Auto-resolve</span>:
+                el equipo participa en los condicionales de auto-resolución.
+                <br>
+                • <span class="badge bg-info text-dark"><i class="bi bi-arrow-repeat"></i> AR NC</span>:
+                la regla tiene auto-resolución habilitada con N condicionales.
+                <br>
+                • <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle"></i> Sin uso</span>:
+                la regla menciona al equipo pero no participa en ningún
+                condicional (posible inconsistencia de configuración).
+                <br><br>
+                Los badges de <strong>alertas activas</strong> (rojo) y
+                <strong>totales</strong> (gris) son clicables y llevan al
+                listado de alertas filtrado por esa regla.
             `
         },
         {
@@ -648,15 +801,6 @@ registerHelpContent({
                 <br>
                 • Ver las <strong>capacidades de monitoreo</strong>
                 (interfaces, health, wireless) con su estado.
-            `
-        },
-        {
-            heading: "Alertas recientes",
-            body: `
-                Muestra las últimas alertas generadas por el motor de
-                reglas para este equipo. Cada alerta tiene severidad,
-                tipo, estado y mensaje. Haz clic en <em>"Ver todas"</em>
-                para el listado completo con filtros.
             `
         },
         {
@@ -677,11 +821,16 @@ registerHelpContent({
                 • <strong>Cambia al modo gráfico</strong> para analizar
                 tendencias (degradación de señal, picos de CPU, etc.).
                 <br>
-                • <strong>Revisa las alertas recientes</strong> para
-                detectar patrones de falla.
+                • <strong>Revisa las reglas vinculadas</strong> para
+                entender qué alertas puede generar este equipo y cuáles
+                ya están activas.
                 <br>
                 • <strong>Si el equipo está inactivo</strong>, las métricas
                 en vivo no se actualizarán.
+                <br>
+                • <strong>Si una regla aparece como "Sin uso"</strong>,
+                revisa su configuración — probablemente quedó un
+                `device_id` huérfano al editar los condicionales.
             `
         }
     ]
@@ -889,7 +1038,7 @@ function observeSparklines() {
 }
 
 // ============================================================
-// RENDERIZADO DE BLOQUES (igual que monitor_live)
+// RENDERIZADO DE BLOQUES
 // ============================================================
 function renderWirelessBlock(wireless) {
     if (!wireless) return '';
@@ -1463,7 +1612,6 @@ function renderLiveMetrics(device) {
 
     const chartMode = state.viewMode === 'chart';
 
-    // Stats superiores
     const icmp = device.icmp || {};
     const statusEl = document.getElementById('stat-status');
     const statusDetailEl = document.getElementById('stat-status-detail');
@@ -1481,14 +1629,12 @@ function renderLiveMetrics(device) {
         statusDetailEl.textContent = 'sin respuesta ICMP';
     }
 
-    // Bloques
     const wirelessBlock = renderWirelessBlock(device.wireless_info);
     const radioBlock = renderRadioBlock(device, chartMode);
     const icmpBlock = renderIcmpBlock(device, chartMode);
     const healthBlock = renderHealthBlock(device, chartMode);
     const tcpBlock = renderTcpBlock(device);
 
-    // ← FIX: AP Clients reemplaza a TRAFFIC (no a ICMP)
     const networkBlock = device.is_wireless_link
         ? renderApClientsBlock(device)
         : renderTrafficBlock(device, chartMode);
@@ -1506,7 +1652,6 @@ function renderLiveMetrics(device) {
 
     container.innerHTML = html;
 
-    // Cargar sparklines (solo en modo gráfico)
     if (chartMode) {
         observeSparklines();
     }
@@ -1590,7 +1735,6 @@ function setViewMode(mode) {
 
     try { localStorage.setItem('cf-live-view-mode', mode); } catch (e) {}
 
-    // Re-render con el modo actual (si ya tenemos datos)
     if (state.device) {
         renderLiveMetrics(state.device);
     }
@@ -1617,7 +1761,6 @@ function toggleSnmpCredentials() {
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Restaurar modo vista (compartido con monitor_live)
     try {
         const saved = localStorage.getItem('cf-live-view-mode');
         if (saved === 'chart' || saved === 'static') {
@@ -1627,17 +1770,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     } catch (e) { setViewMode('static'); }
 
-    // Toggle modo vista
     document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
         radio.addEventListener('change', () => {
             if (radio.checked) setViewMode(radio.value);
         });
     });
 
-    // Carga inicial
     loadLiveMetrics();
 
-    // Auto-refresh
     const toggle = document.getElementById('live-auto-refresh');
     if (toggle) {
         toggle.addEventListener('change', () => {
@@ -1647,7 +1787,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (toggle.checked) startLiveRefresh();
     }
 
-    // Pausar cuando la pestaña no está visible
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
             if (state.refreshTimer) stopLiveRefresh();

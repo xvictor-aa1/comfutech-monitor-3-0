@@ -292,22 +292,36 @@
 <!-- ============================================================ -->
 <!-- Último error                                                 -->
 <!-- ============================================================ -->
-{% if status and status.last_error %}
-<div class="alert alert-warning" id="last-error-box">
-    <div class="d-flex justify-content-between align-items-start">
-        <div class="flex-grow-1" style="min-width: 0;">
-            <strong>
-                <i class="bi bi-exclamation-triangle"></i> Último error registrado:
-            </strong>
-            <pre class="mb-0 mt-2" style="white-space: pre-wrap; font-size: 0.8rem;
-                 max-height: 200px; overflow-y: auto;">{{ status.last_error|truncatechars:1000 }}</pre>
-        </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
-                onclick="dismissError()"
+{% if status and status.last_errors %}
+<div class="alert alert-warning" id="last-errors-box">
+    <div class="d-flex justify-content-between align-items-start mb-2">
+        <strong>
+            <i class="bi bi-exclamation-triangle"></i>
+            Errores por poller ({{ status.last_errors|length }}):
+        </strong>
+        <button type="button" class="btn btn-sm btn-outline-secondary"
+                onclick="dismissErrors()"
                 title="Ocultar hasta recargar la página">
             <i class="bi bi-x-lg"></i>
         </button>
     </div>
+    <ul class="mb-0 small" style="list-style: none; padding-left: 0;">
+        {% for poller, err in status.last_errors.items %}
+        <li class="mb-2 pb-2 {% if not forloop.last %}border-bottom{% endif %}">
+            <div class="d-flex align-items-start gap-2">
+                <span class="badge bg-warning text-dark">{{ poller }}</span>
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <div class="text-break">{{ err.msg }}</div>
+                    {% if err.ts %}
+                    <small class="text-muted" style="font-size: 0.72rem;">
+                        <i class="bi bi-clock"></i> {{ err.ts }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
 </div>
 {% endif %}
 
@@ -510,8 +524,8 @@ function updateNextRuns() {
 /**
  * Oculta el banner de último error hasta que se recargue la página.
  */
-function dismissError() {
-    const box = document.getElementById('last-error-box');
+function dismissErrors() {
+    const box = document.getElementById('last-errors-box');
     if (box) box.style.display = 'none';
 }
 

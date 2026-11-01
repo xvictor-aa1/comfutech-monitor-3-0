@@ -98,6 +98,16 @@ class MonitorStatus(models.Model):
     last_radio_run = models.DateTimeField(null=True, blank=True)
     last_ap_clients_run = models.DateTimeField(null=True, blank=True)
 
+    last_errors = models.JSONField(
+        default=dict, blank=True,
+        verbose_name="Últimos errores por poller",
+        help_text=(
+            "Diccionario {poller: {msg, ts}} con el último error de "
+            "cada poller. Se limpia automáticamente cuando el poller "
+            "vuelve a tener éxito."
+        ),
+    )
+    # Usado por Monitor Status | Deprecado
     last_error = models.TextField(null=True, blank=True)
 
     class Meta:
@@ -117,3 +127,50 @@ class MonitorStatus(models.Model):
             return False
         age = (timezone.now() - self.last_heartbeat).total_seconds()
         return age < 90 and self.status == "running"
+
+    @property
+    def has_any_error(self) -> bool:
+        """
+        True si al menos un poller tiene un error registrado en
+        `last_errors`. Útil para mostrar un banner en la UI.
+        """
+        return bool(self.last_errors)
+
+
+class TelegramCooldown(models.Model):
+    """
+    Persistencia del cooldown de Telegram por regla (y opcionalmente
+    por device).
+
+    El cooldown de Telegram ya no vive solo en memoria del proceso monitor. 
+    Se persiste en esta tabla para que sobreviva a reinicios del servicio.
+
+    La clave `key` es un string con el formato:
+      · `rule:<rule_id>`                 → cooldown por regla (v4)
+      · `rule:<rule_id>:device:<id>`     → cooldown por regla+device (legacy)
+
+    Las alertas ya no tienen FK a device, así que se usa `rule:<rule_id>` siempre. 
+    La forma `rule:<id>:device:<id>` se conserva por compatibilidad si en el 
+    futuro se reintroduce el device en el motor de alertas.
+
+    Se limpia automáticamente por el heartbeat del scheduler cuando
+    tiene más de 24h de antigüedad.
+    """
+    key = models.CharField(
+        max_length=200, unique=True, db_index=True,
+        verbose_name="Clave de cooldown",
+    )
+    last_sent_at = models.DateTimeField(
+        verbose_name="Último envío",
+    )
+
+    class Meta:
+        db_table = "telegram_cooldowns"
+        verbose_name = "Cooldown de Telegram"
+        verbose_name_plural = "Cooldowns de Telegram"
+        indexes = [
+            models.Index(fields=["last_sent_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.key} ({self.last_sent_at:%Y-%m-%d %H:%M:%S})"

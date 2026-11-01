@@ -9,6 +9,12 @@ Características:
   - Cache de contadores previos en memoria por (device, if_index).
   - Cálculo de utilización con sanity check (>500% se descarta).
   - Solo procesa interfaces con `monitored=True` y `oper_status=True`.
+  - La evaluación de alertas se realiza una sola vez por device y
+    ciclo, enviando el máximo de utilización, in_bps y out_bps entre
+    todas las interfaces monitoreadas.
+  - Limpieza periódica de contadores huérfanos mediante
+    `cleanup_stale_counters()`, invocada desde el heartbeat del
+    scheduler.
 """
 import logging
 import time
@@ -145,6 +151,38 @@ def _calculate_bps(
 
 
 # ============================================================
+# LIMPIEZA DE CONTADORES HUÉRFANOS
+# ============================================================
+def cleanup_stale_counters(max_age_sec: int = 86400) -> int:
+    """
+    Elimina entradas de `_prev_counters` con más de `max_age_sec`
+    sin actualizarse.
+
+    Se llama periódicamente desde el heartbeat del scheduler para
+    liberar memoria cuando se eliminan equipos o interfaces.
+
+    Args:
+        max_age_sec: antigüedad máxima en segundos (default 24h).
+
+    Returns:
+        int: número de entradas eliminadas.
+    """
+    now = _utcnow()
+    removed = 0
+    with _prev_lock:
+        stale_keys = [
+            k for k, (_, _, ts) in _prev_counters.items()
+            if (now - ts).total_seconds() > max_age_sec
+        ]
+        for k in stale_keys:
+            del _prev_counters[k]
+            removed += 1
+    if removed:
+        log.debug("Limpiados %d contadores de tráfico huérfanos.", removed)
+    return removed
+
+
+# ============================================================
 # CICLO COMPLETO
 # ============================================================
 def poll_traffic() -> dict:
@@ -153,7 +191,8 @@ def poll_traffic() -> dict:
 
     Itera sobre todas las interfaces con `monitored=True` y
     `oper_status=True`, lee los contadores, calcula bps y utilización,
-    escribe a InfluxDB y evalúa alertas.
+    escribe a InfluxDB (buffer) y evalúa alertas una vez por device
+    con el máximo de cada métrica entre sus interfaces.
 
     Returns:
         dict: {devices, interfaces, alerts, errors, duration_s}
@@ -169,7 +208,7 @@ def poll_traffic() -> dict:
     now = _utcnow()
 
     for device in devices:
-        # Filtrar interfaces monitoreadas y operativas
+        # Filtrar interfaces monitoreadas y operativas.
         interfaces = [
             i for i in device.interfaces.all()
             if i.monitored and i.oper_status
@@ -178,6 +217,12 @@ def poll_traffic() -> dict:
             continue
 
         stats["devices"] += 1
+
+        # Acumuladores para el motor de alertas: máximo de cada métrica
+        # entre todas las interfaces monitoreadas del equipo.
+        max_util: Optional[float] = None
+        max_in_bps: Optional[float] = None
+        max_out_bps: Optional[float] = None
 
         for iface in interfaces:
             try:
@@ -191,7 +236,7 @@ def poll_traffic() -> dict:
                     stats["errors"] += 1
                     continue
 
-                # Leer contadores previos del cache
+                # Leer contadores previos del cache.
                 cache_key = (device.id, iface.if_index)
                 with _prev_lock:
                     prev = _prev_counters.get(cache_key)
@@ -203,16 +248,16 @@ def poll_traffic() -> dict:
                     prev_in = prev_out = None
                     elapsed = 60.0  # asumir ciclo estándar en el primer intento
 
-                # Calcular bps
+                # Calcular bps.
                 in_bps, out_bps = _calculate_bps(
                     prev_in, prev_out, curr_in, curr_out, elapsed, bits=64,
                 )
 
-                # Actualizar cache
+                # Actualizar cache.
                 with _prev_lock:
                     _prev_counters[cache_key] = (curr_in, curr_out, now)
 
-                # Calcular utilización
+                # Calcular utilización.
                 util = None
                 if iface.if_speed_bps and iface.if_speed_bps > 0:
                     candidates = []
@@ -223,7 +268,7 @@ def poll_traffic() -> dict:
                     if candidates:
                         util = max(candidates)
 
-                    # Sanity check: advertir una sola vez por interfaz
+                    # Sanity check: advertir una sola vez por interfaz.
                     if util is not None and util > 500.0:
                         if iface.id not in _warned_absurd_util:
                             log.warning(
@@ -235,7 +280,18 @@ def poll_traffic() -> dict:
                             _warned_absurd_util.add(iface.id)
                         util = None
 
-                # Escribir a InfluxDB
+                # Acumular máximos para el motor de alertas.
+                if util is not None:
+                    if max_util is None or util > max_util:
+                        max_util = util
+                if in_bps is not None:
+                    if max_in_bps is None or in_bps > max_in_bps:
+                        max_in_bps = in_bps
+                if out_bps is not None:
+                    if max_out_bps is None or out_bps > max_out_bps:
+                        max_out_bps = out_bps
+
+                # Escribir a InfluxDB (acumula en buffer; se envía al final).
                 if in_bps is not None or out_bps is not None:
                     influx_writer.write_traffic(
                         device_name=device.name,
@@ -253,16 +309,6 @@ def poll_traffic() -> dict:
                     )
                     stats["interfaces"] += 1
 
-                # Evaluar alertas
-                if util is not None:
-                    try:
-                        alerts.evaluate_metrics(device, {"utilization_pct": util})
-                    except Exception as e:
-                        log.error(
-                            "[%s] Error evaluando alertas: %s",
-                            device.name, e,
-                        )
-
                 log.info(
                     "%s if%d [%s]: cap=%s Mbps in=%.2f out=%.2f util=%s%%",
                     device.name, iface.if_index, device.device_role,
@@ -278,6 +324,22 @@ def poll_traffic() -> dict:
                     device.name, iface.if_index, e,
                 )
                 stats["errors"] += 1
+
+        # Evaluar alertas una sola vez por device y ciclo, con las
+        # 3 métricas de tráfico (máximo entre interfaces).
+        if max_util is not None or max_in_bps is not None or max_out_bps is not None:
+            try:
+                alerts.evaluate_metrics(device, {
+                    "utilization_pct": max_util,
+                    "in_bps": max_in_bps,
+                    "out_bps": max_out_bps,
+                })
+                stats["alerts"] += 1
+            except Exception as e:
+                log.error(
+                    "[%s] Error evaluando alertas de tráfico: %s",
+                    device.name, e,
+                )
 
     stats["duration_s"] = round(time.time() - start, 2)
     return stats

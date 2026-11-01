@@ -170,12 +170,16 @@ elif DB_ENGINE in ("postgres", "postgresql", "psql"):
             "USER": DB_USER,
             "PASSWORD": DB_PASSWORD,
             "HOST": DB_HOST,
-            "PORT": DB_PORT or "5432",
+            "PORT": DB_PORT or "6543",            # 5432 - conexion por defecto / 6543 Supabase
+             # --- Opciones de Django (nivel superior) ---
+            "CONN_MAX_AGE": 0,
+            "CONN_HEALTH_CHECKS": True,
+            "DISABLE_SERVER_SIDE_CURSORS": True,  # ✅ Aquí, no en OPTIONS
+            # --- Opciones del driver (se pasan a psycopg) ---
             "OPTIONS": {
-                "sslmode": "require",      # Supabase exige SSL
+                "sslmode": "require",
                 "connect_timeout": 10,
             },
-            "CONN_MAX_AGE": 60,            # reutilizar conexiones (recomendado)
         }
     }
 
