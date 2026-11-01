@@ -109,4 +109,8 @@ class IcmpTcpPollerTests(TestCase):
         # Se puede inspeccionar las llamadas para verificar los puertos
         call_args_list = mock_write_tcp.call_args_list
         self.assertEqual(call_args_list[0].kwargs['port'], 22)
+<<<<<<< HEAD
         self.assertTrue(call_args_list[0].kwargs['is_open'])
+=======
+        self.assertTrue(call_args_list[0].kwargs['is_open'])
+>>>>>>> 52c40f36b6cbf199303952082a1ffe47c0512189
