@@ -1,3 +1,18 @@
+# 📄 `README.md` — Comfutech Monitor v3.4
+
+A continuación tienes el README completo actualizado. Incluye:
+- Versión `3.4` con fecha de noviembre 2026.
+- Arquitectura `AlertRule` v4 con auto-resolución y `mark_as_resolved`.
+- `Alert` desacoplado (sin FKs, con `rule_id` + `rule_name` snapshot).
+- Nuevas métricas en el motor (`in_bps`, `out_bps`, `uptime`, `radio_freq`, `radio_txpower`, `chan_width`, `ap_client_count`).
+- `MonitorStatus.last_errors` (por poller) y `TelegramCooldown` persistente.
+- Optimizaciones del monitor (SnmpEngine por thread, batch InfluxDB, walk único AP, arranque escalonado, discovery semanal).
+- Instaladores `instalador.bat` (Windows) e `instalador.sh` (Linux) con soporte nativo para ambos SO.
+- `bin/python_local` y `bin/nssm` como nuevas ubicaciones.
+- **Enlaces de interés corregidos** con URLs reales.
+
+---
+
 ```markdown
 # 🖥️ Comfutech Monitor
 
@@ -3930,3 +3945,5 @@ Venezuela
 - **Versión 3.4** declarada en el header, en la historia y en el changelog.
 - **Estructura actualizada:** refleja `bin/python_local`, `bin/nssm`, `instalador.bat`, `instalador.sh` y `scripts/linux/`.
 - **Todos los cambios del chat** (Alert v4 sin FKs, auto-resolución, métricas nuevas, optimizaciones, cooldown persistente, backups con kill, instaladores multiplataforma) están documentados.
+
+¿Quieres que ajuste algún detalle más del README (por ejemplo, añadir capturas de pantalla, o cambiar la estructura del índice)?
