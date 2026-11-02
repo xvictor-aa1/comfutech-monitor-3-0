@@ -1,4 +1,3 @@
-```markdown
 # 🖥️ Comfutech Monitor
 
 Sistema de monitoreo de red para **Comfutech** en Güigüe, Estado Carabobo, Venezuela.
@@ -83,11 +82,7 @@ Permite supervisar en tiempo real el estado de equipos de red (MikroTik, Cisco, 
 
 CRUD de escritorio desarrollado en **C++ con Visual Studio 2015**.
 
-Archivado en:
-
-```text
-_legacy/
-```
+Descartado.
 
 ## Fase 2 — Reingeniería en Django (actual)
 
@@ -3919,16 +3914,3 @@ Venezuela
 | Glosario            | `SnmpEngine`, `buffer batch`, `auto-resolución`, `rule_id` snapshot |
 | Changelog           | Añadida entrada v3.4 completa                                               |
 | Enlaces de interés | URLs reales corregidas y ampliadas                                           |
-
-```
-
----
-
-**Notas sobre esta versión del README:**
-
-- **MySQL como motor principal:** se ha eliminado toda mención a PostgreSQL en la instalación y configuración. Solo se mantiene una nota breve aclarando que Django soporta otros motores de forma nativa, sin detallar ajustes específicos.
-- **Enlaces de interés corregidos:** se han añadido URLs reales para todos los enlaces que faltaban, incluyendo Python 3.15.1, Waitress, systemd, Bootstrap 5.3 y Bootstrap Icons.
-- **Versión 3.4** declarada en el header, en la historia y en el changelog.
-- **Estructura actualizada:** refleja `bin/python_local`, `bin/nssm`, `instalador.bat`, `instalador.sh` y `scripts/linux/`.
-- **Todos los cambios del chat** (Alert v4 sin FKs, auto-resolución, métricas nuevas, optimizaciones, cooldown persistente, backups con kill, instaladores multiplataforma) están documentados.
-```
