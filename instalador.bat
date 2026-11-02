@@ -4,13 +4,13 @@ setlocal EnableDelayedExpansion
 REM ============================================================
 REM instalador.bat - Instalador completo de Comfutech Monitor
 REM
-REM Ubicacion: raiz del proyecto (junto a manage.py y requirements.txt)
+REM Ubicacion: raiz del proyecto (junto a manage.py y requeriments.txt)
 REM
 REM Pasos:
 REM   1. Verificar permisos de administrador.
 REM   2. Detectar Python (3.15+). Si no esta, descargarlo e instalarlo.
 REM   3. Crear el entorno virtual en bin\python_local.
-REM   4. Instalar las dependencias de requirements.txt.
+REM   4. Instalar las dependencias de requeriments.txt.
 REM   5. Descargar NSSM y descomprimirlo en bin\nssm.
 REM   6. Instalar los servicios de Windows con NSSM.
 REM ============================================================
@@ -142,12 +142,12 @@ REM ============================================================
 REM 4. Instalar dependencias
 REM ============================================================
 echo.
-echo === Instalando dependencias de requirements.txt ===
+echo === Instalando dependencias de requeriments.txt ===
 
 set "VENV_PYTHON=%PROJECT_ROOT%\bin\python_local\Scripts\python.exe"
 
-if not exist "%PROJECT_ROOT%\requirements.txt" (
-    echo [ERROR] No se encontro requirements.txt en la raiz del proyecto.
+if not exist "%PROJECT_ROOT%\requeriments.txt" (
+    echo [ERROR] No se encontro requeriments.txt en la raiz del proyecto.
     pause
     exit /b 1
 )
@@ -159,7 +159,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-"%VENV_PYTHON%" -m pip install -r "%PROJECT_ROOT%\requirements.txt"
+"%VENV_PYTHON%" -m pip install -r "%PROJECT_ROOT%\requeriments.txt"
 if errorlevel 1 (
     echo [ERROR] Fallo la instalacion de dependencias.
     pause
