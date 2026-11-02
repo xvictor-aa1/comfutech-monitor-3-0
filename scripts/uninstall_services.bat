@@ -1,9 +1,11 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 REM ============================================================
 REM uninstall_services.bat - Desinstala los servicios NSSM
 REM ============================================================
+
+for %%I in ("%~dp0..") do set "PROJECT_ROOT=%%~fI"
 
 echo.
 echo ============================================================
@@ -11,7 +13,7 @@ echo   Desinstalador de servicios Comfutech
 echo ============================================================
 echo.
 
-REM --- Verificar permisos de admin ---
+REM --- Verificar admin ---
 net session >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Este script debe ejecutarse como Administrador.
@@ -19,17 +21,16 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM --- Verificar NSSM ---
-where nssm >nul 2>&1
+REM --- Localizar NSSM ---
+call "%PROJECT_ROOT%\scripts\_find_nssm.bat"
 if errorlevel 1 (
-    echo [ERROR] NSSM no esta en PATH.
     pause
     exit /b 1
 )
 
 REM --- Confirmar ---
-set /p CONFIRM="¿Eliminar los servicios Comfutech? [s/N]: "
-if /i not "%CONFIRM%"=="s" (
+set /p CONFIRM="Eliminar los servicios Comfutech? [s/N]: "
+if /i not "!CONFIRM!"=="s" (
     echo Cancelado.
     pause
     exit /b 0
@@ -37,13 +38,13 @@ if /i not "%CONFIRM%"=="s" (
 
 echo.
 echo === Deteniendo servicios ===
-nssm stop ComfutechDjango
-nssm stop ComfutechMonitor
+"!NSSM_EXE!" stop ComfutechDjango  >nul 2>&1
+"!NSSM_EXE!" stop ComfutechMonitor >nul 2>&1
 
 echo.
 echo === Eliminando servicios ===
-nssm remove ComfutechDjango confirm
-nssm remove ComfutechMonitor confirm
+"!NSSM_EXE!" remove ComfutechDjango  confirm
+"!NSSM_EXE!" remove ComfutechMonitor confirm
 
 echo.
 echo === Verificacion ===
@@ -63,3 +64,4 @@ if errorlevel 1 (
 echo.
 echo Desinstalacion completa.
 pause
+exit /b 0

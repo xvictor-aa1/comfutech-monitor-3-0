@@ -20,9 +20,10 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# --- Detectar Python del venv ---
-source "$PROJECT_ROOT/scripts/linux/_detect_venv.sh"
-if [[ $? -ne 0 ]]; then
+# --- Detectar Python del venv (fix: source dentro de if) ---
+#    Nota: 'set -e' aborta si 'source' devuelve != 0. Al envolverlo en
+#    'if ! source ...', desactivamos set -e para esa comprobación.
+if ! source "$PROJECT_ROOT/scripts/linux/_detect_venv.sh"; then
     exit 1
 fi
 
@@ -41,7 +42,7 @@ mkdir -p "$PROJECT_ROOT/logs"
 
 # --- Detener y eliminar servicios previos si existen ---
 for SVC in ComfutechDjango ComfutechMonitor; do
-    systemctl stop "$SVC" 2>/dev/null || true
+    systemctl stop    "$SVC" 2>/dev/null || true
     systemctl disable "$SVC" 2>/dev/null || true
     rm -f "/etc/systemd/system/${SVC}.service"
 done

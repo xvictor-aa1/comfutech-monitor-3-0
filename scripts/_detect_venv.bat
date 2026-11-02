@@ -1,7 +1,7 @@
 @echo off
 @echo off
 REM ============================================================
-REM _detect_venv.bat - Detecta el entorno virtual del proyecto
+REM _detect_venv.bat - Detecta el entorno virtual del proyecto 
 REM Uso: call _detect_venv.bat
 REM Exporta: PYTHON_EXE, VENV_NAME
 REM Devuelve errorlevel 1 si no lo encuentra.
