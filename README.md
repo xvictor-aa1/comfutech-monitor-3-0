@@ -1,18 +1,3 @@
-# 📄 `README.md` — Comfutech Monitor v3.4
-
-A continuación tienes el README completo actualizado. Incluye:
-- Versión `3.4` con fecha de noviembre 2026.
-- Arquitectura `AlertRule` v4 con auto-resolución y `mark_as_resolved`.
-- `Alert` desacoplado (sin FKs, con `rule_id` + `rule_name` snapshot).
-- Nuevas métricas en el motor (`in_bps`, `out_bps`, `uptime`, `radio_freq`, `radio_txpower`, `chan_width`, `ap_client_count`).
-- `MonitorStatus.last_errors` (por poller) y `TelegramCooldown` persistente.
-- Optimizaciones del monitor (SnmpEngine por thread, batch InfluxDB, walk único AP, arranque escalonado, discovery semanal).
-- Instaladores `instalador.bat` (Windows) e `instalador.sh` (Linux) con soporte nativo para ambos SO.
-- `bin/python_local` y `bin/nssm` como nuevas ubicaciones.
-- **Enlaces de interés corregidos** con URLs reales.
-
----
-
 ```markdown
 # 🖥️ Comfutech Monitor
 
@@ -106,23 +91,23 @@ _legacy/
 
 ## Fase 2 — Reingeniería en Django (actual)
 
-| Iteración | Cambios principales |
-|-----------|--------------------|
-| **v0.1** | Setup inicial, Django, apps, modelos y MySQL |
-| **v0.2** | Inventario, CRUD de equipos e interfaces |
-| **v0.3** | Pollers SNMP, ICMP, Health, InfluxDB y APScheduler |
-| **v0.4** | Sistema de alertas |
-| **v0.5** | Configuración centralizada |
-| **v0.6** | Autenticación y roles |
-| **v0.7** | Recuperación de contraseña |
-| **v0.8** | Alertas v1 |
-| **v0.9** | DeviceModel e is_wireless_link |
-| **v1.0** | Refactor completo de la UI |
-| **v2.0** | Configuración UI v2 |
-| **v3.0** | TOML, mantenimiento, backups, alertas v2, Django Admin y sistema de ayuda |
-| **v3.1** | Monitoreo de radiofrecuencia y clientes AP |
-| **v3.2** | Dashboard con sparklines, timeframe y toasts |
-| **v3.3** | Interfaz destacada del dashboard y "Destacar WAN" |
+| Iteración     | Cambios principales                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **v0.1** | Setup inicial, Django, apps, modelos y MySQL                                                                                   |
+| **v0.2** | Inventario, CRUD de equipos e interfaces                                                                                       |
+| **v0.3** | Pollers SNMP, ICMP, Health, InfluxDB y APScheduler                                                                             |
+| **v0.4** | Sistema de alertas                                                                                                             |
+| **v0.5** | Configuración centralizada                                                                                                    |
+| **v0.6** | Autenticación y roles                                                                                                         |
+| **v0.7** | Recuperación de contraseña                                                                                                   |
+| **v0.8** | Alertas v1                                                                                                                     |
+| **v0.9** | DeviceModel e is_wireless_link                                                                                                 |
+| **v1.0** | Refactor completo de la UI                                                                                                     |
+| **v2.0** | Configuración UI v2                                                                                                           |
+| **v3.0** | TOML, mantenimiento, backups, alertas v2, Django Admin y sistema de ayuda                                                      |
+| **v3.1** | Monitoreo de radiofrecuencia y clientes AP                                                                                     |
+| **v3.2** | Dashboard con sparklines, timeframe y toasts                                                                                   |
+| **v3.3** | Interfaz destacada del dashboard y "Destacar WAN"                                                                              |
 | **v3.4** | Alertas v4 (auto-resolución), desacoplamiento de `Alert`, optimización del motor y scripts de instalación multiplataforma |
 
 **Estado actual:** v3.4, producción estable.
@@ -209,18 +194,18 @@ _legacy/
 
 ## Componentes principales
 
-| Componente | Rol | Servicio | Puerto |
-|------------|------|-----------|---------|
-| **Django + Waitress** | Backend web, ORM e interfaz | `ComfutechDjango` / `comfutech-django` | 8000 |
-| **APScheduler** | Scheduler de polling | `ComfutechMonitor` / `comfutech-monitor` | — |
-| **MySQL** | Base de datos relacional | `MySQL80` / `mysql` | 3306 |
-| **InfluxDB 2.9** | Base de datos temporal | `influxdb` | 8086 |
-| **Grafana** | Visualización | `grafana` | 3000 |
-| **Telegram Bot API** | Notificaciones | Externo | 443 |
-| **SMTP** | Email transaccional | Externo | 587/465 |
-| **NSSM** | Servicios Windows | `bin/nssm/win64/nssm.exe` | — |
-| **systemd** | Servicios Linux | `ComfutechDjango` / `ComfutechMonitor` | — |
-| **Dynaconf + tomlkit** | Gestión de TOML | Librería | — |
+| Componente                   | Rol                         | Servicio                                     | Puerto  |
+| ---------------------------- | --------------------------- | -------------------------------------------- | ------- |
+| **Django + Waitress**  | Backend web, ORM e interfaz | `ComfutechDjango` / `comfutech-django`   | 8000    |
+| **APScheduler**        | Scheduler de polling        | `ComfutechMonitor` / `comfutech-monitor` | —      |
+| **MySQL**              | Base de datos relacional    | `MySQL80` / `mysql`                      | 3306    |
+| **InfluxDB 2.9**       | Base de datos temporal      | `influxdb`                                 | 8086    |
+| **Grafana**            | Visualización              | `grafana`                                  | 3000    |
+| **Telegram Bot API**   | Notificaciones              | Externo                                      | 443     |
+| **SMTP**               | Email transaccional         | Externo                                      | 587/465 |
+| **NSSM**               | Servicios Windows           | `bin/nssm/win64/nssm.exe`                  | —      |
+| **systemd**            | Servicios Linux             | `ComfutechDjango` / `ComfutechMonitor`   | —      |
+| **Dynaconf + tomlkit** | Gestión de TOML            | Librería                                    | —      |
 
 ---
 
@@ -228,49 +213,49 @@ _legacy/
 
 ## Backend
 
-| Tecnología | Versión | Rol |
-|------------|----------|------|
-| **Python** | 3.11+ (probado en 3.15.1) | Runtime |
-| **Django** | 4.2 LTS / 5.x | Framework web |
-| **Waitress** | 2.x | Servidor WSGI |
-| **APScheduler** | 3.10+ | Scheduler |
-| **pysnmp** | 7.1+ | Cliente SNMP |
-| **influxdb-client** | 1.44+ | Cliente InfluxDB |
-| **Dynaconf** | 3.2+ | Configuración TOML |
-| **tomlkit** | 0.12+ | Escritura TOML |
-| **mysqlclient / pymysql** | 2.2+ / 1.1+ | MySQL |
-| **requests** | 2.32+ | APIs externas |
-| **openpyxl** | 3.1+ | Exportación Excel |
-| **reportlab** | 4.2+ | Exportación PDF |
+| Tecnología                     | Versión                  | Rol                 |
+| ------------------------------- | ------------------------- | ------------------- |
+| **Python**                | 3.11+ (probado en 3.15.1) | Runtime             |
+| **Django**                | 4.2 LTS / 5.x             | Framework web       |
+| **Waitress**              | 2.x                       | Servidor WSGI       |
+| **APScheduler**           | 3.10+                     | Scheduler           |
+| **pysnmp**                | 7.1+                      | Cliente SNMP        |
+| **influxdb-client**       | 1.44+                     | Cliente InfluxDB    |
+| **Dynaconf**              | 3.2+                      | Configuración TOML |
+| **tomlkit**               | 0.12+                     | Escritura TOML      |
+| **mysqlclient / pymysql** | 2.2+ / 1.1+               | MySQL               |
+| **requests**              | 2.32+                     | APIs externas       |
+| **openpyxl**              | 3.1+                      | Exportación Excel  |
+| **reportlab**             | 4.2+                      | Exportación PDF    |
 
 ## Frontend
 
-| Tecnología | Versión | Rol |
-|------------|----------|------|
-| **Bootstrap** | 5.3.x | Framework CSS |
-| **Bootstrap Icons** | 1.11.x | Iconografía |
-| **JavaScript** | ES2020+ | Interactividad |
-| **Django Templates** | N/A | Renderizado servidor |
+| Tecnología                | Versión | Rol                  |
+| -------------------------- | -------- | -------------------- |
+| **Bootstrap**        | 5.3.x    | Framework CSS        |
+| **Bootstrap Icons**  | 1.11.x   | Iconografía         |
+| **JavaScript**       | ES2020+  | Interactividad       |
+| **Django Templates** | N/A      | Renderizado servidor |
 
 ## Bases de datos
 
-| Base | Versión | Rol |
-|--------|----------|------|
-| **MySQL** | 5.7+ / 8.0 | Inventario, usuarios, alertas y backlogs |
-| **InfluxDB** | 2.9.1+ | Métricas temporales |
-| **config.toml** | N/A | Configuración runtime |
-| **system.toml** | N/A | Bootstrap Django |
+| Base                  | Versión   | Rol                                      |
+| --------------------- | ---------- | ---------------------------------------- |
+| **MySQL**       | 5.7+ / 8.0 | Inventario, usuarios, alertas y backlogs |
+| **InfluxDB**    | 2.9.1+     | Métricas temporales                     |
+| **config.toml** | N/A        | Configuración runtime                   |
+| **system.toml** | N/A        | Bootstrap Django                         |
 
 Django soporta de forma nativa otros motores de BD como PostgreSQL o SQLite. La configuración por defecto del proyecto está optimizada para MySQL, que es el motor oficialmente probado y soportado en producción.
 
 ## Despliegue
 
-| Herramienta | Rol |
-|-------------|-----|
-| **NSSM 2.24+** | Servicios Windows |
-| **systemd** | Servicios Linux |
-| **Windows** | 10/11 o Server 2016+ |
-| **Linux** | Debian / Ubuntu / CentOS / RHEL |
+| Herramienta          | Rol                             |
+| -------------------- | ------------------------------- |
+| **NSSM 2.24+** | Servicios Windows               |
+| **systemd**    | Servicios Linux                 |
+| **Windows**    | 10/11 o Server 2016+            |
+| **Linux**      | Debian / Ubuntu / CentOS / RHEL |
 
 ---
 
@@ -881,16 +866,16 @@ comfutech-monitor/
 
 ## Software mínimo
 
-| Software | Versión |
-|-----------|----------|
-| Windows | 10 / 11 / Server 2016+ |
-| Linux | Debian / Ubuntu / CentOS / RHEL |
-| Python | 3.11+ |
-| MySQL | 5.7+ / 8.0 |
-| InfluxDB | 2.9.1+ |
-| Grafana | 9.x+ |
-| NSSM (Windows) | 2.24+ (descargado por `instalador.bat`) |
-| systemd (Linux) | Cualquier versión estándar |
+| Software        | Versión                                  |
+| --------------- | ----------------------------------------- |
+| Windows         | 10 / 11 / Server 2016+                    |
+| Linux           | Debian / Ubuntu / CentOS / RHEL           |
+| Python          | 3.11+                                     |
+| MySQL           | 5.7+ / 8.0                                |
+| InfluxDB        | 2.9.1+                                    |
+| Grafana         | 9.x+                                      |
+| NSSM (Windows)  | 2.24+ (descargado por `instalador.bat`) |
+| systemd (Linux) | Cualquier versión estándar              |
 
 ## Cuentas externas
 
@@ -1118,10 +1103,10 @@ python manage.py migrate_config_to_toml --backup-bd
 
 El sistema utiliza **dos archivos TOML** claramente diferenciados:
 
-| Archivo | Propósito | Modificación |
-|----------|------------|--------------|
-| `system.toml` | Configuración de arranque de Django | Manual |
-| `config.toml` | Configuración runtime del sistema | UI o manual |
+| Archivo         | Propósito                           | Modificación |
+| --------------- | ------------------------------------ | ------------- |
+| `system.toml` | Configuración de arranque de Django | Manual        |
+| `config.toml` | Configuración runtime del sistema   | UI o manual   |
 
 ### system.toml
 
@@ -1150,14 +1135,14 @@ Contiene:
 
 ## Ventajas de TOML
 
-| Característica | .env | .ini | .toml |
-|----------------|------|------|--------|
-| Maneja `#` | ❌ | ❌ | ✅ |
-| Maneja `=` dentro del valor | ⚠️ | ❌ | ✅ |
-| Soporta espacios | ⚠️ | ⚠️ | ✅ |
-| Preserva comentarios | ❌ | ❌ | ✅ |
-| Soporta secciones | ❌ | ✅ | ✅ |
-| Legibilidad | Media | Media | Alta |
+| Característica               | .env  | .ini  | .toml |
+| ----------------------------- | ----- | ----- | ----- |
+| Maneja `#`                  | ❌    | ❌    | ✅    |
+| Maneja `=` dentro del valor | ⚠️  | ❌    | ✅    |
+| Soporta espacios              | ⚠️  | ⚠️  | ✅    |
+| Preserva comentarios          | ❌    | ❌    | ✅    |
+| Soporta secciones             | ❌    | ✅    | ✅    |
+| Legibilidad                   | Media | Media | Alta  |
 
 ---
 
@@ -1781,19 +1766,19 @@ if_index
 
 ## Servicios
 
-| Servicio | Archivo | Función |
-|-----------|----------|----------|
-| Cliente SNMP | `snmp_client.py` | Wrapper pysnmp con engine por thread |
-| Discovery | `discovery.py` | Descubrimiento SNMP |
-| Traffic | `traffic.py` | Tráfico de interfaces |
-| Health | `health.py` | Métricas de chasis |
-| ICMP/TCP | `icmp_tcp.py` | Disponibilidad |
-| Radio | `radio.py` | Métricas RF |
-| AP Clients | `ap_clients.py` | Clientes inalámbricos |
-| Alerts | `alerts.py` | Motor de alertas |
-| Telegram | `telegram.py` | Notificaciones con cooldown persistente |
-| Influx Writer | `influx_writer.py` | Escritura batch por thread |
-| Influx Reader | `influx_reader.py` | Consultas |
+| Servicio      | Archivo              | Función                                |
+| ------------- | -------------------- | --------------------------------------- |
+| Cliente SNMP  | `snmp_client.py`   | Wrapper pysnmp con engine por thread    |
+| Discovery     | `discovery.py`     | Descubrimiento SNMP                     |
+| Traffic       | `traffic.py`       | Tráfico de interfaces                  |
+| Health        | `health.py`        | Métricas de chasis                     |
+| ICMP/TCP      | `icmp_tcp.py`      | Disponibilidad                          |
+| Radio         | `radio.py`         | Métricas RF                            |
+| AP Clients    | `ap_clients.py`    | Clientes inalámbricos                  |
+| Alerts        | `alerts.py`        | Motor de alertas                        |
+| Telegram      | `telegram.py`      | Notificaciones con cooldown persistente |
+| Influx Writer | `influx_writer.py` | Escritura batch por thread              |
+| Influx Reader | `influx_reader.py` | Consultas                               |
 
 ---
 
@@ -2600,22 +2585,22 @@ Destino:
 
 ## URLs principales
 
-| URL | Descripción | Permiso |
-|------|-------------|----------|
-| `/` | Dashboard | Autenticado |
-| `/accounts/login/` | Login | Público |
-| `/setup/` | Setup inicial | Público |
-| `/equipos/` | Equipos | Autenticado |
-| `/equipos/modelos/` | Modelos | Autenticado |
-| `/alertas/` | Alertas | Autenticado |
-| `/alertas/reglas/` | Reglas | Autenticado |
-| `/monitoreo/status/` | Estado monitor | Autenticado |
-| `/monitoreo/live/` | Monitor en vivo | Autenticado |
-| `/usuarios/` | Usuarios | Administrador |
-| `/perfil/` | Perfil | Autenticado |
-| `/configuracion/` | Configuración | Superadmin |
-| `/mantenimiento/` | Backups | Superadmin |
-| `/django-admin/` | Django Admin | Superadmin |
+| URL                    | Descripción    | Permiso       |
+| ---------------------- | --------------- | ------------- |
+| `/`                  | Dashboard       | Autenticado   |
+| `/accounts/login/`   | Login           | Público      |
+| `/setup/`            | Setup inicial   | Público      |
+| `/equipos/`          | Equipos         | Autenticado   |
+| `/equipos/modelos/`  | Modelos         | Autenticado   |
+| `/alertas/`          | Alertas         | Autenticado   |
+| `/alertas/reglas/`   | Reglas          | Autenticado   |
+| `/monitoreo/status/` | Estado monitor  | Autenticado   |
+| `/monitoreo/live/`   | Monitor en vivo | Autenticado   |
+| `/usuarios/`         | Usuarios        | Administrador |
+| `/perfil/`           | Perfil          | Autenticado   |
+| `/configuracion/`    | Configuración  | Superadmin    |
+| `/mantenimiento/`    | Backups         | Superadmin    |
+| `/django-admin/`     | Django Admin    | Superadmin    |
 
 ---
 
@@ -2931,30 +2916,30 @@ Notificaciones futuras
 
 ## Roles oficiales
 
-| Rol | is_superuser | is_staff | Grupo |
-|-------|-------------|-----------|--------|
-| Superadministrador | ✅ | ✅ | Ninguno |
-| Administrador | ❌ | ✅ | Administrador |
-| Usuario | ❌ | ❌ | Usuario |
+| Rol                | is_superuser | is_staff | Grupo         |
+| ------------------ | ------------ | -------- | ------------- |
+| Superadministrador | ✅           | ✅       | Ninguno       |
+| Administrador      | ❌           | ✅       | Administrador |
+| Usuario            | ❌           | ❌       | Usuario       |
 
 ---
 
 ## Matriz de permisos
 
-| Acción | Superadmin | Administrador | Usuario |
-|----------|------------|----------------|----------|
-| Dashboard | ✅ | ✅ | ✅ |
-| Equipos | ✅ | ✅ | ✅ |
-| Ver Alertas | ✅ | ✅ | ✅ |
-| Crear Equipos | ✅ | ✅ | ❌ |
-| Editar Equipos | ✅ | ✅ | ❌ |
-| Crear Reglas | ✅ | ✅ | ❌ |
-| Resolver Alertas | ✅ | ✅ | ❌ |
-| Gestionar Usuarios | ✅ | ✅ | ❌ |
-| Cambiar Email de Otros | ✅ | ❌ | ❌ |
-| Configuración | ✅ | ❌ | ❌ |
-| Backups | ✅ | ❌ | ❌ |
-| Django Admin | ✅ | ❌ | ❌ |
+| Acción                | Superadmin | Administrador | Usuario |
+| ---------------------- | ---------- | ------------- | ------- |
+| Dashboard              | ✅         | ✅            | ✅      |
+| Equipos                | ✅         | ✅            | ✅      |
+| Ver Alertas            | ✅         | ✅            | ✅      |
+| Crear Equipos          | ✅         | ✅            | ❌      |
+| Editar Equipos         | ✅         | ✅            | ❌      |
+| Crear Reglas           | ✅         | ✅            | ❌      |
+| Resolver Alertas       | ✅         | ✅            | ❌      |
+| Gestionar Usuarios     | ✅         | ✅            | ❌      |
+| Cambiar Email de Otros | ✅         | ❌            | ❌      |
+| Configuración         | ✅         | ❌            | ❌      |
+| Backups                | ✅         | ❌            | ❌      |
+| Django Admin           | ✅         | ❌            | ❌      |
 
 ---
 
@@ -3578,29 +3563,29 @@ El sistema está diseñado para ejecutarse con MySQL como motor principal.
 
 # 📚 Glosario
 
-| Término | Definición |
-|----------|------------|
-| SNMP | Simple Network Management Protocol |
-| OID | Object Identifier |
-| MIB | Management Information Base |
-| ICMP | Internet Control Message Protocol |
-| NMS | Network Management System |
-| QoS | Quality of Service |
-| SLA | Service Level Agreement |
-| MTTR | Mean Time To Repair |
-| TOML | Tom's Obvious Minimal Language |
-| Dynaconf | Librería de configuración |
-| tomlkit | Escritura avanzada de TOML |
-| APScheduler | Scheduler para Python |
-| ifIndex | Índice único de interfaz SNMP |
-| Counter Wrap | Desbordamiento de contador |
-| NSSM | Non-Sucking Service Manager |
-| systemd | Gestor de servicios de Linux |
-| SnmpEngine | Objeto pysnmp reutilizable por thread |
-| Buffer batch | Acumulación de puntos antes de escribir a InfluxDB |
-| Auto-resolución | Resolución automática de alertas por condicionales |
-| `rule_id` | Identificador plano de la regla en la alerta (sin FK) |
-| `rule_name` | Snapshot del nombre de la regla al disparar la alerta |
+| Término         | Definición                                           |
+| ---------------- | ----------------------------------------------------- |
+| SNMP             | Simple Network Management Protocol                    |
+| OID              | Object Identifier                                     |
+| MIB              | Management Information Base                           |
+| ICMP             | Internet Control Message Protocol                     |
+| NMS              | Network Management System                             |
+| QoS              | Quality of Service                                    |
+| SLA              | Service Level Agreement                               |
+| MTTR             | Mean Time To Repair                                   |
+| TOML             | Tom's Obvious Minimal Language                        |
+| Dynaconf         | Librería de configuración                           |
+| tomlkit          | Escritura avanzada de TOML                            |
+| APScheduler      | Scheduler para Python                                 |
+| ifIndex          | Índice único de interfaz SNMP                       |
+| Counter Wrap     | Desbordamiento de contador                            |
+| NSSM             | Non-Sucking Service Manager                           |
+| systemd          | Gestor de servicios de Linux                          |
+| SnmpEngine       | Objeto pysnmp reutilizable por thread                 |
+| Buffer batch     | Acumulación de puntos antes de escribir a InfluxDB   |
+| Auto-resolución | Resolución automática de alertas por condicionales  |
+| `rule_id`      | Identificador plano de la regla en la alerta (sin FK) |
+| `rule_name`    | Snapshot del nombre de la regla al disparar la alerta |
 
 ---
 
@@ -3916,24 +3901,25 @@ Venezuela
 
 # 📋 Resumen de cambios en el README
 
-| Sección | Cambio |
-|----------|---------|
-| Versión | 3.0 → 3.4 |
-| Historia | Añadidas v3.1, v3.2, v3.3, v3.4 |
-| Arquitectura | `bin/python_local`, `bin/nssm`, `TelegramCooldown`, jobs adicionales |
-| Stack | Python 3.15.1, Linux (systemd), NSSM como binario local |
-| Características | Auto-resolución, `mark_as_resolved`, métricas nuevas |
-| Diagramas | Flujo de alertas v4 con auto-resolución |
-| Estructura | `bin/`, `instalador.bat`, `instalador.sh`, `scripts/linux/` |
-| Instalación | Nueva sección "Instalación automática" (Windows + Linux) |
-| Base de datos | Alertas sin FK, `telegram_cooldowns`, `last_errors` |
-| Motor | SnmpEngine por thread, buffer batch, walk único AP, discovery semanal |
-| Alertas | v4 con auto-resolución y métricas extendidas |
-| Integraciones | Cooldown persistente de Telegram |
-| Despliegue | Windows (NSSM) y Linux (systemd) |
-| Glosario | `SnmpEngine`, `buffer batch`, `auto-resolución`, `rule_id` snapshot |
-| Changelog | Añadida entrada v3.4 completa |
-| Enlaces de interés | URLs reales corregidas y ampliadas |
+| Sección            | Cambio                                                                       |
+| ------------------- | ---------------------------------------------------------------------------- |
+| Versión            | 3.0 → 3.4                                                                   |
+| Historia            | Añadidas v3.1, v3.2, v3.3, v3.4                                             |
+| Arquitectura        | `bin/python_local`, `bin/nssm`, `TelegramCooldown`, jobs adicionales   |
+| Stack               | Python 3.15.1, Linux (systemd), NSSM como binario local                      |
+| Características    | Auto-resolución, `mark_as_resolved`, métricas nuevas                     |
+| Diagramas           | Flujo de alertas v4 con auto-resolución                                     |
+| Estructura          | `bin/`, `instalador.bat`, `instalador.sh`, `scripts/linux/`          |
+| Instalación        | Nueva sección "Instalación automática" (Windows + Linux)                  |
+| Base de datos       | Alertas sin FK, `telegram_cooldowns`, `last_errors`                      |
+| Motor               | SnmpEngine por thread, buffer batch, walk único AP, discovery semanal       |
+| Alertas             | v4 con auto-resolución y métricas extendidas                               |
+| Integraciones       | Cooldown persistente de Telegram                                             |
+| Despliegue          | Windows (NSSM) y Linux (systemd)                                             |
+| Glosario            | `SnmpEngine`, `buffer batch`, `auto-resolución`, `rule_id` snapshot |
+| Changelog           | Añadida entrada v3.4 completa                                               |
+| Enlaces de interés | URLs reales corregidas y ampliadas                                           |
+
 ```
 
 ---
@@ -3945,5 +3931,4 @@ Venezuela
 - **Versión 3.4** declarada en el header, en la historia y en el changelog.
 - **Estructura actualizada:** refleja `bin/python_local`, `bin/nssm`, `instalador.bat`, `instalador.sh` y `scripts/linux/`.
 - **Todos los cambios del chat** (Alert v4 sin FKs, auto-resolución, métricas nuevas, optimizaciones, cooldown persistente, backups con kill, instaladores multiplataforma) están documentados.
-
-¿Quieres que ajuste algún detalle más del README (por ejemplo, añadir capturas de pantalla, o cambiar la estructura del índice)?
+```
