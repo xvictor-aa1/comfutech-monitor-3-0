@@ -7,9 +7,10 @@
  *
  * No usado por:
  *   - device_interfaces.html (tiene su propio renderizado de tablas AP)
+ *   - dashboard.html (solo consume escapeHtml y signalStrokeColor)
  *
  * API pública:
- *   LiveCards.configure({sparklineUrl, sparklineMinutes})
+ *   LiveCards.configure({sparklineUrl, sparklineMinutes, interfacesUrlTemplate})
  *   LiveCards.formatBps(v), LiveCards.formatUptime(s), LiveCards.relativeTime(iso)
  *   LiveCards.escapeHtml(s), LiveCards.utilColor(p), LiveCards.signalColor(s)
  *   LiveCards.signalStrokeColor(s)
@@ -19,6 +20,17 @@
  *   LiveCards.resetSparklineCache()
  *   LiveCards.initViewMode(callback)    → engancha los radios y persiste en localStorage
  *   LiveCards.setViewMode(mode), LiveCards.getViewMode()
+ *
+ * Límites de visualización (para no saturar las cards):
+ *   - IF-MIB (tráfico): máximo 5 interfaces. Si hay más, aparece un botón
+ *     "Ver todas" que redirige a la página de interfaces del equipo.
+ *   - Clientes AP: máximo 5 clientes (ordenados online primero). Si hay
+ *     más, aparece un botón "Ver todos" que redirige a la página de
+ *     interfaces del equipo.
+ *
+ * Los límites solo aplican al modo ESTÁTICO del bloque de tráfico
+ * (el modo gráfico muestra solo WAN, así que no hay nada que limitar).
+ * Los clientes AP no tienen modo gráfico: siempre se limitan a 5.
  */
 window.LiveCards = (function () {
     'use strict';
@@ -28,7 +40,12 @@ window.LiveCards = (function () {
     // ============================================================
     let _sparklineUrl = '';
     let _sparklineMinutes = 10;
+    let _interfacesUrlTemplate = '';  // ej: "/equipos/{id}/interfaces/"
     const _sparklineCacheMs = 25000;
+
+    // Límites de visualización
+    const MAX_TRAFFIC_ROWS = 5;
+    const MAX_AP_CLIENTS = 5;
 
     // ============================================================
     // ESTADO INTERNO
@@ -99,6 +116,20 @@ window.LiveCards = (function () {
         if (s < -80) return '#dc3545';
         if (s < -70) return '#e67e00';
         return '#198754';
+    }
+
+    /**
+     * Resuelve la URL de la página de interfaces de un equipo.
+     *
+     * Usa la plantilla configurada en `configure()` (con placeholder `{id}`).
+     * Si no hay plantilla, devuelve null (y el botón "Ver todas" no se muestra).
+     *
+     * @param {number} deviceId
+     * @returns {string|null}
+     */
+    function _deviceInterfacesUrl(deviceId) {
+        if (!_interfacesUrlTemplate || !deviceId) return null;
+        return _interfacesUrlTemplate.replace('{id}', deviceId);
     }
 
     // ============================================================
@@ -348,14 +379,28 @@ window.LiveCards = (function () {
             </div></div>`;
     }
 
+    /**
+     * Bloque de tráfico SNMP.
+     *
+     * En modo estático, si hay más de MAX_TRAFFIC_ROWS interfaces
+     * monitoreadas, se muestran solo las primeras MAX_TRAFFIC_ROWS y
+     * se añade un botón "Ver todas" que redirige a la página de
+     * interfaces del equipo (solo si `interfacesUrlTemplate` está
+     * configurado).
+     *
+     * En modo gráfico, solo se muestra la interfaz WAN (o la primera
+     * disponible), por lo que no aplica el límite.
+     */
     function renderTrafficBlock(device, chartMode) {
         if (!device.has_interfaces_support) return '';
         const traffic = device.traffic || [];
+
         if (!device.has_traffic) {
             return `<div class="live-block">
                 <div class="live-block-header"><span><i class="bi bi-graph-up"></i> SNMP Tráfico</span></div>
                 <div class="text-muted small fst-italic">Sin interfaces monitoreadas</div></div>`;
         }
+
         if (chartMode) {
             const wan = device.dashboard_traffic || (traffic.length ? traffic[0] : null);
             if (!wan) {
@@ -391,12 +436,20 @@ window.LiveCards = (function () {
                 ${util != null ? `<div class="progress" style="height:6px;"><div class="progress-bar ${utilColor(util)}" style="width:${Math.min(util, 100)}%;"></div></div>` : ''}
             </div>`;
         }
+
         if (traffic.length === 0) {
             return `<div class="live-block">
                 <div class="live-block-header"><span><i class="bi bi-graph-up"></i> SNMP Tráfico</span></div>
                 <div class="text-muted small fst-italic">Sin datos recientes</div></div>`;
         }
-        const rows = traffic.map(t => `
+
+        // ─── Modo estático: limitar a MAX_TRAFFIC_ROWS interfaces ───
+        const totalTraffic = traffic.length;
+        const visibleTraffic = traffic.slice(0, MAX_TRAFFIC_ROWS);
+        const hasMore = totalTraffic > MAX_TRAFFIC_ROWS;
+        const interfacesUrl = _deviceInterfacesUrl(device.id);
+
+        const rows = visibleTraffic.map(t => `
             <tr>
                 <td><code class="small">${escapeHtml(t.interface || '—')}</code></td>
                 <td class="small text-muted">${escapeHtml(t.alias) || '—'}</td>
@@ -404,10 +457,25 @@ window.LiveCards = (function () {
                 <td class="text-end text-warning small">↑ ${formatBps(t.out_bps)}</td>
                 <td class="text-end small">${t.utilization != null ? t.utilization.toFixed(1) + '%' : '—'}</td>
             </tr>`).join('');
+
+        const moreButton = (hasMore && interfacesUrl) ? `
+            <div class="text-center mt-2">
+                <a href="${interfacesUrl}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-ethernet"></i>
+                    Ver todas las ${totalTraffic} interfaces
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        ` : '';
+
+        const metaLabel = hasMore
+            ? `${visibleTraffic.length} de ${totalTraffic} interfaces`
+            : `${totalTraffic} interfaz${totalTraffic !== 1 ? 'es' : ''}`;
+
         return `<div class="live-block">
             <div class="live-block-header">
                 <span><i class="bi bi-graph-up"></i> SNMP Tráfico</span>
-                <span class="live-block-meta">${traffic.length} interfaz${traffic.length !== 1 ? 'es' : ''}</span>
+                <span class="live-block-meta">${metaLabel}</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-borderless mb-0">
@@ -418,7 +486,9 @@ window.LiveCards = (function () {
                     </tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
-            </div></div>`;
+            </div>
+            ${moreButton}
+        </div>`;
     }
 
     function renderHealthBlock(device, chartMode) {
@@ -499,25 +569,48 @@ window.LiveCards = (function () {
     }
 
     /**
-     * Tabla COMPACTA de clientes AP (7 columnas) para monitor_live y device_detail.
-     * La tabla completa (con distancia y airMAX) está en device_interfaces.html.
+     * Bloque de clientes AP.
+     *
+     * Se muestran como máximo MAX_AP_CLIENTS clientes, ordenados con
+     * los online primero y luego por nombre. Si hay más de
+     * MAX_AP_CLIENTS en total, se añade un botón "Ver todos" que
+     * redirige a la página de interfaces del equipo (solo si
+     * `interfacesUrlTemplate` está configurado).
+     *
+     * La tabla compacta solo muestra 7 columnas (nombre, IP, signal,
+     * CCQ, TX, RX, estado). Los detalles completos (distancia, airMAX,
+     * SNR, noise) se ven en la página de interfaces del equipo.
      */
     function renderApClientsBlock(device) {
         if (!device.ap_clients || device.ap_clients.length === 0) return '';
-        const clients = device.ap_clients;
-        const onlineCount = clients.filter(c => c.online).length;
-        const total = clients.length;
 
-        const rows = clients.map(c => {
+        const clients = device.ap_clients;
+        const total = clients.length;
+        const onlineCount = clients.filter(c => c.online).length;
+        const hasMore = total > MAX_AP_CLIENTS;
+        const interfacesUrl = _deviceInterfacesUrl(device.id);
+
+        // Ordenar: online primero, luego por nombre
+        const sorted = [...clients].sort((a, b) => {
+            if (a.online !== b.online) return b.online - a.online;
+            const na = (a.name || a.hostname || a.mac || '').toLowerCase();
+            const nb = (b.name || b.hostname || b.mac || '').toLowerCase();
+            return na.localeCompare(nb);
+        });
+        const toShow = sorted.slice(0, MAX_AP_CLIENTS);
+
+        const rows = toShow.map(c => {
             const rowCls = c.online ? '' : 'opacity-50';
             const sigN = c.signal;
             const sigC = sigN == null ? '' : sigN < -80 ? 'text-danger' : sigN < -70 ? 'text-warning' : 'text-success';
             const ccqN = c.ccq;
             const ccqC = ccqN == null ? '' : ccqN < 50 ? 'text-danger' : ccqN < 80 ? 'text-warning' : 'text-success';
+            const displayName = c.name || c.hostname || c.mac || '—';
+
             return `<tr class="${rowCls}">
                 <td class="small">
-                    <div class="text-truncate" style="max-width:150px;" title="${escapeHtml(c.name || c.mac)}">
-                        ${escapeHtml(c.name || c.mac)}
+                    <div class="text-truncate" style="max-width:150px;" title="${escapeHtml(displayName)}">
+                        ${escapeHtml(displayName)}
                     </div>
                 </td>
                 <td class="small">${escapeHtml(c.ip) || '—'}</td>
@@ -531,10 +624,24 @@ window.LiveCards = (function () {
             </tr>`;
         }).join('');
 
+        const moreButton = (hasMore && interfacesUrl) ? `
+            <div class="text-center mt-2">
+                <a href="${interfacesUrl}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-broadcast-pin"></i>
+                    Ver todos los ${total} clientes
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        ` : '';
+
+        const metaLabel = hasMore
+            ? `${onlineCount}/${total} en línea · mostrando ${toShow.length}`
+            : `${onlineCount}/${total} en línea`;
+
         return `<div class="live-block">
             <div class="live-block-header">
                 <span><i class="bi bi-people-fill text-info"></i> Clientes AP</span>
-                <span class="live-block-meta">${onlineCount}/${total} en línea</span>
+                <span class="live-block-meta">${metaLabel}</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-borderless mb-0">
@@ -546,7 +653,9 @@ window.LiveCards = (function () {
                     </tr></thead>
                     <tbody>${rows}</tbody>
                 </table>
-            </div></div>`;
+            </div>
+            ${moreButton}
+        </div>`;
     }
 
     // ============================================================
@@ -604,6 +713,7 @@ window.LiveCards = (function () {
         configure(opts) {
             if (opts.sparklineUrl) _sparklineUrl = opts.sparklineUrl;
             if (opts.sparklineMinutes) _sparklineMinutes = opts.sparklineMinutes;
+            if (opts.interfacesUrlTemplate) _interfacesUrlTemplate = opts.interfacesUrlTemplate;
         },
         formatBps, formatUptime, relativeTime, escapeHtml,
         utilColor, signalColor, signalStrokeColor,

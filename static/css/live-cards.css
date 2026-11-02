@@ -136,3 +136,11 @@
     0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+
+/* ============================================================
+   BOTÓN "VER TODAS" (límite de filas en las cards)
+   ============================================================ */
+.live-block > .text-center > .btn.btn-sm {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+}

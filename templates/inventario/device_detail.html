@@ -657,6 +657,7 @@ const SPARKLINE_REFRESH_MS = 30000;
 LiveCards.configure({
     sparklineUrl: SPARKLINE_URL,
     sparklineMinutes: 10,
+    interfacesUrlTemplate: "{% url 'inventario:device_interfaces' 0 %}".replace('/0/', '/{id}/'),
 });
 
 // ============================================================

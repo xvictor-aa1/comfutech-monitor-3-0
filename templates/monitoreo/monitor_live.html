@@ -444,6 +444,7 @@ const URLS = {
 LiveCards.configure({
     sparklineUrl: URLS.sparkline,
     sparklineMinutes: 10,
+    interfacesUrlTemplate: "{% url 'inventario:device_interfaces' 0 %}".replace('/0/', '/{id}/'),
 });
 
 const SPARKLINE_REFRESH_MS = 30000;
