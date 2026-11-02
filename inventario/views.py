@@ -612,7 +612,7 @@ def device_interfaces(request, device_id):
                 "mac": c.get("mac", ""),
                 "ip": c.get("ip", ""),
                 "hostname": c.get("hostname", ""),
-                "essid": c.get("essid", ""),
+                "name": c.get("name", ""),
                 "if_index": c.get("if_index"),
                 "first_seen": c.get("first_seen"),
                 "last_seen": last_seen_iso,

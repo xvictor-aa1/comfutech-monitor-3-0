@@ -392,6 +392,15 @@ LOGGING = {
 }
 
 # Para HTTP (no HTTPS):
-SESSION_COOKIE_SECURE = False
-CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"  # "Strict" rompe algunos fetch cross-site
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://172.14.4.239:8000",
+    "https://probable-bassoon-697xr75957p93qxp-8000.app.github.dev",   # Permite cualquier URL de GitHub Codespaces
+]

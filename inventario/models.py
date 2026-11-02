@@ -256,7 +256,7 @@ class Device(models.Model):
             "Lista de clientes conectados a este equipo cuando opera "
             "en modo Access Point. Se puebla automáticamente con el "
             "Discovery. Solo aplica a modelos wireless. "
-            "Formato: [{if_index, mac, ip, essid, hostname, "
+            "Formato: [{if_index, mac, ip, name, hostname, "
             "first_seen, last_seen}, ...]"
         ),
     )

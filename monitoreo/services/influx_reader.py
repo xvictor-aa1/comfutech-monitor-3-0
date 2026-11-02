@@ -372,7 +372,7 @@ def _query_last_ap_clients(client, bucket: str) -> dict:
 
     Returns:
         dict: {ap_device_name: [{
-            client_mac, client_ip, essid, if_index,
+            client_mac, client_ip, name, if_index,
             signal_dbm, noise_dbm, ccq_pct,
             tx_rate_bps, rx_rate_bps, snr_db, ts
         }, ...]}
@@ -380,16 +380,19 @@ def _query_last_ap_clients(client, bucket: str) -> dict:
     try:
         qapi = client.query_api()
         flux = f'''
-        from(bucket: "{bucket}")
-          |> range(start: {LOOKBACK_RANGE})
-          |> filter(fn: (r) => r._measurement == "ap_clients")
-          |> filter(fn: (r) => r._field == "signal_dbm"
-                              or r._field == "noise_dbm"
-                              or r._field == "ccq_pct"
-                              or r._field == "tx_rate_bps"
-                              or r._field == "rx_rate_bps"
-                              or r._field == "snr_db")
-          |> last()
+            from(bucket: "{bucket}")
+              |> range(start: {LOOKBACK_RANGE})
+              |> filter(fn: (r) => r._measurement == "ap_clients")
+              |> filter(fn: (r) => r._field == "signal_dbm"
+                                or r._field == "noise_dbm"
+                                or r._field == "ccq_pct"
+                                or r._field == "tx_rate_bps"
+                                or r._field == "rx_rate_bps"
+                                or r._field == "snr_db"
+                                or r._field == "distance_m"
+                                or r._field == "airmax_quality"
+                                or r._field == "airmax_capacity")
+              |> last()
         '''
         records = []
         for table in qapi.query(flux):
@@ -412,8 +415,7 @@ def _query_last_ap_clients(client, bucket: str) -> dict:
                 result[ap][mac] = {
                     "client_mac": mac,
                     "client_ip": r.values.get("client_ip", ""),
-                    "essid": r.values.get("essid", ""),
-                    "if_index": r.values.get("if_index"),
+                    "name": r.values.get("name", ""),
                     "ts": ts,
                 }
             result[ap][mac][field] = value

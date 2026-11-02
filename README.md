@@ -325,7 +325,7 @@ Información registrada:
 ```text
 mac
 ip
-essid
+name
 hostname
 first_seen
 last_seen
@@ -1755,7 +1755,7 @@ ap_ip
 client_mac
 client_ip
 
-essid
+name
 
 if_index
 ```

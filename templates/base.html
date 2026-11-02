@@ -491,7 +491,7 @@
                 class="cf-sidebar-item {% if 'user' in url_name or 'system_settings' in url_name %}active{% endif %}"
                 data-bs-toggle="collapse"
                 data-bs-target="#submenu-settings"
-                data-main-url="{% url 'core:user_list' %}"
+                data-main-url="{% url 'core:system_settings' %}"
                 aria-expanded="false"
                 title="Configuraciones del Sistema">
             <i class="bi bi-gear"></i>
@@ -499,13 +499,15 @@
             <i class="bi bi-chevron-right cf-chevron"></i>
         </button>
         <div class="collapse cf-sidebar-subnav" id="submenu-settings">
+            {% if is_admin %}
+            <a href="{% url 'core:system_settings' %}">
+                <i class="bi bi-sliders"></i> Configuración
+            </a>
+            {% endif %}
             <a href="{% url 'core:user_list' %}">
                 <i class="bi bi-people"></i> Panel de Usuarios
             </a>
             {% if is_superadmin %}
-            <a href="{% url 'core:system_settings' %}">
-                <i class="bi bi-sliders"></i> Configuración
-            </a>
             <a href="{% url 'mantenimiento:panel' %}">
                 <i class="bi bi-tools"></i> Mantenimiento
             </a>

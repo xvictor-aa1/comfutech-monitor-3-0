@@ -32,7 +32,7 @@ from monitoreo.services.snmp_client import snmp_walk, to_int, to_str
 # Basado en la MIB UBNT-AirMAX y validado empíricamente en airOS 8.7.x.
 AP_COLUMNS = {
     "mac":          "1.3.6.1.4.1.41112.1.4.5.1.2",
-    "essid":        "1.3.6.1.4.1.41112.1.4.5.1.3",
+    "name":        "1.3.6.1.4.1.41112.1.4.5.1.3",
     "ip":           "1.3.6.1.4.1.41112.1.4.5.1.4",
     "signal":       "1.3.6.1.4.1.41112.1.4.5.1.5",
     "rssi":         "1.3.6.1.4.1.41112.1.4.5.1.6",
@@ -45,7 +45,7 @@ AP_COLUMNS = {
 # Descripción legible de cada columna
 COLUMN_LABELS = {
     "mac":          "MAC del cliente",
-    "essid":        "SSID",
+    "name":        "SSID",
     "ip":           "IP del cliente",
     "signal":       "Señal (dBm)",
     "rssi":         "RSSI",
@@ -138,7 +138,7 @@ class Command(BaseCommand):
         Hace walk de cada columna y agrupa por índice.
 
         Returns:
-            list: [{index, mac, essid, ip, signal, rssi, ccq,
+            list: [{index, mac, name, ip, signal, rssi, ccq,
                     noise_floor, tx_rate, rx_rate}, ...]
         """
         self.stdout.write("\n  Haciendo walk de columnas...\n")
@@ -177,7 +177,7 @@ class Command(BaseCommand):
         for idx in sorted(all_indexes):
             entry = {"index": idx}
             entry["mac"] = self._format_mac(raw["mac"].get(idx))
-            entry["essid"] = to_str(raw["essid"].get(idx)) or ""
+            entry["name"] = to_str(raw["name"].get(idx)) or ""
             entry["ip"] = to_str(raw["ip"].get(idx)) or ""
             entry["signal"] = to_int(raw["signal"].get(idx))
             entry["rssi"] = to_int(raw["rssi"].get(idx))

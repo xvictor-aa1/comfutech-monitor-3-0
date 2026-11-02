@@ -418,15 +418,17 @@ def write_ap_client(
     ap_ip: str,
     client_mac: str,
     client_ip: Optional[str],
-    client_essid: Optional[str],
-    if_index: Optional[int],
+    client_name: Optional[str],
     signal_dbm: Optional[float],
     noise_dbm: Optional[float],
     ccq_pct: Optional[float],
     tx_rate_bps: Optional[float],
     rx_rate_bps: Optional[float],
     snr_db: Optional[float],
-    timestamp,
+    distance_m: Optional[float] = None,
+    airmax_quality: Optional[float] = None,
+    airmax_capacity: Optional[float] = None,
+    timestamp=None,
 ) -> bool:
     """
     Escribe un punto del measurement `ap_clients`.
@@ -439,12 +441,11 @@ def write_ap_client(
         ap_ip: IP del AP (tag).
         client_mac: MAC del cliente (tag, identificador principal).
         client_ip: IP del cliente (tag).
-        client_essid: SSID (tag).
+        client_name: SSID (tag).
         if_index: índice SNMP del cliente (tag).
         signal_dbm, noise_dbm, ccq_pct: métricas (fields).
         tx_rate_bps, rx_rate_bps: tasas en bps (fields).
         snr_db: SNR calculado (field).
-        timestamp: datetime UTC.
 
     Returns:
         bool: True si se acumuló en el buffer.
@@ -455,8 +456,7 @@ def write_ap_client(
         .tag("ap_ip", ap_ip or "")
         .tag("client_mac", client_mac or "")
         .tag("client_ip", client_ip or "")
-        .tag("essid", client_essid or "")
-        .tag("if_index", str(if_index) if if_index is not None else "")
+        .tag("name", client_name or "")
     )
 
     wrote = False
@@ -467,6 +467,9 @@ def write_ap_client(
         ("tx_rate_bps", tx_rate_bps),
         ("rx_rate_bps", rx_rate_bps),
         ("snr_db", snr_db),
+        ("distance_m", distance_m),
+        ("airmax_quality", airmax_quality),
+        ("airmax_capacity", airmax_capacity),
     ]:
         if val is not None:
             point = point.field(name, float(val))

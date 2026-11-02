@@ -1,0 +1,138 @@
+/* ============================================================
+   live-cards.css — Estilos compartidos de los bloques de métricas
+   ============================================================
+   Usado por:
+     - templates/monitoreo/monitor_live.html
+     - templates/inventario/device_detail.html
+
+   NO incluye estilos específicos de cada template:
+     · monitor_live: .devices-grid, .live-stat, .refresh-progress,
+                     .device-live-card, .status-dot (con animaciones)
+                     → se quedan en el <style> del template.
+     · device_detail: nada específico, todo su CSS ya está aquí.
+                     → su <style> puede quedar vacío o eliminarse.
+     · dashboard: .dashboard-device-card, .sparkline-svg (28px),
+                  .radio-signal-bar, .status-dot (sin animaciones)
+                  → NO usa este archivo (es su propio estilo).
+
+   Cómo cargarlo en cada template:
+     {% load static %}
+     {% block extra_css %}
+     <link rel="stylesheet" href="{% static 'css/live-cards.css' %}">
+     {% endblock %}
+   ============================================================ */
+
+
+/* ============================================================
+   LIVE BLOCK (contenedor de cada métrica)
+   ------------------------------------------------------------
+   Usado por renderWirelessBlock, renderRadioBlock, renderIcmpBlock,
+   renderTrafficBlock, renderHealthBlock, renderTcpBlock,
+   renderApClientsBlock (definidos en live-cards.js).
+   ============================================================ */
+.live-block {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--cf-border-light, #eee);
+}
+.live-block:last-child { border-bottom: 0; }
+.live-block:first-child { padding-top: 0; }
+
+.live-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--cf-text-muted, #6c757d);
+}
+.live-block-meta {
+    font-size: 0.7rem;
+    color: var(--cf-text-subtle, #999);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+
+/* ============================================================
+   FILAS DE MÉTRICAS
+   ------------------------------------------------------------
+   Usado por renderRadioBlock y renderHealthBlock en modo gráfico.
+   ============================================================ */
+.live-metric-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.3rem;
+}
+.live-metric-row:last-child { margin-bottom: 0; }
+
+.live-metric-label {
+    min-width: 60px;
+    color: var(--cf-text-muted, #6c757d);
+    font-size: 0.75rem;
+}
+.live-metric-chart {
+    flex: 1;
+    min-width: 0;
+}
+.live-metric-value {
+    min-width: 70px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+
+/* ============================================================
+   SPARKLINES (36px de alto)
+   ------------------------------------------------------------
+   Los bloques de monitor_live y device_detail usan sparklines de
+   36px de alto. El dashboard usa 28px y define su propio
+   .sparkline-svg (no comparte esta hoja).
+   ============================================================ */
+.sparkline-slot {
+    width: 100%;
+    min-height: 36px;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.sparkline-slot svg {
+    width: 100%;
+    height: 36px;
+    display: block;
+}
+.sparkline-slot .sparkline-loading {
+    width: 100%;
+    height: 36px;
+    background: linear-gradient(
+        90deg,
+        var(--cf-hover-bg, #eef2f7) 0%,
+        var(--cf-border-light, #f8f9fa) 50%,
+        var(--cf-hover-bg, #eef2f7) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+/* Variante de sparkline grande (50px de alto).
+   No la usa ningún template actual; se mantiene por compatibilidad
+   por si en el futuro se quiere una card con sparkline más alto. */
+.sparkline-slot.sparkline-lg svg {
+    height: 50px;
+}
+.sparkline-slot.sparkline-lg .sparkline-loading {
+    height: 50px;
+}
+
+@keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}

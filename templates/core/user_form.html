@@ -167,11 +167,6 @@
                                 El usuario no podrá recuperar su contraseña
                                 hasta validarlo.
                             </div>
-                            <form id="send-verification-form" method="post"
-                                  action="{% url 'core:user_send_verification' target_user.id %}"
-                                  style="display: none;">
-                                {% csrf_token %}
-                            </form>
                             <button type="button"
                                     class="btn btn-outline-primary btn-sm"
                                     onclick="document.getElementById('send-verification-form').submit();">
@@ -649,5 +644,25 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+/**
+ * Envía el enlace de verificación por fetch (sin formulario anidado).
+ *
+ * El endpoint responde con una redirección (302) a `user_list` en éxito,
+ * o a `user_edit` si hay conflicto. Navegamos a la URL final del
+ * response para mostrar el mensaje correspondiente.
+ */
+function sendVerificationEmail(url) {
+    const csrfToken = getCookie('csrftoken');
+    fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRFToken': csrfToken },
+    }).then((response) => {
+        window.location.href = response.url;
+    }).catch((err) => {
+        alert('Error al enviar la verificación: ' + err.message);
+    });
+}
 </script>
 {% endblock %}
