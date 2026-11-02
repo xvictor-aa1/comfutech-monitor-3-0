@@ -16,7 +16,7 @@ from django import template
 register = template.Library()
 
 
-@register.inclusion_tag("core/_sortable_th.html", takes_context=True)
+@register.inclusion_tag("components/_sortable_th.html", takes_context=True)
 def sortable_th(context, key, label, width=""):
     """
     Renderiza un <th> con enlace de ordenamiento.
