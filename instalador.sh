@@ -4,11 +4,12 @@
 #
 # Pasos:
 #   1. Verificar permisos de root.
-#   2. Detectar Python (>=3.11). Si no está, descargar y compilar
-#      Python 3.15.1 desde fuente.
-#   3. Crear el entorno virtual en bin/python_local.
-#   4. Instalar las dependencias de requeriments.txt.
-#   5. Instalar los servicios systemd.
+#   2. Detectar la distribución e instalar dependencias del sistema
+#      (build-essential, python3-dev, libmysqlclient-dev, etc.).
+#   3. Detectar Python (>=3.11). Si no está, compilar Python 3.15.1.
+#   4. Crear el entorno virtual en bin/python_local.
+#   5. Instalar las dependencias de requeriments.txt.
+#   6. Instalar los servicios systemd.
 # ============================================================
 set -euo pipefail
 
@@ -31,15 +32,151 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # ------------------------------------------------------------
-# 2. Detectar Python
+# 2. Detectar la distribución e instalar dependencias del sistema
+# ------------------------------------------------------------
+#    mysqlclient requiere compilador C, headers de Python y la
+#    librería de desarrollo de MySQL/MariaDB. pkg-config y libssl-dev
+#    también son necesarios en muchos casos.
+# ------------------------------------------------------------
+detect_distro() {
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "${ID:-unknown}"
+    else
+        echo "unknown"
+    fi
+}
+
+install_system_deps() {
+    local distro
+    distro=$(detect_distro)
+    echo "  Distribución detectada: $distro"
+    echo "  Instalando dependencias del sistema (build tools, Python dev, MySQL dev)..."
+
+    case "$distro" in
+        ubuntu|debian|linuxmint|pop)
+            apt-get update -y
+            apt-get install -y \
+                build-essential \
+                python3-dev \
+                default-libmysqlclient-dev \
+                pkg-config \
+                libssl-dev \
+                zlib1g-dev \
+                libffi-dev \
+                wget \
+                curl \
+                git \
+                libjpeg-dev \
+                libxml2-dev \
+                libxslt1-dev \
+                libpq-dev \
+                sqlite3 \
+                libsqlite3-dev \
+                mariadb-client \
+                mariadb-server \
+                nginx \
+                logrotate \
+                systemd
+            ;;
+        rhel|centos|fedora|rocky|almalinux)
+            if command -v dnf &>/dev/null; then
+                dnf install -y \
+                    gcc gcc-c++ make \
+                    python3-devel \
+                    mariadb-devel \
+                    pkgconfig \
+                    openssl-devel \
+                    zlib-devel \
+                    libffi-devel \
+                    wget \
+                    curl \
+                    git \
+                    libjpeg-turbo-devel \
+                    libxml2-devel \
+                    libxslt-devel \
+                    postgresql-devel \
+                    sqlite \
+                    sqlite-devel \
+                    mariadb \
+                    mariadb-server \
+                    nginx \
+                    logrotate \
+                    systemd
+            else
+                yum install -y \
+                    gcc gcc-c++ make \
+                    python3-devel \
+                    mariadb-devel \
+                    pkgconfig \
+                    openssl-devel \
+                    zlib-devel \
+                    libffi-devel \
+                    wget \
+                    curl \
+                    git \
+                    libjpeg-turbo-devel \
+                    libxml2-devel \
+                    libxslt-devel \
+                    postgresql-devel \
+                    sqlite \
+                    sqlite-devel \
+                    mariadb \
+                    mariadb-server \
+                    nginx \
+                    logrotate \
+                    systemd
+            fi
+            ;;
+        arch|manjaro)
+            pacman -Sy --noconfirm \
+                base-devel \
+                python \
+                mariadb-libs \
+                pkgconf \
+                openssl \
+                zlib \
+                libffi \
+                wget \
+                curl \
+                git \
+                libjpeg-turbo \
+                libxml2 \
+                libxslt \
+                postgresql-libs \
+                sqlite \
+                mariadb \
+                nginx \
+                logrotate \
+                systemd
+            ;;
+        *)
+            echo "[ADVERTENCIA] Distribución '$distro' no reconocida."
+            echo "  Asegúrate de tener instalados: build-essential, python3-dev,"
+            echo "  libmysqlclient-dev (o mariadb-devel), pkg-config, libssl-dev."
+            ;;
+    esac
+}
+
+install_system_deps
+
+# --- Verificar que mysql_config esté disponible ---
+if ! command -v mysql_config &>/dev/null; then
+    echo "[ERROR] 'mysql_config' no está en el PATH."
+    echo "  Esto indica que las librerías de desarrollo de MySQL/MariaDB"
+    echo "  no se instalaron correctamente. Revisa los mensajes anteriores."
+    exit 1
+fi
+echo "  mysql_config encontrado: $(command -v mysql_config)"
+
+# ------------------------------------------------------------
+# 3. Detectar Python
 # ------------------------------------------------------------
 PYTHON_CMD=""
 PYTHON_VERSION=""
 
-# Buscar python3
 if command -v python3 &>/dev/null; then
     PYTHON_VERSION="$(python3 --version 2>&1 | awk '{print $2}')"
-    # Comprobar que sea >= 3.11 (comparación de versiones)
     if printf '%s\n' "3.11" "$PYTHON_VERSION" | sort -V | head -n1 | grep -q "^3.11$"; then
         PYTHON_CMD="python3"
         echo "  Python detectado: $PYTHON_VERSION (comando: python3)"
@@ -55,19 +192,19 @@ if [[ -z "$PYTHON_CMD" ]]; then
         exit 1
     fi
 
-    # --- Instalar dependencias de compilación (Debian/Ubuntu) ---
+    # Dependencias de compilación (ya instaladas en el paso 2, pero por si acaso)
     if command -v apt-get &>/dev/null; then
-        echo "  Instalando dependencias de compilación..."
-        apt-get update -y
         apt-get install -y build-essential zlib1g-dev libssl-dev libbz2-dev \
             libreadline-dev libsqlite3-dev libffi-dev liblzma-dev \
-            libncurses5-dev libgdbm-dev tk-dev wget curl
-    else
-        echo "[ERROR] No se detectó apt-get. Instala las dependencias de compilación manualmente."
-        exit 1
+            libncurses5-dev libgdbm-dev tk-dev
+    elif command -v dnf &>/dev/null; then
+        dnf install -y gcc gcc-c++ make zlib-devel openssl-devel bzip2-devel \
+            readline-devel sqlite-devel libffi-devel xz-devel ncurses-devel \
+            gdbm-devel tk-devel
+    elif command -v pacman &>/dev/null; then
+        pacman -S --noconfirm base-devel zlib openssl bzip2 readline sqlite libffi xz ncurses gdbm tk
     fi
 
-    # --- Descargar y compilar Python 3.15.1 ---
     PYTHON_TGZ="Python-3.15.1.tgz"
     PYTHON_URL="https://www.python.org/ftp/python/3.15.1/Python-3.15.1.tgz"
     echo "  Descargando $PYTHON_URL ..."
@@ -77,7 +214,7 @@ if [[ -z "$PYTHON_CMD" ]]; then
     echo "  Configurando y compilando (esto puede tardar varios minutos)..."
     ./configure --enable-optimizations --prefix=/usr/local
     make -j"$(nproc)"
-    make altinstall   # instala como python3.15, sin reemplazar python3
+    make altinstall
     cd "$PROJECT_ROOT"
     rm -rf "Python-3.15.1" "$PYTHON_TGZ"
 
@@ -87,7 +224,7 @@ if [[ -z "$PYTHON_CMD" ]]; then
 fi
 
 # ------------------------------------------------------------
-# 3. Crear entorno virtual en bin/python_local
+# 4. Crear entorno virtual en bin/python_local
 # ------------------------------------------------------------
 echo
 echo "=== Creando entorno virtual en bin/python_local ==="
@@ -104,7 +241,7 @@ VENV_PYTHON="$PROJECT_ROOT/bin/python_local/bin/python"
 VENV_PIP="$PROJECT_ROOT/bin/python_local/bin/pip"
 
 # ------------------------------------------------------------
-# 4. Instalar dependencias
+# 5. Instalar dependencias
 # ------------------------------------------------------------
 echo
 echo "=== Instalando dependencias de requeriments.txt ==="
@@ -119,7 +256,7 @@ fi
 echo "  Dependencias instaladas correctamente."
 
 # ------------------------------------------------------------
-# 5. Instalar servicios systemd
+# 6. Instalar servicios systemd
 # ------------------------------------------------------------
 echo
 echo "=== Instalando servicios systemd ==="
