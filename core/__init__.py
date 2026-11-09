@@ -12,4 +12,3 @@ Incluye:
   - Dashboard principal.
   - Utilidades (sorting, decoradores, runtime config).
 """
-default_app_config = "core.apps.CoreConfig"
