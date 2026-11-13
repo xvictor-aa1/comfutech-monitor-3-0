@@ -389,14 +389,14 @@
 <!-- ============================================================ -->
 <aside class="cf-sidebar" id="cf-sidebar">
 
+    {% if user.is_authenticated %}
+    {% with url_name=request.resolver_match.url_name %}
     <!-- Brand -->
     <a class="cf-sidebar-brand" id="cf-sidebar-brand">
         <i class="bi bi-router"></i>
         <span>Comfutech Monitor</span>
     </a>
 
-    {% if user.is_authenticated %}
-    {% with url_name=request.resolver_match.url_name %}
     <nav class="cf-sidebar-nav">
 
         <!-- Dashboard -->
