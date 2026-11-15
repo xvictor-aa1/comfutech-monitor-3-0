@@ -8,39 +8,254 @@
 # 3. Restringe permisos:
 #    Linux:   chmod 600 system.toml
 #    Windows: clic derecho > Propiedades > Seguridad > solo tu usuario
+#
+# NOTA: este archivo se lee UNA SOLA VEZ al arrancar Django.
+# Cualquier cambio aquí requiere reiniciar el servicio
+# (ComfutechDjango en Windows, ComfutechDjango en Linux).
+#
+# A diferencia de config.toml (runtime, editable desde la UI),
+# este archivo es de bootstrap: solo se toca al desplegar o al
+# cambiar credenciales de base de datos / secret key.
 # ============================================================
 
+
+# ============================================================
+# DJANGO
+# ============================================================
 [django]
+# Clave secreta de Django. Se usa para firmar sesiones, CSRF, etc.
 # Genera una nueva con:
 #   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 # Se permiten # y = dentro del valor.
-secret_key = "cambia-esto-por-una-clave-larga-aleatoria"
+# ⚠️ NUNCA la compartas ni la subas a git.
+secret_key = "cambia-esto-por-una-clave-larga-aleatoria-de-al-menos-50-caracteres"
+
+# Modo debug. NUNCA activar en producción (expone trazas e info sensible).
+# true  → muestra páginas de error detalladas.
+# false → solo muestra "Internal Server Error" genérico.
 debug = false
+
+# Hosts/IPs permitidos por Django. Separados por coma.
+# Ejemplos:
+#   localhost,127.0.0.1
+#   localhost,127.0.0.1,midominio.com,10.0.0.5
+#   *                              (solo en desarrollo, muy inseguro)
 allowed_hosts = "localhost,127.0.0.1"
+
+# Nivel de log de la aplicación.
+# Opciones: DEBUG | INFO | WARNING | ERROR | CRITICAL
+# Recomendado: INFO en producción, DEBUG solo al depurar.
 log_level = "INFO"
 
+
 # ============================================================
-# BASE DE DATOS
+# BASE DE DATOS — SELECTOR DE MOTOR
+# ============================================================
+# Solo se usa UNA de las tres sub-secciones de abajo, según el valor
+# de `engine`:
+#
+#   engine = "mysql"                    → usa [database.mysql]
+#   engine = "postgres"                 → usa [database.postgres]
+#   engine = "postgresql"               → usa [database.postgres]
+#   engine = "psql"                     → usa [database.postgres]
+#   engine = "sqlite"                   → usa [database.sqlite]
+#
+# Las otras dos sub-secciones se ignoran aunque existan.
+# Puedes dejar las tres configuradas y solo cambiar `engine` para
+# alternar entre motores sin tocar nada más.
 # ============================================================
 [database]
-# Motor a usar: "mysql" | "sqlite3" | "postgres"
-# Cambiar SOLO este campo para alternar entre ambos.
-engine = "mysql"
+engine = "mysql"   # "mysql" | "postgres" | "postgresql" | "psql" | "sqlite"
 
-# --- MySQL / Postgres
+
+# ------------------------------------------------------------
+# MySQL (aplica si engine = "mysql")
+# ------------------------------------------------------------
+# Requiere: mysqlclient o pymysql (ya instalados en requirements.txt).
+# Motor probado y soportado en producción.
+[database.mysql]
+# Nombre de la base de datos.
 name = "monitoreo_red"
+
+# Usuario de MySQL. Ej: monitor (recomendado) o root (solo desarrollo).
 user = "monitor"
-password = "tu_password"
-host = "127.0.0.1"
-port = "3306"     # 5432 para Postgres; ignorado en SQLite
 
-# --- Configuración de SQLite (ignorada si engine = "mysql" | "postgres") ---
+# Contraseña del usuario MySQL.
+password = "tu_password_segura"
+
+# Host del servidor MySQL.
+#   localhost / 127.0.0.1  → servidor local
+#   10.0.0.5                → servidor remoto
+host = "localhost"
+
+# Puerto TCP de MySQL. Por defecto 3306.
+port = 3306
+
+# Charset de la conexión. UTF-8 completo (soporta emojis y caracteres
+# asiáticos). Recomendado dejar "utf8mb4".
+charset = "utf8mb4"
+
+
+# ------------------------------------------------------------
+# PostgreSQL / Supabase (aplica si engine = "postgres", "postgresql" o "psql")
+# ------------------------------------------------------------
+# Requiere: psycopg[binary] o psycopg2-binary.
+# Recomendado si usas Supabase o un servidor PostgreSQL propio.
+[database.postgres]
+# Nombre de la base de datos.
+name = "monitoreo_red"
+
+# Usuario de PostgreSQL.
+#   Servidor propio:   "monitor" o "postgres"
+#   Supabase:          "postgres.<ref>"  (ej: postgres.abcdefghijklmnop)
+user = "monitor"
+
+# Contraseña del usuario PostgreSQL.
+password = "tu_password_segura"
+
+# Host del servidor.
+#   Servidor propio:   localhost / 127.0.0.1 / IP
+#   Supabase:          aws-0-<región>.pooler.supabase.com
+host = "localhost"
+
+# Puerto TCP de PostgreSQL.
+#   5432 → Session Pooler / servidor directo
+#   6543 → Transaction Pooler (Supabase, recomendado con Django)
+port = 5432
+
+# ------------------------------------------------------------
+# Opciones avanzadas de PostgreSQL
+# ------------------------------------------------------------
+# CONN_MAX_AGE: segundos que se reutiliza una conexión antes de
+# cerrarla.
+#   0    → cerrar tras cada request. OBLIGATORIO con Transaction
+#          Pooler de Supabase (puerto 6543).
+#   60   → reutilizar 60 s. Recomendado con Session Pooler o
+#          servidor directo.
+#   None → reutilizar indefinidamente (no recomendado con poolers).
+conn_max_age = 0
+
+# CONN_HEALTH_CHECKS: revalidar conexiones antes de usarlas.
+#   true  → recomendado. Evita errores por conexiones muertas.
+#   false → comportamiento legacy de Django.
+conn_health_checks = true
+
+# DISABLE_SERVER_SIDE_CURSORS: obligatorio con Transaction Pooler
+# (Supabase :6543), porque los cursores del lado del servidor no
+# sobreviven cuando Supavisor reasigna la conexión.
+#   true  → con pooler en modo transacción.
+#   false → con servidor directo (no pooler).
+disable_server_side_cursors = true
+
+# sslmode: modo de cifrado TLS.
+# Opciones: disable | allow | prefer | require | verify-ca | verify-full
+# Recomendado: "require" para Supabase y la mayoría de servidores
+#              en producción.
+sslmode = "require"
+
+# connect_timeout: segundos de espera al conectar.
+# Recomendado: 10. Si el servidor está lejos, subir a 15-20.
+connect_timeout = 10
+
+
+# ------------------------------------------------------------
+# SQLite (aplica si engine = "sqlite")
+# ------------------------------------------------------------
+# Recomendado solo para desarrollo o instalaciones muy pequeñas.
+# Sin dependencias externas (viene con Python).
 [database.sqlite]
-# Ruta relativa a BASE_DIR o absoluta.
-# Ejemplo: "db.sqlite3" → se crea en la raíz del proyecto.
-path = "db.sqlite3"
+# Ruta del archivo de base de datos.
+#   "db.sqlite3"           → en la raíz del proyecto
+#   "data/db.sqlite3"      → subcarpeta data/
+#   "C:/ruta/abs/db.sqlite3" → ruta absoluta
+name = "db.sqlite3"
 
+# Timeout (segundos) al esperar si la BD está bloqueada por otra
+# escritura. Recomendado: 20.
+timeout = 20
+
+
+# ============================================================
+# SEGURIDAD DE COOKIES Y PROXY
+# ============================================================
+# Configuración de cookies, CSRF y confianza en proxies.
+#
+# Los valores por defecto (si esta sección no existe) son:
+#   session_cookie_secure         = false
+#   csrf_cookie_secure            = false
+#   session_cookie_samesite       = "Lax"
+#   use_x_forwarded_host          = false
+#   secure_proxy_ssl_header_name  = "HTTP_X_FORWARDED_PROTO"
+#   secure_proxy_ssl_header_value = "https"
+#   csrf_trusted_origins          = []
+#
+# ⚠️ IMPORTANTE: si activas `session_cookie_secure` o
+# `csrf_cookie_secure` en TRUE, el navegador se negará a enviar las
+# cookies por HTTP. Asegúrate de servir el sitio por HTTPS antes de
+# activarlos, o los usuarios no podrán iniciar sesión.
+# ============================================================
+[security]
+# Cookies de sesión solo por HTTPS.
+#   true  → producción con HTTPS (recomendado).
+#   false → desarrollo local con HTTP.
+session_cookie_secure = false
+
+# Cookies CSRF solo por HTTPS.
+#   true  → producción con HTTPS (recomendado).
+#   false → desarrollo local con HTTP.
+csrf_cookie_secure = false
+
+# Política SameSite de la cookie de sesión.
+#   "Lax"    → recomendado. Envía la cookie en navegación normal y
+#              en peticiones del mismo sitio.
+#   "Strict" → más seguro pero ROMPE algunos fetch cross-site y
+#              enlaces desde otros sitios.
+#   "None"   → solo válido junto con Secure=true.
+session_cookie_samesite = "Lax"
+
+# Confiar en el header X-Forwarded-Host que envía el proxy.
+# Necesario cuando Django está detrás de Nginx, Traefik, Cloudflare,
+# GitHub Codespaces, Supabase, etc.
+#   true  → producción con proxy inverso.
+#   false → conexión directa sin proxy.
+use_x_forwarded_host = false
+
+# Header que indica que la petición original era HTTPS.
+# Los proxies suelen enviar "X-Forwarded-Proto: https".
+# Si tu proxy usa otro header (ej: "X-Forwarded-Scheme"), cámbialo.
+secure_proxy_ssl_header_name = "HTTP_X_FORWARDED_PROTO"
+secure_proxy_ssl_header_value = "https"
+
+# Orígenes de confianza para la verificación CSRF.
+# Cada entrada DEBE empezar por http:// o https://.
+# Incluye el esquema, el host y el puerto (si no es el estándar).
+#
+# Ejemplos:
+#   ["http://localhost:8000", "https://midominio.com"]
+#
+# Si usas Codespaces, añade la URL pública del espacio de trabajo.
+csrf_trusted_origins = [
+    # "http://localhost:8000",
+    # "http://127.0.0.1:8000",
+    # "https://midominio.com",
+    # "https://mi-codespace-abc123-8000.app.github.dev",
+]
+
+
+# ============================================================
+# EMAIL BACKEND
+# ============================================================
+# Backend de Django para envío de correos (bootstrap).
+#
+# IMPORTANTE: esto solo define QUÉ backend usa Django. Los datos
+# concretos del servidor SMTP (host, puerto, credenciales, remitente)
+# viven en `config.toml` (sección [email]) y se cargan en runtime
+# desde la UI de Configuración del sistema.
+#
+# Opciones comunes:
+#   "django.core.mail.backends.console.EmailBackend"  → imprime en consola (desarrollo)
+#   "django.core.mail.backends.smtp.EmailBackend"     → envía por SMTP real
+#   "django.core.mail.backends.filebased.EmailBackend"→ guarda en archivos
+# ============================================================
 [email_backend]
-# Backend de Django para envío de emails (bootstrap).
-# El resto de la configuración SMTP vive en config.toml.
 backend = "django.core.mail.backends.smtp.EmailBackend"

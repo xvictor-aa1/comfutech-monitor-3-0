@@ -1,4 +1,4 @@
-#sistema\settings.py
+## sistema/settings.py
 """
 Django settings for sistema project.
 
@@ -23,7 +23,8 @@ _SYSTEM_TOML = BASE_DIR / "system.toml"
 if not _SYSTEM_TOML.exists():
     raise RuntimeError(
         f"Falta el archivo '{_SYSTEM_TOML}'. "
-        f"Copia 'system.toml.example' a 'system.toml' y rellena los valores."
+        f"Copia 'system.toml.example' a 'system.toml' y rellena los valores. "
+        f"Puedes usar 'configurador_toml.py' para generarlo desde la GUI."
     )
 
 with _SYSTEM_TOML.open("rb") as _f:
@@ -31,11 +32,12 @@ with _SYSTEM_TOML.open("rb") as _f:
 
 
 def _cfg_get(section: str, key: str, default: str = "") -> str:
-    """Wrapper seguro para leer del .toml."""
+    """Wrapper seguro para leer un string del .toml."""
     return str(_cfg.get(section, {}).get(key, default))
 
 
 def _cfg_getbool(section: str, key: str, default: bool = False) -> bool:
+    """Wrapper seguro para leer un bool del .toml."""
     val = _cfg.get(section, {}).get(key, default)
     if isinstance(val, bool):
         return val
@@ -45,10 +47,40 @@ def _cfg_getbool(section: str, key: str, default: bool = False) -> bool:
 
 
 def _cfg_getint(section: str, key: str, default: int = 0) -> int:
+    """Wrapper seguro para leer un int del .toml."""
     try:
         return int(_cfg.get(section, {}).get(key, default))
     except (ValueError, TypeError):
         return default
+
+
+def _cfg_get_section(section: str) -> dict:
+    """
+    Devuelve una sección completa del TOML como dict.
+
+    Útil para las secciones anidadas ([database.mysql], [database.postgres],
+    [database.sqlite], [security]), donde cada valor se lee individualmente
+    y no todos tienen por qué existir.
+    """
+    val = _cfg.get(section, {})
+    return val if isinstance(val, dict) else {}
+
+
+def _get_db_section(engine: str) -> dict:
+    """
+    Devuelve la sub-sección [database.<engine>] del TOML.
+
+    Args:
+        engine: 'mysql' | 'postgres' | 'postgresql' | 'psql' | 'sqlite'.
+
+    Returns:
+        dict: la sección anidada o {} si no existe.
+    """
+    db = _cfg.get("database", {})
+    if not isinstance(db, dict):
+        return {}
+    sub = db.get(engine, {})
+    return sub if isinstance(sub, dict) else {}
 
 
 # ============================================================
@@ -57,8 +89,8 @@ def _cfg_getint(section: str, key: str, default: int = 0) -> int:
 SECRET_KEY = _cfg_get("django", "secret_key")
 if not SECRET_KEY:
     raise RuntimeError(
-        "@9b94lze1mkxa^m58e0$#!6y9s5$r(*(v1tk-^s1f9w@aptvpf"
-        #"La sección [django] del system.ini debe tener una 'secret_key'."
+        "La sección [django] del system.toml debe tener una 'secret_key'. "
+        "Usa 'configurador_toml.py' para generarla automáticamente."
     )
 
 # ⚠️ IMPORTANTE: la variable DEBE llamarse DEBUG, no DJANGO_DEBUG.
@@ -129,68 +161,69 @@ WSGI_APPLICATION = 'sistema.wsgi.application'
 # ============================================================
 # BASE DE DATOS — multi-engine (mysql | postgres | sqlite)
 # ============================================================
-# Cambia `DB_ENGINE` en system.toml (sección [database], clave engine)
-# y ajusta los demás campos según el motor elegido.
+# El motor se elige con `engine = "..."` en la sección [database]:
 #
-# Ejemplos de system.toml:
-#   MySQL:    engine = "mysql"    (requiere: mysqlclient o pymysql)
-#   Postgres: engine = "postgres" (requiere: psycopg2-binary)
-#   SQLite:   engine = "sqlite"   (sin dependencias extra)
+#   [database]
+#   engine = "mysql"      → usa [database.mysql]
+#   engine = "postgres"   → usa [database.postgres]   (o "postgresql" / "psql")
+#   engine = "sqlite"     → usa [database.sqlite]
+#
+# Solo la sub-sección del motor elegido se lee; las demás se ignoran
+# aunque existan en el archivo.
 # ============================================================
 
 DB_ENGINE = _cfg_get("database", "engine", "mysql").lower().strip()
-DB_NAME = _cfg_get("database", "name", "monitoreo_red")
-DB_USER = _cfg_get("database", "user", "monitor")
-DB_PASSWORD = _cfg_get("database", "password", "")
-DB_HOST = _cfg_get("database", "host", "127.0.0.1")
-DB_PORT = _cfg_get("database", "port", "")
-
 
 if DB_ENGINE == "mysql":
+    _db = _get_db_section("mysql")
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.mysql",
-            "NAME": DB_NAME or "comfutech-monitor",
-            "USER": DB_USER or "monitor",
-            "PASSWORD": DB_PASSWORD,
-            "HOST": DB_HOST or "127.0.0.1",
-            "PORT": DB_PORT or "3306",
+            "NAME": _db.get("name") or "monitoreo_red",
+            "USER": _db.get("user") or "monitor",
+            "PASSWORD": _db.get("password", ""),
+            "HOST": _db.get("host") or "127.0.0.1",
+            "PORT": str(_db.get("port") or "3306"),
             "OPTIONS": {
-                "charset": "utf8mb4",
+                "charset": _db.get("charset") or "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
             },
         }
     }
 
 elif DB_ENGINE in ("postgres", "postgresql", "psql"):
+    _db = _get_db_section("postgres")
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": DB_NAME or "postgres",
-            "USER": DB_USER,
-            "PASSWORD": DB_PASSWORD,
-            "HOST": DB_HOST,
-            "PORT": DB_PORT or "6543",            # 5432 - conexion por defecto / 6543 Supabase
-             # --- Opciones de Django (nivel superior) ---
-            "CONN_MAX_AGE": 0,
-            "CONN_HEALTH_CHECKS": True,
-            "DISABLE_SERVER_SIDE_CURSORS": True,  # ✅ Aquí, no en OPTIONS
+            "NAME": _db.get("name") or "postgres",
+            "USER": _db.get("user") or "monitor",
+            "PASSWORD": _db.get("password", ""),
+            "HOST": _db.get("host") or "localhost",
+            "PORT": str(_db.get("port") or "5432"),
+            # --- Opciones de Django (nivel superior, NO dentro de OPTIONS) ---
+            "CONN_MAX_AGE": int(_db.get("conn_max_age", 0)),
+            "CONN_HEALTH_CHECKS": bool(_db.get("conn_health_checks", True)),
+            "DISABLE_SERVER_SIDE_CURSORS": bool(
+                _db.get("disable_server_side_cursors", True)
+            ),
             # --- Opciones del driver (se pasan a psycopg) ---
             "OPTIONS": {
-                "sslmode": "require",
-                "connect_timeout": 10,
+                "sslmode": _db.get("sslmode") or "require",
+                "connect_timeout": int(_db.get("connect_timeout", 10)),
             },
         }
     }
 
 elif DB_ENGINE == "sqlite":
+    _db = _get_db_section("sqlite")
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / (DB_NAME or "db.sqlite3"),
+            "NAME": BASE_DIR / (_db.get("name") or "db.sqlite3"),
             "OPTIONS": {
                 # Reduce locking en escrituras concurrentes:
-                "timeout": 20,
+                "timeout": int(_db.get("timeout", 20)),
                 "init_command": "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;",
             },
         }
@@ -199,7 +232,7 @@ elif DB_ENGINE == "sqlite":
 else:
     raise RuntimeError(
         f"DB_ENGINE='{DB_ENGINE}' no soportado. "
-        f"Usa 'mysql', 'postgres' o 'sqlite'."
+        f"Usa 'mysql', 'postgres' (o 'postgresql' / 'psql') o 'sqlite'."
     )
 
 # ============================================================
@@ -241,10 +274,10 @@ STORAGES = {
 }
 
 # ============================================================
-# EMAIL BACKEND (desde .cfg)
+# EMAIL BACKEND (desde .toml)
 # ============================================================
 # El resto de la configuración de email (host, port, etc.)
-# ahora se carga desde la tabla `email_config` en runtime.
+# se carga en runtime desde core.runtime_config (config.toml).
 EMAIL_BACKEND = _cfg_get(
     "email_backend", "backend",
     "django.core.mail.backends.console.EmailBackend",
@@ -284,7 +317,7 @@ LOG_LEVEL = _cfg_get("django", "log_level", "INFO")
 
 def _bootstrap_email_from_toml():
     """
-    Aplica la config SMTP de `config.ini` al `django.conf.settings` en
+    Aplica la config SMTP de `config.toml` al `django.conf.settings` en
     el arranque, para que los envíos de email funcionen desde el
     primer momento.
     """
@@ -391,16 +424,50 @@ LOGGING = {
     },
 }
 
-# Para HTTP (no HTTPS):
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SESSION_COOKIE_SAMESITE = "Lax"  # "Strict" rompe algunos fetch cross-site
-USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# ============================================================
+# SEGURIDAD DE COOKIES Y PROXY (configurable vía [security])
+# ============================================================
+# Todos estos parámetros viven en la sección [security] del system.toml
+# y se pueden editar desde la pestaña "Avanzado" de configurador_toml.py.
+#
+# Valores por defecto (si la sección [security] no existe):
+#   SESSION_COOKIE_SECURE       = False
+#   CSRF_COOKIE_SECURE          = False
+#   SESSION_COOKIE_SAMESITE     = "Lax"
+#   USE_X_FORWARDED_HOST        = False
+#   SECURE_PROXY_SSL_HEADER     = ("HTTP_X_FORWARDED_PROTO", "https")
+#   CSRF_TRUSTED_ORIGINS        = []
+# ============================================================
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://172.14.4.239:8000",
-    "https://probable-bassoon-697xr75957p93qxp-8000.app.github.dev",   # Permite cualquier URL de GitHub Codespaces
-]
+_security = _cfg_get_section("security")
+
+# Cookies solo por HTTPS (activar en producción con HTTPS).
+SESSION_COOKIE_SECURE = bool(_security.get("session_cookie_secure", False))
+CSRF_COOKIE_SECURE = bool(_security.get("csrf_cookie_secure", False))
+
+# Política SameSite de la cookie de sesión.
+# "Lax" (recomendado) · "Strict" (rompe algunos fetch cross-site) · "None"
+SESSION_COOKIE_SAMESITE = str(
+    _security.get("session_cookie_samesite", "Lax")
+).strip() or "Lax"
+
+# Confiar en X-Forwarded-Host del proxy (necesario detrás de Nginx,
+# Codespaces, Supabase, etc.).
+USE_X_FORWARDED_HOST = bool(_security.get("use_x_forwarded_host", False))
+
+# Header + valor que indican "la petición original era HTTPS".
+SECURE_PROXY_SSL_HEADER = (
+    str(_security.get("secure_proxy_ssl_header_name", "HTTP_X_FORWARDED_PROTO")).strip(),
+    str(_security.get("secure_proxy_ssl_header_value", "https")).strip(),
+)
+
+# Orígenes de confianza para la verificación CSRF.
+# Cada entrada debe empezar por http:// o https://.
+_origins = _security.get("csrf_trusted_origins", [])
+if isinstance(_origins, list):
+    CSRF_TRUSTED_ORIGINS = [str(o).strip() for o in _origins if str(o).strip()]
+elif isinstance(_origins, str):
+    # Tolerancia por si alguien lo pone como string separado por comas.
+    CSRF_TRUSTED_ORIGINS = [s.strip() for s in _origins.split(",") if s.strip()]
+else:
+    CSRF_TRUSTED_ORIGINS = []
