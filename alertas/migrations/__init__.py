@@ -1,0 +1,1 @@
+# alertas/migrations/__init__.py
