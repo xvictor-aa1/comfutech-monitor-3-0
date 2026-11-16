@@ -343,11 +343,17 @@ def _build_message(rule, groups, all_conds_flat, all_values_flat) -> str:
                 f"{threshold} (valor: {val_str})"
             )
 
+        # Si el grupo no tiene condicionales, se omite del mensaje.
+        # Evita generar "NOT ()" cuando hay `negate=True` sin condicionales
+        # (bug estético reportado en el contexto v3.4).
+        if not parts:
+            continue
+
         operators = g.get("operators") or []
         if not isinstance(operators, list) or len(operators) != len(parts) - 1:
             operators = ["AND"] * max(0, len(parts) - 1)
 
-        joined = parts[0] if parts else ""
+        joined = parts[0]
         for i in range(1, len(parts)):
             op = operators[i - 1] if i - 1 < len(operators) else "AND"
             joined += f" {op} {parts[i]}"

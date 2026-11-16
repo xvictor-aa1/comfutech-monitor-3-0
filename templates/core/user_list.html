@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load sorting_tags %}
+{% load static sorting_tags %}
 {% block title %}Usuarios - Comfutech Monitor{% endblock %}
 
 {% block content %}
@@ -525,6 +525,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/tables.js' %}"></script>
 <script>
 // ============================================================
 // AYUDA DE LA PÁGINA
@@ -723,71 +724,43 @@ registerHelpContent({
 });
 
 // ============================================================
-// FILTRO RÁPIDO (cliente)
+// LÓGICA DE LA PÁGINA
 // ============================================================
-(function() {
-    const input = document.getElementById("quick-search");
-    const clearBtn = document.getElementById("quick-search-clear");
-    const counter = document.getElementById("live-count");
-    const table = document.getElementById("users-table");
-    if (!input || !table) return;
+/**
+ * Gestión de usuarios — Lógica de la página.
+ *
+ * Responsabilidades:
+ *   - Inicializar tooltips de Bootstrap (idempotente).
+ *   - Inicializar el filtro rápido en el cliente (atajo `/`, limpiar con
+ *     `Esc`, botón de limpiar, counter "N de M visibles").
+ *
+ * Dependencias (cargadas desde base.html o este template):
+ *   - tables.js:
+ *       · Tables.initTooltips()
+ *       · Tables.initQuickFilter({inputId, clearBtnId, counterId,
+ *                                 tableId, rowSelector})
+ *       · Tables.initKeyboardShortcuts({focusSearchId})
+ *
+ * Nota: esta página NO usa `Tables.initSelection` porque no hay
+ * checkboxes de selección múltiple (los usuarios no se seleccionan
+ * en bloque; cada acción es individual por fila).
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    // Tooltips de Bootstrap.
+    Tables.initTooltips();
 
-    function applyFilter() {
-        const q = input.value.toLowerCase().trim();
-        const rows = table.querySelectorAll("tbody tr[data-user-id]");
-        let visible = 0;
-
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            const match = !q || text.includes(q);
-            row.style.display = match ? "" : "none";
-            if (match) visible++;
-        });
-
-        if (clearBtn) clearBtn.style.display = input.value ? "block" : "none";
-        if (counter) {
-            counter.textContent = q
-                ? `${visible} de ${rows.length} visibles`
-                : "";
-            counter.className = visible === 0
-                ? "small text-danger fw-bold"
-                : "small text-success";
-        }
-    }
-
-    input.addEventListener("input", applyFilter);
-    if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
-            input.value = "";
-            applyFilter();
-            input.focus();
-        });
-    }
-
-    // Atajos
-    document.addEventListener("keydown", (e) => {
-        const tag = (e.target.tagName || "").toUpperCase();
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-            if (e.key === "Escape" && e.target === input) {
-                input.value = "";
-                applyFilter();
-                input.blur();
-            }
-            return;
-        }
-        if (e.key === "/") {
-            e.preventDefault();
-            input.focus();
-        }
+    // Filtro rápido sobre las filas visibles (cliente).
+    Tables.initQuickFilter({
+        inputId: 'quick-search',
+        clearBtnId: 'quick-search-clear',
+        counterId: 'live-count',
+        tableId: 'users-table',
+        rowSelector: 'tbody tr[data-user-id]',
     });
-})();
 
-// ============================================================
-// TOOLTIPS DE BOOTSTRAP
-// ============================================================
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-        new bootstrap.Tooltip(el);
+    // Atajos: '/' enfoca el buscador, 'Esc' lo limpia cuando tiene foco.
+    Tables.initKeyboardShortcuts({
+        focusSearchId: 'quick-search',
     });
 });
 </script>

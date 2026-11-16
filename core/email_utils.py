@@ -18,6 +18,38 @@ def _get_from_email() -> str:
         return "Comfutech Monitor <noreply@comfutech.local>"
 
 
+def _ensure_email_config_applied() -> None:
+    """
+    Asegura que la configuración SMTP de `config.toml` esté aplicada
+    a `django.conf.settings` ANTES de enviar un email.
+
+    ¿Por qué este helper? Porque `settings.py` aplica la config SMTP
+    durante el bootstrap (línea final), pero en ese momento Django aún
+    no está completamente inicializado. El import de `core.runtime_config`
+    puede fallar silenciosamente y los valores quedan en los defaults
+    de Django (`localhost:25` → Connection refused).
+
+    Al llamar `apply_email_config_to_settings()` antes de cada envío,
+    garantizamos que:
+      1. El arranque inicial funcione incluso si el bootstrap falló.
+      2. Si `config.toml` cambia en runtime (edición manual o UI), la
+         próxima llamada al envío aplique los valores frescos.
+
+    Si la llamada falla (config.toml corrupto, etc.), se loguea el
+    warning y se intenta el envío con la config actual de Django
+    (puede fallar, pero no rompemos el flujo silenciosamente).
+    """
+    try:
+        from core.runtime_config import apply_email_config_to_settings
+        apply_email_config_to_settings()
+    except Exception as e:
+        log.warning(
+            "No se pudo aplicar la config SMTP antes de enviar email: %s. "
+            "Se usará la config actual de Django (puede fallar si no se "
+            "ha configurado previamente).", e,
+        )
+
+
 def send_verification_email(request, user, token):
     """
     Envía el email con el enlace de verificación.
@@ -30,6 +62,7 @@ def send_verification_email(request, user, token):
     Returns:
         tuple: (ok: bool, error: str | None)
     """
+    _ensure_email_config_applied()
     try:
         verify_path = reverse("core:verify_email", kwargs={"token": str(token)})
         verify_url = request.build_absolute_uri(verify_path)
@@ -95,6 +128,7 @@ def send_password_reset_email(request, user, code):
     Returns:
         tuple: (ok: bool, error: str | None)
     """
+    _ensure_email_config_applied()
     try:
         name = user.get_full_name() or user.username
         from_email = _get_from_email()

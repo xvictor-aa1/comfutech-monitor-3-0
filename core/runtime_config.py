@@ -203,17 +203,54 @@ def get_email_config() -> Dict:
 
 
 def apply_email_config_to_settings() -> None:
-    """Aplica la config SMTP al módulo `django.conf.settings` en runtime."""
+    """
+    Aplica la config SMTP de `config.toml` al módulo `django.conf.settings`.
+
+    Esta función es la ÚNICA fuente de verdad para los parámetros SMTP
+    que usa `django.core.mail.send_mail()` en runtime. Se llama desde:
+      1. `core/apps.py::CoreConfig.ready()` — al arrancar Django.
+      2. `core/email_utils.py::_ensure_email_config_applied()` — antes
+         de cada envío (defensivo).
+      3. `core/views_settings.py::system_settings()` — al guardar desde UI.
+
+    Normalización TLS/SSL:
+      `EMAIL_USE_TLS` y `EMAIL_USE_SSL` son **mutuamente excluyentes** en
+      Django. Si `config.toml` los tiene ambos en `True`, Django lanza
+      error al enviar. Aquí normalizamos: si ambos están activos,
+      preferimos TLS (puerto 587) y desactivamos SSL.
+
+    Si `config.toml` está vacío o incompleto, se aplican los defaults
+    seguros de `get_email_config()` (smtp.gmail.com:587 con TLS).
+    """
     from django.conf import settings as dj_settings
     cfg = get_email_config()
 
+    # Normalización TLS/SSL: mutuamente excluyentes.
+    use_tls = bool(cfg["use_tls"])
+    use_ssl = bool(cfg["use_ssl"])
+    if use_tls and use_ssl:
+        log.warning(
+            "Config SMTP inválida: EMAIL_USE_TLS=True y EMAIL_USE_SSL=True "
+            "son mutuamente excluyentes. Se aplicará solo TLS (puerto 587)."
+        )
+        use_ssl = False
+
     dj_settings.EMAIL_HOST = cfg["host"]
     dj_settings.EMAIL_PORT = cfg["port"]
-    dj_settings.EMAIL_USE_TLS = cfg["use_tls"]
-    dj_settings.EMAIL_USE_SSL = cfg["use_ssl"]
+    dj_settings.EMAIL_USE_TLS = use_tls
+    dj_settings.EMAIL_USE_SSL = use_ssl
     dj_settings.EMAIL_HOST_USER = cfg["user"]
     dj_settings.EMAIL_HOST_PASSWORD = cfg["password"]
     dj_settings.DEFAULT_FROM_EMAIL = cfg["from_email"]
+
+    # Diagnóstico: registrar qué se aplicó (sin exponer credenciales).
+    log.debug(
+        "Config SMTP aplicada: host=%s port=%s tls=%s ssl=%s user=%s from=%s",
+        dj_settings.EMAIL_HOST, dj_settings.EMAIL_PORT,
+        use_tls, use_ssl,
+        "sí" if dj_settings.EMAIL_HOST_USER else "no",
+        dj_settings.DEFAULT_FROM_EMAIL,
+    )
 
 
 # ============================================================

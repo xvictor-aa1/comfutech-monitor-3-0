@@ -1,6 +1,10 @@
 {% extends "base.html" %}
-{% load sorting_tags %}
+{% load static sorting_tags %}
 {% block title %}Interfaces - {{ device.name }} - Comfutech Monitor{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/live-cards.css' %}">
+{% endblock %}
 
 {% block content %}
 
@@ -141,7 +145,7 @@
                 data-bs-toggle="tab" data-bs-target="#tab-ap"
                 type="button" role="tab">
             <i class="bi bi-broadcast-pin"></i> Clientes AP
-            <span class="badge bg-info ms-1">{{ ap_clients_total }}</span>
+            <span class="badge bg-info ms-1" id="ap-tab-count">{{ ap_clients_total }}</span>
         </button>
     </li>
 </ul>
@@ -517,14 +521,17 @@
                     <thead class="table-light">
                         <tr>
                             <th>MAC</th>
+                            <th>Nombre</th>
                             <th>IP</th>
-                            <th>Hostname</th>
                             <th class="text-end">Signal</th>
                             <th class="text-end">CCQ</th>
                             <th class="text-end">Noise</th>
                             <th class="text-end">SNR</th>
-                            <th class="text-end">TX</th>
                             <th class="text-end">RX</th>
+                            <th class="text-end">TX</th>
+                            <th class="text-end">Distancia</th>
+                            <th class="text-end">airMAX Q</th>
+                            <th class="text-end">airMAX C</th>
                             <th class="text-center">Estado</th>
                         </tr>
                     </thead>
@@ -533,14 +540,22 @@
                         <tr class="{% if not c.online %}opacity-50{% endif %}"
                             data-mac="{{ c.mac }}">
                             <td><code class="small">{{ c.mac }}</code></td>
-                            <td><code class="small">{{ c.ip|default:"—" }}</code></td>
-                            <td class="small">{{ c.hostname|default:"—" }}</td>
+                            <td class="small">
+                                <div class="text-truncate" style="max-width: 220px;"
+                                    title="{{ c.name|default:c.hostname|default:c.mac }}">
+                                    {{ c.name|default:c.hostname|default:c.mac }}
+                                </div>
+                            </td>
+                            <td><code class="small">{{ c.ip|default:"desconocido" }}</code></td>
                             <td class="text-end small ap-cell-signal">—</td>
                             <td class="text-end small ap-cell-ccq">—</td>
                             <td class="text-end small ap-cell-noise">—</td>
                             <td class="text-end small ap-cell-snr">—</td>
-                            <td class="text-end small ap-cell-tx">—</td>
-                            <td class="text-end small ap-cell-rx">—</td>
+                            <td class="text-end small ap-cell-rx text-success">↓ —</td>
+                            <td class="text-end small ap-cell-tx text-warning">↑ —</td>
+                            <td class="text-end small ap-cell-distance text-muted">—</td>
+                            <td class="text-end small ap-cell-airmax-q">—</td>
+                            <td class="text-end small ap-cell-airmax-c">—</td>
                             <td class="text-center">
                                 {% if c.online %}
                                 <span class="badge bg-success">Online</span>
@@ -551,7 +566,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center text-muted py-5">
+                            <td colspan="13" class="text-center text-muted py-5">
                                 <i class="bi bi-broadcast-pin" style="font-size: 3rem;"></i>
                                 <p class="mt-3 mb-2">No hay clientes AP registrados.</p>
                                 {% if is_admin %}
@@ -576,6 +591,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/toasts.js' %}"></script>
+<script src="{% static 'js/device-interfaces.js' %}"></script>
 <script>
 // ============================================================
 // AYUDA DE LA PÁGINA
@@ -599,7 +616,7 @@ registerHelpContent({
                 vía SNMP.
             `
         },
-                {
+        {
             heading: "Interfaces IF-MIB",
             body: `
                 Cada interfaz tiene un <code>ifIndex</code> único, un nombre
@@ -718,742 +735,56 @@ registerHelpContent({
 });
 
 // ============================================================
-// CONFIGURACIÓN INICIAL
+// CONFIGURACIÓN E INICIALIZACIÓN
 // ============================================================
-const AP_DEVICE_ID = {{ device.id }};
-const AP_URL_LIVE = "{% url 'monitoreo:devices_live' %}";
-const AP_REFRESH_INTERVAL = 10000;  // 10s
-
-let apRefreshTimer = null;
-let apAutoRefreshEnabled = true;
-
-// ============================================================
-// HELPERS
-// ============================================================
-
 /**
- * Formatea bps a K/M/G con 2 decimales.
- * @param {number|null} v
- * @returns {string}
- */
-function formatBps(v) {
-    if (v === null || v === undefined) return '—';
-    if (v >= 1e9) return (v / 1e9).toFixed(2) + ' Gbps';
-    if (v >= 1e6) return (v / 1e6).toFixed(2) + ' Mbps';
-    if (v >= 1e3) return (v / 1e3).toFixed(2) + ' Kbps';
-    return v.toFixed(0) + ' bps';
-}
-
-/**
- * Escapa HTML para inyectar como texto seguro.
- */
-function escapeHtmlJs(s) {
-    if (s === null || s === undefined) return '';
-    return String(s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-/**
- * Devuelve la clase de color para un valor de señal (dBm).
- */
-function signalColor(s) {
-    if (s === null || s === undefined) return '';
-    if (s < -80) return 'text-danger';
-    if (s < -70) return 'text-warning';
-    return 'text-success';
-}
-
-/**
- * Devuelve la clase de color para un valor de CCQ (%).
- */
-function ccqColor(c) {
-    if (c === null || c === undefined) return '';
-    if (c < 50) return 'text-danger';
-    if (c < 80) return 'text-warning';
-    return 'text-success';
-}
-
-/**
- * Devuelve la clase de color para un valor de noise (dBm).
- */
-function noiseColor(n) {
-    if (n === null || n === undefined) return '';
-    if (n > -80) return 'text-danger';
-    if (n > -90) return 'text-warning';
-    return '';
-}
-
-/**
- * Devuelve la clase de color para un valor de SNR (dB).
- */
-function snrColor(s) {
-    if (s === null || s === undefined) return '';
-    if (s < 15) return 'text-danger';
-    if (s < 25) return 'text-warning';
-    return 'text-success';
-}
-
-// ============================================================
-// CARGA DE CLIENTES AP (polling)
-// ============================================================
-
-/**
- * Carga los clientes AP del device actual desde el endpoint
- * de monitoreo en vivo.
+ * Interfaces / Clientes AP — Inicialización.
  *
- * @param {boolean} manual - true si el usuario pulsó "Recargar".
+ * El template NO contiene lógica de negocio inline: toda la lógica
+ * (selección IF-MIB, polling de clientes AP, toggle de interfaz
+ * destacada ⭐, botón "Destacar WAN", toasts de confirmación,
+ * auto-refresh por visibilitychange) vive en
+ * `static/js/device-interfaces.js`.
+ *
+ * Este bloque solo:
+ *   1. Registra el contenido de ayuda (data, no lógica).
+ *   2. Inicializa `DeviceInterfaces` con la configuración extraída
+ *      del contexto de Django (deviceId + URLs + intervalos).
+ *
+ * Dependencias cargadas arriba (en orden):
+ *   - toasts.js            → provee Toasts.show (usado para el
+ *                            feedback de la interfaz destacada ⭐).
+ *   - device-interfaces.js → provee DeviceInterfaces.init() y todos
+ *                            los handlers globales (resetToWan,
+ *                            loadApClients, selectAll, deselectAll,
+ *                            selectPhysical, toggleDashboardInterface).
+ *
+ * Nota: las funciones expuestas en `window` por `DeviceInterfaces.init()`
+ * están enlazadas a los `onclick=` del HTML (ej. `onclick="selectAll()"`,
+ * `onclick="resetToWan()"`). Por eso se llaman sin prefijo.
+ *
+ * 🐛 Bug #4 cerrado: `device-interfaces.js` busca la celda que
+ * contiene `<strong>` (no usa `td:nth-child(N)` como fallback).
  */
-async function loadApClients(manual = false) {
-    const btn = document.getElementById('ap-btn-refresh');
+DeviceInterfaces.init({
+    // ID del equipo actual (para filtrar el endpoint de devices_live).
+    deviceId: {{ device.id }},
 
-    if (manual && btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    }
+    // Total inicial de clientes AP (para decidir si hacer la primera
+    // carga o esperar a un Discovery).
+    apClientsTotal: {{ ap_clients_total|default:0 }},
 
-    try {
-        const response = await fetch(AP_URL_LIVE, {
-            credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' },
-        });
+    // URLs con nombres de ruta de Django.
+    // El placeholder `__IFACE__` será reemplazado por el ID de la
+    // interfaz (o `0` para desmarcar la destacada).
+    urls: {
+        live: "{% url 'monitoreo:devices_live' %}",
+        setDashboard: "{% url 'inventario:device_interface_set_dashboard' device.id 0 %}"
+            .replace(/\/0\/set-dashboard/, '/__IFACE__/set-dashboard'),
+    },
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-
-        const myDevice = (data.devices || []).find(d => d.id === AP_DEVICE_ID);
-        if (!myDevice) {
-            console.warn('Device no encontrado en la respuesta del servidor.');
-            return;
-        }
-
-        const clients = myDevice.ap_clients || [];
-        renderApClients(clients);
-
-        // Timestamp
-        const ts = new Date(data.timestamp);
-        const el = document.getElementById('ap-last-update');
-        if (el) el.textContent = ts.toLocaleTimeString('es-VE');
-
-    } catch (e) {
-        console.error('Error cargando clientes AP:', e);
-        const el = document.getElementById('ap-last-update');
-        if (el) el.textContent = 'error';
-    } finally {
-        if (manual && btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Recargar';
-        }
-    }
-}
-
-/**
- * Renderiza (o actualiza) la tabla de clientes AP.
- * @param {Array} clients - array de clientes desde el endpoint.
- */
-function renderApClients(clients) {
-    const tbody = document.getElementById('ap-clients-tbody');
-    if (!tbody) return;
-
-    // Actualizar stats
-    const online = clients.filter(c => c.online).length;
-    const total = clients.length;
-
-    const statOnlineEl = document.getElementById('ap-stat-online');
-    const statTotalEl = document.getElementById('ap-stat-total');
-    const badgeEl = document.getElementById('ap-count-badge');
-
-    if (statOnlineEl) statOnlineEl.textContent = online;
-    if (statTotalEl) statTotalEl.textContent = total;
-    if (badgeEl) badgeEl.textContent = total;
-
-    // Si la tabla está vacía, mostrar mensaje
-    if (clients.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="10" class="text-center text-muted py-5">
-                    <i class="bi bi-broadcast-pin" style="font-size: 3rem;"></i>
-                    <p class="mt-3 mb-2">No hay clientes AP registrados.</p>
-                </td>
-            </tr>
-        `;
-        return;
-    }
-
-    // Ordenar: online primero, luego por MAC
-    clients.sort((a, b) => {
-        if (a.online !== b.online) return b.online - a.online;
-        return (a.mac || '').localeCompare(b.mac || '');
-    });
-
-    tbody.innerHTML = clients.map(c => {
-        const rowCls = c.online ? '' : 'opacity-50';
-
-        const signalVal = c.signal !== null && c.signal !== undefined
-            ? c.signal.toFixed(0) + ' dBm' : '—';
-        const ccqVal = c.ccq !== null && c.ccq !== undefined
-            ? c.ccq.toFixed(0) + '%' : '—';
-        const noiseVal = c.noise !== null && c.noise !== undefined
-            ? c.noise.toFixed(0) + ' dBm' : '—';
-        const snrVal = c.snr !== null && c.snr !== undefined
-            ? c.snr.toFixed(0) + ' dB' : '—';
-        const txVal = formatBps(c.tx_rate);
-        const rxVal = formatBps(c.rx_rate);
-
-        return `
-            <tr class="${rowCls}" data-mac="${escapeHtmlJs(c.mac)}">
-                <td><code class="small">${escapeHtmlJs(c.mac)}</code></td>
-                <td><code class="small">${escapeHtmlJs(c.ip) || '—'}</code></td>
-                <td class="small">${escapeHtmlJs(c.hostname) || '—'}</td>
-                <td class="text-end small ${signalColor(c.signal)}">${signalVal}</td>
-                <td class="text-end small ${ccqColor(c.ccq)}">${ccqVal}</td>
-                <td class="text-end small ${noiseColor(c.noise)}">${noiseVal}</td>
-                <td class="text-end small ${snrColor(c.snr)}">${snrVal}</td>
-                <td class="text-end small text-success">↓ ${txVal}</td>
-                <td class="text-end small text-warning">↑ ${rxVal}</td>
-                <td class="text-center">
-                    ${c.online
-                        ? '<span class="badge bg-success">Online</span>'
-                        : '<span class="badge bg-secondary">Offline</span>'}
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// ============================================================
-// CICLO DE AUTO-REFRESH
-// ============================================================
-
-function startApAutoRefresh() {
-    stopApAutoRefresh();
-    apAutoRefreshEnabled = true;
-    apRefreshTimer = setInterval(() => loadApClients(false), AP_REFRESH_INTERVAL);
-}
-
-function stopApAutoRefresh() {
-    if (apRefreshTimer) {
-        clearInterval(apRefreshTimer);
-        apRefreshTimer = null;
-    }
-    apAutoRefreshEnabled = false;
-}
-
-// ============================================================
-// CONTROLES DE IF-MIB (selección de checkboxes)
-// ============================================================
-
-function updateCount() {
-    const checkboxes = document.querySelectorAll('.interface-checkbox');
-    const checked = document.querySelectorAll('.interface-checkbox:checked');
-    const el = document.getElementById('selected-count');
-    if (el) el.textContent = checked.length;
-
-    checkboxes.forEach(cb => {
-        const row = cb.closest('tr');
-        if (cb.checked) row.classList.add('interface-monitored');
-        else row.classList.remove('interface-monitored');
-    });
-}
-
-function selectAll() {
-    document.querySelectorAll('.interface-checkbox').forEach(cb => cb.checked = true);
-    updateCount();
-}
-
-function deselectAll() {
-    document.querySelectorAll('.interface-checkbox').forEach(cb => cb.checked = false);
-    updateCount();
-}
-
-function selectPhysical() {
-    document.querySelectorAll('.interface-checkbox').forEach(cb => {
-        const speed = parseInt(cb.dataset.speed) || 0;
-        cb.checked = speed > 0;
-    });
-    updateCount();
-}
-
-// ============================================================
-// INICIALIZACIÓN
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    // IF-MIB: listeners de checkboxes
-    document.querySelectorAll('.interface-checkbox').forEach(cb => {
-        cb.addEventListener('change', updateCount);
-    });
-    updateCount();
-
-    // AP: solo si la tab AP existe
-    const apTable = document.getElementById('ap-clients-table');
-    if (!apTable) return;
-
-    const autoToggle = document.getElementById('ap-auto-refresh');
-
-    // Carga inicial (solo si hay clientes estáticos; si no, el usuario
-    // debe pulsar Discovery primero)
-    const hasStaticClients = {{ ap_clients_total|default:0 }} > 0;
-    if (hasStaticClients) {
-        loadApClients(false);
-    }
-
-    // Auto-refresh
-    if (autoToggle) {
-        autoToggle.addEventListener('change', () => {
-            if (autoToggle.checked) startApAutoRefresh();
-            else stopApAutoRefresh();
-        });
-        if (autoToggle.checked) startApAutoRefresh();
-    }
-
-    // Pausar cuando la pestaña no está visible
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            if (apRefreshTimer) stopApAutoRefresh();
-        } else {
-            const toggle = document.getElementById('ap-auto-refresh');
-            if (toggle && toggle.checked) {
-                startApAutoRefresh();
-                loadApClients(false);
-            }
-        }
-    });
+    // Intervalo de auto-refresh de clientes AP (ms).
+    refreshInterval: 10000,
 });
-
-// ============================================================
-// MARCAR INTERFAZ DESTACADA DEL DASHBOARD
-// ============================================================
-const URL_SET_DASHBOARD = "{% url 'inventario:device_interface_set_dashboard' device.id 0 %}"
-    .replace(/\/0\/set-dashboard/, '/__IFACE__/set-dashboard');
-
-/**
- * Maneja el click del botón ⭐ de una interfaz.
- *
- * @param {HTMLButtonElement} btn - botón clickeado
- */
-async function toggleDashboardInterface(btn) {
-    const interfaceId = parseInt(btn.dataset.interfaceId, 10);
-    const isCurrent = btn.dataset.isDashboard === 'true';
-
-    // Si ya es la destacada, desmarcamos (interface_id = 0 en el backend
-    // significa "quitar la destacada actual"). Si no, marcamos esta.
-    const targetId = isCurrent ? 0 : interfaceId;
-
-    // Deshabilitar mientras se ejecuta
-    btn.disabled = true;
-    const originalHtml = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-    try {
-        const url = URL_SET_DASHBOARD.replace('__IFACE__', targetId);
-        const csrfToken = getCookie('csrftoken');
-
-        const response = await fetch(url, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'X-CSRFToken': csrfToken },
-        });
-
-        const data = await response.json();
-
-        if (!data.ok) {
-            alert(data.error || 'Error al marcar la interfaz.');
-            return;
-        }
-
-        // Actualizar TODOS los botones de la tabla
-        // (porque solo una interfaz puede ser destacada a la vez)
-        updateAllStarButtons(data.dashboard_interface_id);
-
-        // Mostrar toast de confirmación
-        showInterfaceToast(data.message, 'success');
-
-        // Actualizar el badge "Destacada" en la tabla
-        updateDashboardBadges(data.dashboard_interface_id);
-
-        // Actualizar el estado del botón "Destacar WAN"
-        updateHighlightWanButton();
-
-    } catch (e) {
-        console.error('Error marcando interfaz:', e);
-        alert('Error de red. Intenta de nuevo.');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
-}
-
-/**
- * Actualiza el estado visual de TODOS los botones ⭐ de la tabla.
- *
- * @param {number|null} dashboardId - ID de la interfaz destacada actual
- *                                    (o null si no hay ninguna).
- */
-function updateAllStarButtons(dashboardId) {
-    document.querySelectorAll('.btn-dashboard-star').forEach(btn => {
-        const btnIfaceId = parseInt(btn.dataset.interfaceId, 10);
-        const isNow = dashboardId !== null && btnIfaceId === dashboardId;
-
-        btn.dataset.isDashboard = isNow ? 'true' : 'false';
-
-        // Actualizar clases del botón
-        btn.classList.toggle('btn-warning', isNow);
-        btn.classList.toggle('btn-outline-secondary', !isNow);
-
-        // Actualizar icono
-        const icon = btn.querySelector('i');
-        if (icon) {
-            icon.classList.toggle('bi-star-fill', isNow);
-            icon.classList.toggle('bi-star', !isNow);
-        }
-
-        // Actualizar tooltip
-        btn.title = isNow
-            ? 'Quitar como destacada'
-            : 'Marcar como destacada del dashboard';
-    });
-}
-
-/**
- * Actualiza los badges "Destacada" en la columna de nombre.
- *
- * @param {number|null} dashboardId
- */
-function updateDashboardBadges(dashboardId) {
-    // Quitar todos los badges existentes
-    document.querySelectorAll('.dashboard-badge').forEach(b => b.remove());
-
-    if (dashboardId === null) return;
-
-    // Añadir el badge en la fila correspondiente
-    const row = document.querySelector(
-        `tr[data-interface-id="${dashboardId}"]`
-    );
-    if (!row) return;
-
-    const nameCell = row.querySelector('td:nth-child(2)');
-    // Ajuste: si no hay checkbox (usuario no admin), es nth-child(2);
-    // si hay checkbox, es nth-child(3). Buscamos la celda que tiene
-    // el if_name.
-    const targetCell = row.querySelector('td:nth-child(2)') ||
-                       row.querySelector('td:nth-child(3)');
-    if (!targetCell) return;
-
-    const badge = document.createElement('span');
-    badge.className = 'badge bg-warning text-dark ms-1 dashboard-badge';
-    badge.title = 'Esta es la interfaz destacada del dashboard';
-    badge.style.fontSize = '0.6rem';
-    badge.innerHTML = '<i class="bi bi-star-fill"></i> Destacada';
-    targetCell.appendChild(badge);
-}
-
-/**
- * Muestra un toast de confirmación (independiente del sistema
- * de toasts del dashboard, para que device_interfaces funcione
- * aunque el dashboard no esté cargado).
- *
- * @param {string} message
- * @param {string} severity - 'success' | 'danger' | 'info' | 'warning'
- */
-function showInterfaceToast(message, severity = 'success') {
-    // Reutilizar el contenedor global si existe; si no, crearlo
-    let container = document.getElementById('iface-toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'iface-toast-container';
-        container.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        container.style.zIndex = '1090';
-        document.body.appendChild(container);
-    }
-
-    const colors = {
-        success: 'bg-success text-white',
-        warning: 'bg-warning text-dark',
-        danger:  'bg-danger text-white',
-        info:    'bg-info text-white',
-    };
-    const icons = {
-        success: 'bi-check-circle-fill',
-        warning: 'bi-exclamation-triangle-fill',
-        danger:  'bi-x-circle-fill',
-        info:    'bi-info-circle-fill',
-    };
-
-    const id = 'iface-toast-' + Date.now();
-
-    container.insertAdjacentHTML('beforeend', `
-        <div id="${id}" class="toast" role="alert" data-bs-autohide="true"
-             data-bs-delay="4000">
-            <div class="toast-header ${colors[severity] || colors.info}">
-                <i class="bi ${icons[severity] || icons.info} me-2"></i>
-                <strong class="me-auto">Interfaz destacada</strong>
-                <small>ahora</small>
-                <button type="button" class="btn-close btn-close-white ms-2"
-                        data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body small">${escapeHtmlJs(message)}</div>
-        </div>
-    `);
-
-    const el = document.getElementById(id);
-    if (el) new bootstrap.Toast(el).show();
-
-    // Auto-eliminar el elemento tras el hide
-    if (el) {
-        el.addEventListener('hidden.bs.toast', () => el.remove());
-    }
-}
-
-// ============================================================
-// LISTENERS DEL BOTÓN ⭐
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.btn-dashboard-star').forEach(btn => {
-        btn.addEventListener('click', () => toggleDashboardInterface(btn));
-    });
-});
-
-// ============================================================
-// DESTACAR WAN AUTOMÁTICAMENTE
-// ============================================================
-
-/**
- * Busca y marca automáticamente la interfaz WAN/ether1 como
- * interfaz destacada del dashboard.
- *
- * Estrategia de búsqueda por prioridad:
- *   1. Interfaces cuyo nombre contenga: ether1, wan, sfp-sfpplus1,
- *      eth0, eth1 (case-insensitive).
- *   2. La primera interfaz física (con velocidad > 0) y monitored=True.
- *   3. La primera interfaz con oper_status=True.
- *
- * Si ninguna coincide, muestra un toast de advertencia sugiriendo
- * marcar manualmente.
- *
- * Es idempotente: si la WAN ya es la destacada, no hace nada
- * (excepto confirmar visualmente).
- */
-async function resetToWan() {
-    const btn = document.getElementById('btn-highlight-wan');
-    if (!btn) return;
-
-    // Feedback visual en el botón
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-    try {
-        // --------------------------------------------------------
-        // 1. Buscar la interfaz objetivo por nombre (por prioridad)
-        // --------------------------------------------------------
-        const nameCandidates = [
-            'ether1', 'wan', 'sfp-sfpplus1', 'eth0', 'eth1',
-            'ether2', 'internet', 'uplink',
-        ];
-
-        // Obtener todas las filas de interfaces
-        const rows = Array.from(document.querySelectorAll('tr[data-interface-id]'));
-        if (rows.length === 0) {
-            showInterfaceToast(
-                'No hay interfaces en la tabla. Ejecuta Discovery primero.',
-                'warning'
-            );
-            return;
-        }
-
-        /**
-         * Extrae el nombre de la interfaz de una fila.
-         * El nombre está en un <strong> dentro de la celda 2 o 3
-         * (depende de si hay checkbox o no).
-         */
-        function getRowName(row) {
-            // Buscar en la celda que contiene <strong>
-            const cells = row.querySelectorAll('td');
-            for (const cell of cells) {
-                const strong = cell.querySelector('strong');
-                if (strong) return strong.textContent.trim().toLowerCase();
-            }
-            return '';
-        }
-
-        // Buscar por nombre candidato
-        let targetRow = null;
-        let matchedBy = null;
-
-        for (const candidate of nameCandidates) {
-            targetRow = rows.find(row => {
-                const name = getRowName(row);
-                return name === candidate || name.includes(candidate);
-            });
-            if (targetRow) {
-                matchedBy = `nombre "${candidate}"`;
-                break;
-            }
-        }
-
-        // --------------------------------------------------------
-        // 2. Fallback: primera interfaz con velocidad > 0 + monitored
-        // --------------------------------------------------------
-        if (!targetRow) {
-            targetRow = rows.find(row => {
-                const cb = row.querySelector('.interface-checkbox');
-                if (!cb) return false;
-                const speed = parseInt(cb.dataset.speed) || 0;
-                return speed > 0 && cb.checked;
-            });
-            if (targetRow) matchedBy = 'primera física monitoreada';
-        }
-
-        // --------------------------------------------------------
-        // 3. Fallback: primera interfaz con oper_status up
-        // --------------------------------------------------------
-        if (!targetRow) {
-            targetRow = rows.find(row => {
-                const statusText = row.textContent.toLowerCase();
-                return statusText.includes('up') && !statusText.includes('down');
-            });
-            if (targetRow) matchedBy = 'primera interfaz activa (up)';
-        }
-
-        // --------------------------------------------------------
-        // 4. Sin candidatos → mostrar aviso
-        // --------------------------------------------------------
-        if (!targetRow) {
-            showInterfaceToast(
-                'No se encontró una interfaz WAN clara. ' +
-                'Marca manualmente con el botón ⭐ de la tabla.',
-                'warning'
-            );
-            return;
-        }
-
-        // --------------------------------------------------------
-        // 5. Ejecutar el toggle correspondiente
-        // --------------------------------------------------------
-        const starBtn = targetRow.querySelector('.btn-dashboard-star');
-        if (!starBtn) {
-            showInterfaceToast(
-                'No se pudo encontrar el botón ⭐ de la fila. ' +
-                'Refresca la página e intenta de nuevo.',
-                'danger'
-            );
-            return;
-        }
-
-        const isCurrentlyDashboard = starBtn.dataset.isDashboard === 'true';
-        const ifaceName = getRowName(targetRow);
-
-        // Si YA es la destacada, avisamos al usuario (no hacemos toggle
-        // accidental hacia "quitar")
-        if (isCurrentlyDashboard) {
-            showInterfaceToast(
-                `"${ifaceName}" ya es la interfaz destacada del dashboard.`,
-                'info'
-            );
-            return;
-        }
-
-        // Simular clic en el botón ⭐ (reutiliza toda la lógica existente)
-        starBtn.click();
-
-        // El toast de confirmación lo maneja `toggleDashboardInterface`
-
-        // Scroll suave a la fila para que el usuario vea el cambio
-        targetRow.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-        });
-
-        // Highlight temporal de la fila (feedback visual)
-        targetRow.style.transition = 'background-color 0.3s ease';
-        const originalBg = targetRow.style.backgroundColor;
-        targetRow.style.backgroundColor = 'rgba(255, 193, 7, 0.25)';
-        setTimeout(() => {
-            targetRow.style.backgroundColor = originalBg;
-        }, 1200);
-
-    } catch (e) {
-        console.error('Error destacando WAN:', e);
-        showInterfaceToast(
-            'Error al destacar la WAN. Intenta manualmente.',
-            'danger'
-        );
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
-}
-
-// ============================================================
-// ESTADO DEL BOTÓN "DESTACAR WAN"
-// ============================================================
-document.addEventListener('DOMContentLoaded', () => {
-    updateHighlightWanButton();
-});
-
-/**
- * Actualiza el estado visual del botón "Destacar WAN" según si la
- * interfaz WAN ya es la destacada actualmente.
- *
- * Se llama:
- *   - Al cargar la página.
- *   - Después de cada toggle de ⭐ (agregar llamada en
- *     `toggleDashboardInterface` justo después de
- *     `updateDashboardBadges(...)`).
- */
-function updateHighlightWanButton() {
-    const btn = document.getElementById('btn-highlight-wan');
-    if (!btn) return;
-
-    // Buscar la WAN siguiendo la misma lógica de resetToWan
-    const nameCandidates = [
-        'ether1', 'wan', 'sfp-sfpplus1', 'eth0', 'eth1',
-        'ether2', 'internet', 'uplink',
-    ];
-    const rows = Array.from(document.querySelectorAll('tr[data-interface-id]'));
-
-    function getRowName(row) {
-        const cells = row.querySelectorAll('td');
-        for (const cell of cells) {
-            const strong = cell.querySelector('strong');
-            if (strong) return strong.textContent.trim().toLowerCase();
-        }
-        return '';
-    }
-
-    let targetRow = null;
-    for (const candidate of nameCandidates) {
-        targetRow = rows.find(row => getRowName(row).includes(candidate));
-        if (targetRow) break;
-    }
-
-    if (!targetRow) {
-        // No hay WAN clara → el botón sigue neutro pero deshabilitado
-        btn.classList.add('disabled');
-        btn.title = 'No se encontró una interfaz WAN. Marca manualmente con ⭐.';
-        return;
-    }
-
-    const starBtn = targetRow.querySelector('.btn-dashboard-star');
-    const isDashboard = starBtn && starBtn.dataset.isDashboard === 'true';
-
-    if (isDashboard) {
-        // Ya destacada: botón amarillo sólido + texto "WAN destacada"
-        btn.classList.remove('btn-outline-warning');
-        btn.classList.add('btn-warning');
-        btn.innerHTML = '<i class="bi bi-star-fill"></i>' +
-            '<span class="d-none d-md-inline"> WAN destacada</span>';
-        btn.title = 'La WAN ya es la interfaz destacada del dashboard';
-    } else {
-        // No destacada: botón outline + texto "Destacar WAN"
-        btn.classList.remove('btn-warning');
-        btn.classList.add('btn-outline-warning');
-        btn.innerHTML = '<i class="bi bi-star-fill"></i>' +
-            '<span class="d-none d-md-inline"> Destacar WAN</span>';
-        btn.title = 'Marcar la interfaz WAN/ether1 como destacada del dashboard';
-    }
-}
-
 </script>
 {% endblock %}

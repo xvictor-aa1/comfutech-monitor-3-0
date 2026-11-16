@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load sorting_tags %}
+{% load static sorting_tags %}
 {% block title %}Equipos - Comfutech Monitor{% endblock %}
 
 {% block content %}
@@ -231,8 +231,7 @@
                 <tr>
                     <th style="width: 35px;">
                         <input type="checkbox" class="form-check-input"
-                               id="select-all-devices"
-                               onclick="toggleAllDevices(this)">
+                               id="select-all-devices">
                     </th>
                     {% sortable_th "nombre" "Nombre" %}
                     {% sortable_th "ip" "IP" "140px" %}
@@ -558,6 +557,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/tables.js' %}"></script>
 <script>
 // ============================================================
 // AYUDA DE LA PÁGINA
@@ -708,43 +708,18 @@ let pendingBulkImport = {
 };
 
 // ============================================================
-// SELECCIÓN Y CONTADOR
+// SELECCIÓN — Exportación
 // ============================================================
-
-/**
- * Marca/desmarca todos los checkboxes de la página.
- * @param {HTMLInputElement} source
- */
-function toggleAllDevices(source) {
-    document.querySelectorAll('.device-checkbox').forEach(cb => {
-        cb.checked = source.checked;
-    });
-    updateSelectedCounter();
-}
-
-/**
- * Actualiza el contador de seleccionados y el estado del master.
- */
-function updateSelectedCounter() {
-    const all = document.querySelectorAll('.device-checkbox');
-    const checked = document.querySelectorAll('.device-checkbox:checked');
-    const master = document.getElementById('select-all-devices');
-    const counter = document.getElementById('selected-counter');
-
-    if (master) {
-        master.checked = all.length > 0 && all.length === checked.length;
-        master.indeterminate = checked.length > 0 && checked.length < all.length;
-    }
-
-    if (counter) {
-        counter.textContent = checked.length > 0
-            ? `(${checked.length} seleccionado${checked.length === 1 ? '' : 's'})`
-            : '';
-    }
-}
-
 /**
  * Exporta los equipos seleccionados.
+ *
+ * Si no hay ninguno seleccionado, pide confirmación para exportar todos.
+ * Si hay seleccionados, construye la URL con los IDs en query string
+ * (`?ids=1,2,3`) y navega a ella para forzar la descarga del JSON.
+ *
+ * La selección se lee directamente del DOM (no depende del estado de
+ * `Tables.initSelection`) para mantener la función autocontenida y
+ * usable desde el dropdown del header.
  */
 function exportSelected() {
     const checked = document.querySelectorAll('.device-checkbox:checked');
@@ -764,14 +739,15 @@ function exportSelected() {
 // ============================================================
 // IMPORTACIÓN MASIVA
 // ============================================================
-
 /**
  * Inicia el flujo de importación masiva.
+ *
+ * Valida que haya archivo, que no supere el tamaño máximo (5 MB), y
+ * arranca la primera pasada de subida.
  */
 function startBulkImport() {
     const fileInput = document.getElementById('import-bulk-file');
     const errorBox = document.getElementById('import-bulk-error');
-    const btn = document.getElementById('import-bulk-btn');
 
     errorBox.style.display = 'none';
     errorBox.textContent = '';
@@ -797,8 +773,15 @@ function startBulkImport() {
 
 /**
  * Sube el archivo al backend.
- * @param {File} file
- * @param {boolean} isSecondPass
+ *
+ * Flujo de dos pasadas:
+ *   - Primera (`isSecondPass=false`): si hay conflictos, los muestra
+ *     en el modal y no procesa nada.
+ *   - Segunda (`isSecondPass=true`): procesa todos los autorizados
+ *     (crea nuevos + actualiza los marcados + salta el resto).
+ *
+ * @param {File}     file
+ * @param {boolean}  isSecondPass
  * @param {string[]} overwriteNames
  */
 async function _uploadBulkImport(file, isSecondPass = false, overwriteNames = []) {
@@ -954,6 +937,16 @@ function confirmBulkImportWithOverwrite() {
 // ============================================================
 // HELPERS
 // ============================================================
+/**
+ * Escapa HTML para inyectar texto dinámico en HTML.
+ *
+ * Se mantiene inline (no se usa `LiveCards.escapeHtml` porque esa
+ * librería no se carga en esta página). 8 líneas, función pura,
+ * sin dependencias externas.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
 function escapeHtmlJs(s) {
     if (s === null || s === undefined) return '';
     return String(s)
@@ -965,6 +958,13 @@ function escapeHtmlJs(s) {
 // ============================================================
 // FILTRO DINÁMICO DE MODELOS POR FABRICANTE
 // ============================================================
+/**
+ * Rellena el select de modelos cuando el usuario elige un fabricante
+ * en el buscador avanzado.
+ *
+ * No aplica a `filter-model` del formulario de creación (eso vive en
+ * `device_form.html` y usa `window.deviceFormModule`).
+ */
 (function() {
     const filterVendor = document.getElementById("filter-vendor");
     const filterModel = document.getElementById("filter-model");
@@ -1001,16 +1001,39 @@ function escapeHtmlJs(s) {
 })();
 
 // ============================================================
-// LISTENERS DE CHECKBOXES
+// INIT
 // ============================================================
+/**
+ * Listado de equipos — Lógica de la página.
+ *
+ * Responsabilidades:
+ *   - Inicializar la selección múltiple con checkbox maestro + contador.
+ *   - El contador `#selected-counter` preserva el formato original
+ *     `(N seleccionado/s)` con paréntesis y masculino, por lo que se
+ *     gestiona via `onUpdate` en lugar de la gestión interna de
+ *     `Tables.initSelection`.
+ *
+ * Dependencias (cargadas desde este template):
+ *   - tables.js:
+ *       · Tables.initSelection({..., onUpdate})
+ */
 document.addEventListener('DOMContentLoaded', () => {
-    // Checkboxes individuales actualizan el master y el contador
-    document.querySelectorAll('.device-checkbox').forEach(cb => {
-        cb.addEventListener('change', updateSelectedCounter);
+    Tables.initSelection({
+        checkboxSelector: '.device-checkbox',
+        masterCheckboxId: 'select-all-devices',
+        counterId: null,   // gestión custom abajo para preservar formato
+        onUpdate: (checkedCount) => {
+            const counter = document.getElementById('selected-counter');
+            if (!counter) return;
+            if (checkedCount > 0) {
+                counter.textContent = `(${checkedCount} seleccionado${checkedCount === 1 ? '' : 's'})`;
+                counter.className = 'ms-2 text-success fw-bold';
+            } else {
+                counter.textContent = '';
+                counter.className = 'ms-2 text-success fw-bold';
+            }
+        },
     });
-
-    // Estado inicial
-    updateSelectedCounter();
 });
 
 // ============================================================

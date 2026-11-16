@@ -249,10 +249,8 @@
                 <tr>
                     {% sortable_th "fecha" "Fecha" "130px" %}
                     {% sortable_th "severidad" "Severidad" "120px" %}
-                    {% sortable_th "tipo" "Tipo" "150px" %}
                     {% sortable_th "regla" "Regla de alerta" "180px" %}
                     {% sortable_th "mensaje" "Mensaje" %}
-                    {% sortable_th "valor" "Valor" "90px" %}
                     {% sortable_th "estado" "Estado" "120px" %}
                     <th style="width: 140px;" class="text-end">Acciones</th>
                 </tr>
@@ -271,9 +269,6 @@
                             {% else %}bg-info{% endif %}">
                             {{ alert.get_severity_display }}
                         </span>
-                    </td>
-                    <td>
-                        <code class="small">{{ alert.alert_type }}</code>
                     </td>
                     <td>
                         {% if alert.rule_name %}
@@ -296,11 +291,6 @@
                     </td>
                     <td>
                         <div class="text-break">{{ alert.message }}</div>
-                    </td>
-                    <td class="text-end">
-                        {% if alert.value_observed is not None %}
-                        <code>{{ alert.value_observed|floatformat:2 }}</code>
-                        {% else %}—{% endif %}
                     </td>
                     <td>
                         {% if alert.status == "activa" %}
@@ -337,7 +327,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-5">
+                    <td colspan="6" class="text-center text-muted py-5">
                         <i class="bi bi-inbox" style="font-size: 3rem;"></i>
                         <p class="mt-3 mb-2">
                             No hay alertas que coincidan con los filtros.

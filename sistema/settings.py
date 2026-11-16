@@ -260,10 +260,13 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# ❌ Deprecado || Usar en Django 4.2
+# ❌ Deprecado en Django 4.2, ELIMINADO en Django 5.1.
+# Si estás en Django ≥5.1, esta línea lanza AttributeError al arrancar.
 # STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# ✅ Django 5.1+
+# ✅ STORAGES (introducido en 4.2, obligatorio desde 5.1+).
+# Django lo usa internamente para resolver storages de archivos y
+# estáticos. Aquí configuramos whitenoise con compresión + manifest.
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -318,14 +321,27 @@ LOG_LEVEL = _cfg_get("django", "log_level", "INFO")
 def _bootstrap_email_from_toml():
     """
     Aplica la config SMTP de `config.toml` al `django.conf.settings` en
-    el arranque, para que los envíos de email funcionen desde el
-    primer momento.
+    el arranque.
+
+    ⚠️ Este bootstrap es una RED DE SEGURIDAD: se ejecuta al final de
+    `settings.py`, cuando Django aún no está completamente inicializado.
+    Es probable que el import de `core.runtime_config` falle aquí (app
+    registry incompleto, etc.) y por eso el `except` NO es silencioso:
+    loguea el motivo a nivel DEBUG.
+
+    El bootstrap REAL ocurre en `core/apps.py::CoreConfig.ready()`, que
+    se ejecuta cuando Django ya está listo. Los envíos de email tienen
+    además un helper defensivo que reintenta antes de cada envío.
     """
     try:
         from core.runtime_config import apply_email_config_to_settings
         apply_email_config_to_settings()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(
+            "Bootstrap SMTP en settings.py omitido (%s). "
+            "Se aplicará en CoreConfig.ready().", e,
+        )
 
 
 try:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load sorting_tags %}
+{% load static sorting_tags %}
 {% block title %}Reglas de alerta - Comfutech Monitor{% endblock %}
 
 {% block content %}
@@ -265,8 +265,7 @@
                 <tr>
                     <th style="width: 35px;">
                         <input type="checkbox" class="form-check-input"
-                               id="select-all-rules"
-                               onclick="toggleAll(this)">
+                               id="select-all-rules">
                     </th>
                     {% sortable_th "estado" "Estado" "100px" %}
                     {% sortable_th "nombre" "Regla" %}
@@ -647,6 +646,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/tables.js' %}"></script>
 <script>
 // ============================================================
 // AYUDA DE LA PÁGINA
@@ -982,136 +982,148 @@ registerHelpContent({
 });
 
 // ============================================================
-// FILTRO RÁPIDO (cliente)
+// LÓGICA DE LA PÁGINA
 // ============================================================
-(function() {
-    const input = document.getElementById("quick-search");
-    const clearBtn = document.getElementById("quick-search-clear");
-    const counter = document.getElementById("live-count");
-    const table = document.getElementById("rules-table");
-    if (!input || !table) return;
-
-    function applyFilter() {
-        const q = input.value.toLowerCase().trim();
-        const rows = table.querySelectorAll("tbody tr[data-rule-id]");
-        let visible = 0;
-
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            const match = !q || text.includes(q);
-            row.style.display = match ? "" : "none";
-            if (match) visible++;
-        });
-
-        if (clearBtn) {
-            clearBtn.style.display = input.value ? "block" : "none";
-        }
-
-        if (counter) {
-            if (!q) {
-                counter.textContent = "";
-            } else {
-                counter.textContent = `${visible} de ${rows.length} visibles`;
-                counter.className = visible === 0
-                    ? "small text-danger fw-bold"
-                    : "small text-success";
-            }
-        }
-    }
-
-    input.addEventListener("input", applyFilter);
-
-    if (clearBtn) {
-        clearBtn.addEventListener("click", () => {
-            input.value = "";
-            applyFilter();
-            input.focus();
-        });
-    }
-
-    // Atajo: / para enfocar, Esc para limpiar
-    document.addEventListener("keydown", (e) => {
-        const tag = (e.target.tagName || "").toUpperCase();
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-            if (e.key === "Escape" && e.target === input) {
-                input.value = "";
-                applyFilter();
-                input.blur();
-            }
-            return;
-        }
-        if (e.key === "/") {
-            e.preventDefault();
-            input.focus();
-        }
-    });
-})();
+/**
+ * Reglas de alerta — Lógica de la página.
+ *
+ * Responsabilidades:
+ *   - Inicializar tooltips de Bootstrap (idempotente).
+ *   - Inicializar el filtro rápido en el cliente (`/`, `Esc`, botón limpiar).
+ *   - Inicializar la selección múltiple con checkbox maestro + contador.
+ *   - Confirmación de acciones masivas (activar/desactivar/eliminar).
+ *   - Gestión unificada del contador `#live-count` que muestra
+ *     "N de M visibles" cuando hay filtro activo, o "N seleccionadas"
+ *     cuando hay selección sin filtro (comportamiento original).
+ *
+ * Dependencias (cargadas desde este template):
+ *   - tables.js:
+ *       · Tables.initTooltips()
+ *       · Tables.initQuickFilter({..., onFilter})
+ *       · Tables.initSelection({..., onUpdate})
+ *       · Tables.initKeyboardShortcuts({focusSearchId})
+ *       · Tables.confirmBulk({...})
+ *
+ * Se usa `counterId: null` tanto en `initQuickFilter` como en
+ * `initSelection` porque ambos escribirían al mismo span
+ * `#live-count` y se pisarían. La gestión del contador se hace en
+ * `updateCounter()` respetando el comportamiento del template
+ * original: si hay filtro activo, prioridad al contador de
+ * visibles; si no, prioridad al contador de seleccionadas.
+ */
 
 // ============================================================
-// TOGGLE ALL CHECKBOXES
+// CONTADOR UNIFICADO
 // ============================================================
-function toggleAll(source) {
-    document.querySelectorAll(".rule-checkbox").forEach(cb => {
-        const row = cb.closest("tr");
-        if (row && row.style.display !== "none") {
-            cb.checked = source.checked;
-        }
-    });
-    updateSelectedCounter();
-}
+/**
+ * Actualiza el span `#live-count` con la información más relevante.
+ *
+ * Prioridad:
+ *   1. Si hay filtro activo (`#quick-search` con valor): mostrar
+ *      "N de M visibles" con color según si hay 0 (danger) o no
+ *      (success). Este es el comportamiento del filtro rápido.
+ *   2. Si NO hay filtro y hay checkboxes marcados: mostrar
+ *      "N seleccionadas" en color primario.
+ *   3. Si NO hay filtro ni selección: dejar vacío.
+ *
+ * Se llama desde:
+ *   - `onFilter(visible, total)` de `initQuickFilter` cuando el
+ *     usuario escribe en el buscador rápido.
+ *   - `onUpdate(checked, ...)` de `initSelection` cuando cambia
+ *     la selección de checkboxes.
+ *
+ * @param {number} visible - Filas visibles tras aplicar el filtro.
+ * @param {number} total   - Total de filas en la tabla.
+ */
+function updateCounter(visible, total) {
+    const counter = document.getElementById('live-count');
+    if (!counter) return;
 
-// ============================================================
-// CONTADOR DE SELECCIONADOS
-// ============================================================
-function updateSelectedCounter() {
-    const checked = document.querySelectorAll(".rule-checkbox:checked");
-    const master = document.getElementById("select-all-rules");
-    const counter = document.getElementById("live-count");
+    const input = document.getElementById('quick-search');
+    const hasFilter = input && input.value.trim() !== '';
+    const checkedCount = document.querySelectorAll('.rule-checkbox:checked').length;
 
-    if (master) {
-        const all = document.querySelectorAll(".rule-checkbox");
-        master.checked = all.length > 0 && checked.length === all.length;
-        master.indeterminate = checked.length > 0 && checked.length < all.length;
-    }
-
-    if (checked.length > 0) {
-        const input = document.getElementById("quick-search");
-        if (!input || !input.value) {
-            if (counter) {
-                counter.textContent = `${checked.length} seleccionada${checked.length === 1 ? "" : "s"}`;
-                counter.className = "small text-primary fw-bold";
-            }
-        }
+    if (hasFilter) {
+        // Prioridad 1: filtro activo → mostrar visibles.
+        counter.textContent = `${visible} de ${total} visibles`;
+        counter.className = visible === 0
+            ? 'small text-danger fw-bold'
+            : 'small text-success';
+    } else if (checkedCount > 0) {
+        // Prioridad 2: sin filtro pero con selección → mostrar seleccionadas.
+        counter.textContent = `${checkedCount} seleccionada${checkedCount === 1 ? '' : 's'}`;
+        counter.className = 'small text-primary fw-bold';
+    } else {
+        // Sin filtro ni selección → vacío.
+        counter.textContent = '';
+        counter.className = 'small text-muted';
     }
 }
 
 // ============================================================
-// CONFIRMACIÓN DE ACCIONES EN BLOQUE
+// CONFIRMACIÓN DE ACCIONES MASIVAS (wrapper)
 // ============================================================
+/**
+ * Wrapper de compatibilidad para los `onclick="return confirmBulk(...)"`
+ * del HTML. Traduce la firma antigua `(action, warn)` a la nueva
+ * API de `Tables.confirmBulk({...})`.
+ *
+ * @param {string}  action - Verbo de la acción ('activar', 'desactivar', 'eliminar').
+ * @param {boolean} warn   - Si true, añade el aviso destructivo (para "eliminar").
+ * @returns {boolean}      - true si el usuario confirma, false si cancela.
+ */
 function confirmBulk(action, warn = false) {
-    const n = document.querySelectorAll(".rule-checkbox:checked").length;
-    if (n === 0) {
-        alert("No has seleccionado ninguna regla.\n\nMarca al menos una casilla.");
-        return false;
-    }
-    const msg = warn
-        ? `¿Eliminar ${n} regla(s)?\n\nEsta acción NO se puede deshacer.\n\nNOTA: las alertas emitidas por estas reglas se conservarán como registro histórico (no se eliminan).`
-        : `${action.charAt(0).toUpperCase() + action.slice(1)} ${n} regla(s)?`;
-    return confirm(msg);
+    const warningText = warn
+        ? 'NOTA: las alertas emitidas por estas reglas se conservarán '
+          + 'como registro histórico (no se eliminan).'
+        : '';
+
+    return Tables.confirmBulk({
+        checkboxSelector: '.rule-checkbox:checked',
+        actionLabel: action,
+        warning: warn,
+        warningText: warningText,
+        noSelectionMsg: 'No has seleccionado ninguna regla.\n\nMarca al menos una casilla.',
+    });
 }
 
 // ============================================================
-// TOOLTIPS DE BOOTSTRAP
+// INIT
 // ============================================================
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-        new bootstrap.Tooltip(el);
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Tooltips de Bootstrap.
+    Tables.initTooltips();
+
+    // 2. Filtro rápido (sin counter propio; se gestiona via callback).
+    Tables.initQuickFilter({
+        inputId: 'quick-search',
+        clearBtnId: 'quick-search-clear',
+        counterId: null,
+        tableId: 'rules-table',
+        rowSelector: 'tbody tr[data-rule-id]',
+        onFilter: (visible, total) => updateCounter(visible, total),
     });
 
-    document.querySelectorAll(".rule-checkbox").forEach(cb => {
-        cb.addEventListener("change", updateSelectedCounter);
+    // 3. Selección múltiple (sin counter propio; se gestiona via callback).
+    Tables.initSelection({
+        checkboxSelector: '.rule-checkbox',
+        masterCheckboxId: 'select-all-rules',
+        counterId: null,
+        rowSelector: 'tbody tr[data-rule-id]',
+        onUpdate: () => {
+            // Recalcular el número de visibles para el contador cuando
+            // hay un filtro activo.
+            const input = document.getElementById('quick-search');
+            const rows = document.querySelectorAll('tbody tr[data-rule-id]');
+            const visible = Array.from(rows).filter(r => r.style.display !== 'none').length;
+            updateCounter(visible, rows.length);
+        },
     });
-    updateSelectedCounter();
+
+    // 4. Atajos de teclado ('/' enfoca, 'Esc' limpia).
+    Tables.initKeyboardShortcuts({
+        focusSearchId: 'quick-search',
+    });
 });
 </script>
 {% endblock %}

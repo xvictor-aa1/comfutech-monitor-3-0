@@ -20,7 +20,7 @@ A partir de la v4:
 """
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -136,7 +136,7 @@ def alert_list(request):
         ).count(),
         "count_resolved_24h": all_alerts.filter(
             status="resuelta",
-            resolved_at__gte=timezone.now() - timezone.timedelta(hours=24)
+            resolved_at__gte=timezone.now() - timedelta(hours=24)
         ).count(),
         # Info para el CTA de "crea tu primera regla".
         "total_rules": total_rules,
