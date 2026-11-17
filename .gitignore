@@ -1,4 +1,6 @@
 .vscode/settings.json
+.devcontainer/
+wg1.conf
 26.2.2
 config.toml
 config.toml.bak

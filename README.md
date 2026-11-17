@@ -211,7 +211,7 @@ Descartado.
 | Tecnología                     | Versión                  | Rol                 |
 | ------------------------------- | ------------------------- | ------------------- |
 | **Python**                | 3.11+ (probado en 3.15.1) | Runtime             |
-| **Django**                | 4.2 LTS / 5.x             | Framework web       |
+| **Django**                | 4.2+ (STORAGES obligatorio desde 5.1) | Framework web       |
 | **Waitress**              | 2.x                       | Servidor WSGI       |
 | **APScheduler**           | 3.10+                     | Scheduler           |
 | **pysnmp**                | 7.1+                      | Cliente SNMP        |
@@ -237,11 +237,18 @@ Descartado.
 | Base                  | Versión   | Rol                                      |
 | --------------------- | ---------- | ---------------------------------------- |
 | **MySQL**       | 5.7+ / 8.0 | Inventario, usuarios, alertas y backlogs |
+| **PostgreSQL**  | 13+        | Alternativa a MySQL (configurable)       |
+| **SQLite**      | 3.x        | Desarrollo / pruebas                     |
 | **InfluxDB**    | 2.9.1+     | Métricas temporales                     |
 | **config.toml** | N/A        | Configuración runtime                   |
 | **system.toml** | N/A        | Bootstrap Django                         |
 
-Django soporta de forma nativa otros motores de BD como PostgreSQL o SQLite. La configuración por defecto del proyecto está optimizada para MySQL, que es el motor oficialmente probado y soportado en producción.
+El proyecto soporta **multi-engine** en `system.toml` mediante la clave `engine`:
+- `mysql` (oficial, probado en producción)
+- `postgres` / `postgresql` / `psql` (PostgreSQL / Supabase)
+- `sqlite` (solo desarrollo/pruebas)
+
+La configuración por defecto usa MySQL. Ver sección [Estructura completa de system.toml](#estructura-completa-de-systemtoml) para detalles de cada motor.
 
 ## Despliegue
 
@@ -1109,10 +1116,11 @@ Contiene:
 
 - SECRET_KEY
 - DEBUG
-- Base de datos
-- Backend de correo
+- Base de datos (multi-engine: MySQL, PostgreSQL, SQLite)
+- Backend de correo (`[email_backend]`)
 - Hosts permitidos
 - Configuración de logging
+- Seguridad (cookies, proxy, CSRF) — sección `[security]`
 
 ### config.toml
 
@@ -1196,6 +1204,90 @@ updated_by = ""
 last_backup_run = ""
 last_backup_type = ""
 last_backup_filename = ""
+```
+
+---
+
+## Estructura completa de system.toml
+
+```toml
+# ============================================================
+# system.toml — Configuración de arranque de Django
+# ============================================================
+# Este archivo contiene credenciales. NO lo versiones.
+# Se lee UNA SOLA VEZ al arrancar Django.
+# Cambios requieren reiniciar el servicio.
+
+# ============================================================
+# DJANGO
+# ============================================================
+[django]
+secret_key = "cambia-esto-por-una-clave-larga-aleatoria-de-al-menos-50-caracteres"
+debug = false
+allowed_hosts = "localhost,127.0.0.1"
+log_level = "INFO"
+
+# ============================================================
+# BASE DE DATOS — SELECTOR DE MOTOR
+# ============================================================
+# Solo se usa UNA sub-sección según el valor de `engine`:
+#   engine = "mysql"      → usa [database.mysql]
+#   engine = "postgres"   → usa [database.postgres] (o "postgresql" / "psql")
+#   engine = "sqlite"     → usa [database.sqlite]
+
+[database]
+engine = "mysql"   # "mysql" | "postgres" | "postgresql" | "psql" | "sqlite"
+
+# ------------------------------------------------------------
+# MySQL (aplica si engine = "mysql")
+# ------------------------------------------------------------
+[database.mysql]
+name = "monitoreo_red"
+user = "monitor"
+password = "tu_password_segura"
+host = "localhost"
+port = 3306
+charset = "utf8mb4"
+
+# ------------------------------------------------------------
+# PostgreSQL / Supabase (aplica si engine = "postgres", "postgresql" o "psql")
+# ------------------------------------------------------------
+[database.postgres]
+name = "postgres"
+user = "monitor"
+password = "tu_password_segura"
+host = "localhost"
+port = 5432
+conn_max_age = 0
+conn_health_checks = true
+disable_server_side_cursors = true
+sslmode = "require"
+connect_timeout = 10
+
+# ------------------------------------------------------------
+# SQLite (aplica si engine = "sqlite")
+# ------------------------------------------------------------
+[database.sqlite]
+name = "db.sqlite3"
+timeout = 20
+
+# ============================================================
+# EMAIL BACKEND
+# ============================================================
+[email_backend]
+backend = "django.core.mail.backends.console.EmailBackend"
+
+# ============================================================
+# SEGURIDAD (cookies, proxy, CSRF)
+# ============================================================
+[security]
+session_cookie_secure = false
+csrf_cookie_secure = false
+session_cookie_samesite = "Lax"
+use_x_forwarded_host = false
+secure_proxy_ssl_header_name = "HTTP_X_FORWARDED_PROTO"
+secure_proxy_ssl_header_value = "https"
+csrf_trusted_origins = []
 ```
 
 ---
