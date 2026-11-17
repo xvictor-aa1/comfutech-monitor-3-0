@@ -38,11 +38,7 @@ chat_id = ""
 
 [monitor]
 enabled = true
-snmp_poll_interval = 60
-health_poll_interval = 120
-icmp_poll_interval = 120
-radio_poll_interval = 120
-ap_clients_poll_interval = 120
+# Los intervalos de polling se administran en el panel y se guardan en la BD.
 
 [email]
 host = "smtp.gmail.com"

@@ -2,9 +2,9 @@
 """
 Panel de configuración del sistema (solo superadmin).
 
-La configuración se guarda en `config.ini` (no en BD). Los cambios
-se aplican en el próximo ciclo del monitor (≤60s) vía
-`config_ini.reload_if_changed()`.
+La configuración general se guarda en TOML y los intervalos de polling
+en la base de datos. Los cambios se aplican en el próximo ciclo del
+monitor (≤60s).
 
 Diseño:
   - Un único formulario con TABS visuales.
@@ -21,6 +21,7 @@ from django.shortcuts import render, redirect
 from core import config_ini
 from core.decorators import require_superadmin
 from core.runtime_config import get_system_config, get_email_config
+from monitoreo.models import PollerConfig
 from monitoreo.services import telegram
 
 log = logging.getLogger(__name__)
@@ -57,10 +58,10 @@ def system_settings(request):
     Panel de configuración del sistema.
 
     GET:
-      - Renderiza el formulario con los valores actuales del .ini.
+    - Renderiza el formulario con los valores actuales.
 
     POST:
-      - Guarda todas las secciones de una sola vez en config.ini.
+    - Guarda la configuración general en TOML y los intervalos en BD.
     """
     if request.method == "POST":
         # ============================================================
@@ -81,21 +82,23 @@ def system_settings(request):
         # ============================================================
         monitor_updates = {
             "enabled": "true" if _get_bool(request, "monitor_enabled") else "false",
-            "snmp_poll_interval": str(_clamp(
+        }
+        poller_updates = {
+            "snmp_poll_interval": _clamp(
                 _get_int(request, "snmp_poll_interval", 60), 10, 3600
-            )),
-            "health_poll_interval": str(_clamp(
+            ),
+            "health_poll_interval": _clamp(
                 _get_int(request, "health_poll_interval", 120), 10, 3600
-            )),
-            "icmp_poll_interval": str(_clamp(
+            ),
+            "icmp_poll_interval": _clamp(
                 _get_int(request, "icmp_poll_interval", 120), 10, 3600
-            )),
-            "radio_poll_interval": str(_clamp(
+            ),
+            "radio_poll_interval": _clamp(
                 _get_int(request, "radio_poll_interval", 120), 10, 3600
-            )),
-            "ap_clients_poll_interval": str(_clamp(
+            ),
+            "ap_clients_poll_interval": _clamp(
                 _get_int(request, "ap_clients_poll_interval", 120), 10, 3600
-            )),
+            ),
         }
 
         # ============================================================
@@ -148,6 +151,7 @@ def system_settings(request):
                 },
                 updated_by=request.user.username,
             )
+            PollerConfig.objects.update_or_create(pk=1, defaults=poller_updates)
         except Exception as e:
             log.exception("Error guardando config.ini")
             messages.error(
@@ -173,8 +177,8 @@ def system_settings(request):
 
         messages.success(
             request,
-            "Configuración guardada en config.ini. "
-            "El monitor aplicará los cambios en menos de 60 segundos.",
+            "Configuración guardada. Los intervalos de polling se almacenaron "
+            "en la base de datos y el monitor aplicará los cambios en menos de 60 segundos.",
         )
         return redirect("core:system_settings")
 

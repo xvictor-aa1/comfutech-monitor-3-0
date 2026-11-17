@@ -55,9 +55,6 @@ class Command(BaseCommand):
                         "telegram_chat_id": sc.telegram_chat_id,
                         "telegram_enabled": sc.telegram_enabled,
                         "monitor_enabled": sc.monitor_enabled,
-                        "snmp_poll_interval": sc.snmp_poll_interval,
-                        "health_poll_interval": sc.health_poll_interval,
-                        "icmp_poll_interval": sc.icmp_poll_interval,
                     },
                     "email_config": {
                         "email_host": ec.email_host,
@@ -123,11 +120,6 @@ class Command(BaseCommand):
             }
             updates["monitor"] = {
                 "enabled": bool(sc.monitor_enabled),
-                "snmp_poll_interval": sc.snmp_poll_interval or 60,
-                "health_poll_interval": sc.health_poll_interval or 120,
-                "icmp_poll_interval": sc.icmp_poll_interval or 120,
-                "radio_poll_interval": sc.health_poll_interval or 120,
-                "ap_clients_poll_interval": sc.health_poll_interval or 120,
             }
 
         if ec:

@@ -92,11 +92,6 @@ def _default_structure() -> dict:
         },
         "monitor": {
             "enabled": True,
-            "snmp_poll_interval": 60,
-            "health_poll_interval": 120,
-            "icmp_poll_interval": 120,
-            "radio_poll_interval": 120,
-            "ap_clients_poll_interval": 120,
         },
         "email": {
             "host": "smtp.gmail.com",

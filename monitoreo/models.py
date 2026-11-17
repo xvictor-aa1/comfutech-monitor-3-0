@@ -8,6 +8,7 @@ Incluye:
 """
 from django.conf import settings
 from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
 
 
 class DiscoveryJob(models.Model):
@@ -135,6 +136,41 @@ class MonitorStatus(models.Model):
         `last_errors`. Útil para mostrar un banner en la UI.
         """
         return bool(self.last_errors)
+
+
+class PollerConfig(models.Model):
+    """Intervalos de ejecución de los pollers del monitor."""
+    id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False
+    )
+    snmp_poll_interval = models.PositiveIntegerField(
+        default=60, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo SNMP (s)",
+    )
+    health_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo Health (s)",
+    )
+    icmp_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo ICMP (s)",
+    )
+    radio_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo Radio (s)",
+    )
+    ap_clients_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo clientes AP (s)",
+    )
+
+    class Meta:
+        db_table = "monitor_poller_config"
+        verbose_name = "Configuración de Pollers"
+        verbose_name_plural = "Configuración de Pollers"
+
+    def __str__(self):
+        return "Intervalos de los pollers"
 
 
 class TelegramCooldown(models.Model):

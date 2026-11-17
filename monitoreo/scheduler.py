@@ -108,7 +108,7 @@ def _heartbeat_and_reload():
     Actualiza el heartbeat, recarga la configuración y ejecuta
     tareas de mantenimiento:
       - Recargar config.toml si cambió.
-      - Detectar cambios en [monitor] y [maintenance].
+    - Detectar cambios de configuración del monitor y mantenimiento.
       - Limpiar estados huérfanos del motor de alertas.
       - Limpiar contadores de tráfico huérfanos.
       - Limpiar cooldowns de Telegram huérfanos.
@@ -468,7 +468,7 @@ def _check_config_changes():
             log.info("Monitor reactivado.")
             _resume_all_jobs()
 
-    # Intervalos: traffic / health / icmp / radio / ap_clients.
+    # Aplicar por separado los intervalos de cada poller.
     if current["snmp_poll_interval"] != _config_snapshot["snmp_poll_interval"]:
         try:
             _scheduler.modify_job("traffic", seconds=current["snmp_poll_interval"])
@@ -477,13 +477,11 @@ def _check_config_changes():
             log.error("No se pudo modificar 'traffic': %s", e)
 
     if current["health_poll_interval"] != _config_snapshot["health_poll_interval"]:
-        # health, radio y ap_clients comparten intervalo.
-        for job_id in ("health", "radio", "ap_clients"):
-            try:
-                _scheduler.modify_job(job_id, seconds=current["health_poll_interval"])
-                log.info("Job '%s' → %ds.", job_id, current["health_poll_interval"])
-            except Exception as e:
-                log.error("No se pudo modificar '%s': %s", job_id, e)
+        try:
+            _scheduler.modify_job("health", seconds=current["health_poll_interval"])
+            log.info("Job 'health' → %ds.", current["health_poll_interval"])
+        except Exception as e:
+            log.error("No se pudo modificar 'health': %s", e)
 
     if current["icmp_poll_interval"] != _config_snapshot["icmp_poll_interval"]:
         try:
@@ -491,6 +489,15 @@ def _check_config_changes():
             log.info("Job 'icmp' → %ds.", current["icmp_poll_interval"])
         except Exception as e:
             log.error("No se pudo modificar 'icmp': %s", e)
+
+    for key, job_id in (("radio_poll_interval", "radio"),
+                         ("ap_clients_poll_interval", "ap_clients")):
+        if current[key] != _config_snapshot[key]:
+            try:
+                _scheduler.modify_job(job_id, seconds=current[key])
+                log.info("Job '%s' → %ds.", job_id, current[key])
+            except Exception as e:
+                log.error("No se pudo modificar '%s': %s", job_id, e)
 
     # Recargar configuración de mantenimiento.
     global _maintenance_snapshot
@@ -572,12 +579,12 @@ def start_scheduler():
     )
     _scheduler.add_job(
         _job_radio, "interval",
-        seconds=cfg["health_poll_interval"],
+        seconds=cfg["radio_poll_interval"],
         id="radio", name="RF Radio Poller",
     )
     _scheduler.add_job(
         _job_ap_clients, "interval",
-        seconds=cfg["health_poll_interval"],
+        seconds=cfg["ap_clients_poll_interval"],
         id="ap_clients", name="AP Clients Poller",
     )
     _scheduler.add_job(
@@ -652,9 +659,10 @@ def start_scheduler():
 
     log.info(
         "Scheduler iniciado: traffic=%ds, health=%ds, icmp=%ds, "
-        "radio=%ds, enabled=%s.",
+        "radio=%ds, ap_clients=%ds, enabled=%s.",
         cfg["snmp_poll_interval"], cfg["health_poll_interval"],
-        cfg["icmp_poll_interval"], cfg["health_poll_interval"],
+        cfg["icmp_poll_interval"], cfg["radio_poll_interval"],
+        cfg["ap_clients_poll_interval"],
         cfg["enabled"],
     )
     return _scheduler

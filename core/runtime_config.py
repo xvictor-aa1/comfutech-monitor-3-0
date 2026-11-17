@@ -3,8 +3,9 @@
 Carga perezosa de la configuración runtime desde `config.ini`.
 
 Se mantiene la API pública original (`get_system_config()`,
-`get_influx_config()`, etc.) para no romper llamadores. Internamente
-todo se lee del .ini vía `core.config_ini` y Dynaconf.
+`get_influx_config()`, etc.) para no romper llamadores. La configuración
+general se lee del TOML vía `core.config_ini` y Dynaconf; los intervalos de
+polling se leen desde la base de datos.
 
 `get_system_config()` devuelve un objeto con atributos compatibles
 con los templates existentes (`cfg.influx_url`, `cfg.monitor_enabled`,
@@ -96,11 +97,7 @@ def get_system_config():
 
         # Monitor
         monitor_enabled=_as_bool(monitor.get("enabled"), True),
-        snmp_poll_interval=_as_int(monitor.get("snmp_poll_interval"), 60),
-        health_poll_interval=_as_int(monitor.get("health_poll_interval"), 120),
-        icmp_poll_interval=_as_int(monitor.get("icmp_poll_interval"), 120),
-        radio_poll_interval=_as_int(monitor.get("radio_poll_interval"), 120),
-        ap_clients_poll_interval=_as_int(monitor.get("ap_clients_poll_interval"), 120),
+        **_get_poller_intervals(),
 
         # Auditoría
         updated_at=_as_datetime(meta.get("updated_at")),
@@ -114,6 +111,20 @@ def get_system_config():
         "meta": meta,
     }
     return cfg
+
+
+def _get_poller_intervals() -> dict:
+    """Lee los intervalos desde la fila singleton de configuración."""
+    from monitoreo.models import PollerConfig
+
+    pollers, _ = PollerConfig.objects.get_or_create(pk=1)
+    return {
+        "snmp_poll_interval": pollers.snmp_poll_interval,
+        "health_poll_interval": pollers.health_poll_interval,
+        "icmp_poll_interval": pollers.icmp_poll_interval,
+        "radio_poll_interval": pollers.radio_poll_interval,
+        "ap_clients_poll_interval": pollers.ap_clients_poll_interval,
+    }
 
 
 # ============================================================
