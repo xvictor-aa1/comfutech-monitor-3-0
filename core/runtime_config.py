@@ -61,7 +61,15 @@ def get_system_config():
     """
     Devuelve un objeto con los campos de configuración como atributos.
 
-    Compatible con:
+    Composición mixta:
+      · InfluxDB, Grafana, Telegram, Email → `config.toml`.
+      · `monitor.enabled` (toggle global) → `config.toml`.
+      · Los 5 intervalos de polling (snmp, health, icmp, radio,
+        ap_clients) → tabla `monitor_poller_config` (modelo
+        `PollerConfig`). Si la fila aún no existe (BD recién creada o
+        migraciones en curso), se usan los defaults del modelo.
+
+    Atributos expuestos (compatibles con templates y vistas):
         cfg.influx_url, cfg.influx_token, cfg.influx_org, cfg.influx_bucket
         cfg.grafana_url
         cfg.telegram_enabled, cfg.telegram_bot_token, cfg.telegram_chat_id
@@ -71,13 +79,17 @@ def get_system_config():
         cfg.ap_clients_poll_interval
         cfg.updated_at, cfg.updated_by
 
-    Además expone `_raw` con todas las secciones para debug.
+    Además expone `_raw` con todas las secciones para debug
+    (incluida la sección `poller` con los intervalos leídos de BD).
     """
     influx = config_ini.get_section("influxdb")
     grafana = config_ini.get_section("grafana")
     telegram = config_ini.get_section("telegram")
     monitor = config_ini.get_section("monitor")
     meta = config_ini.get_meta()
+
+    # --- Intervalos de polling: desde la BD (PollerConfig) ---
+    poller = _get_poller_config_safe()
 
     cfg = SimpleNamespace(
         # InfluxDB
@@ -94,13 +106,13 @@ def get_system_config():
         telegram_bot_token=_as_str(telegram.get("bot_token")),
         telegram_chat_id=_as_str(telegram.get("chat_id")),
 
-        # Monitor
+        # Monitor: `enabled` sigue en config.toml; intervalos en BD.
         monitor_enabled=_as_bool(monitor.get("enabled"), True),
-        snmp_poll_interval=_as_int(monitor.get("snmp_poll_interval"), 60),
-        health_poll_interval=_as_int(monitor.get("health_poll_interval"), 120),
-        icmp_poll_interval=_as_int(monitor.get("icmp_poll_interval"), 120),
-        radio_poll_interval=_as_int(monitor.get("radio_poll_interval"), 120),
-        ap_clients_poll_interval=_as_int(monitor.get("ap_clients_poll_interval"), 120),
+        snmp_poll_interval=poller["snmp_poll_interval"],
+        health_poll_interval=poller["health_poll_interval"],
+        icmp_poll_interval=poller["icmp_poll_interval"],
+        radio_poll_interval=poller["radio_poll_interval"],
+        ap_clients_poll_interval=poller["ap_clients_poll_interval"],
 
         # Auditoría
         updated_at=_as_datetime(meta.get("updated_at")),
@@ -111,9 +123,64 @@ def get_system_config():
         "grafana": grafana,
         "telegram": telegram,
         "monitor": monitor,
+        "poller": poller,
         "meta": meta,
     }
     return cfg
+
+
+def _get_poller_config_safe() -> dict:
+    """
+    Devuelve los intervalos de polling de la BD (modelo `PollerConfig`).
+
+    Se usa un helper separado para:
+      1. Aislar el `try/except` (la BD puede no estar lista durante el
+         bootstrap de Django o durante migraciones).
+      2. Devolver un dict con los defaults del modelo si la fila aún
+         no existe o la consulta falla.
+
+    Los defaults devueltos coinciden con los del modelo
+    (30/60/30/60/60).
+
+    Returns:
+        dict con las 5 claves de intervalos (siempre int).
+    """
+    defaults = {
+        "snmp_poll_interval": 30,
+        "health_poll_interval": 60,
+        "icmp_poll_interval": 30,
+        "radio_poll_interval": 60,
+        "ap_clients_poll_interval": 60,
+    }
+    try:
+        from monitoreo.models import PollerConfig
+        poller = PollerConfig.objects.filter(pk=1).first()
+        if poller is None:
+            return defaults
+        return {
+            "snmp_poll_interval": int(
+                poller.snmp_poll_interval or defaults["snmp_poll_interval"]
+            ),
+            "health_poll_interval": int(
+                poller.health_poll_interval or defaults["health_poll_interval"]
+            ),
+            "icmp_poll_interval": int(
+                poller.icmp_poll_interval or defaults["icmp_poll_interval"]
+            ),
+            "radio_poll_interval": int(
+                poller.radio_poll_interval or defaults["radio_poll_interval"]
+            ),
+            "ap_clients_poll_interval": int(
+                poller.ap_clients_poll_interval
+                or defaults["ap_clients_poll_interval"]
+            ),
+        }
+    except Exception as e:
+        log.debug(
+            "No se pudo leer PollerConfig de la BD (%s). "
+            "Se usan defaults en memoria.", e,
+        )
+        return defaults
 
 
 # ============================================================

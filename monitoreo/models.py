@@ -5,9 +5,12 @@ Modelos de la app `monitoreo`.
 Incluye:
   - DiscoveryJob:  registro de cada ejecución del discovery.
   - MonitorStatus: estado del proceso monitor en background.
+  - PollerConfig:  intervalos de ejecución de los pollers (BD).
+  - TelegramCooldown: cooldown persistente de Telegram.
 """
 from django.conf import settings
 from django.db import models
+from django.core.validators import MaxValueValidator, MinValueValidator
 
 
 class DiscoveryJob(models.Model):
@@ -137,20 +140,70 @@ class MonitorStatus(models.Model):
         return bool(self.last_errors)
 
 
+class PollerConfig(models.Model):
+    """
+    Intervalos de ejecución de los pollers del monitor.
+
+    Modelo singleton (id=1). Se lee desde `core.runtime_config` y se
+    edita desde `/configuracion/` (pestaña Monitor). Los valores NO se
+    guardan en `config.toml`: la BD es la única fuente de verdad para
+    los intervalos.
+
+    Los intervalos afectan la frecuencia con la que cada poller
+    consulta los equipos vía SNMP o ICMP. Valores más bajos
+    incrementan la carga de red y CPU del servidor.
+
+    El scheduler (`monitoreo.scheduler`) detecta cambios comparando
+    los valores leídos con su snapshot en memoria y reajusta los
+    jobs en el siguiente heartbeat (≤60s).
+    """
+    id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False
+    )
+    snmp_poll_interval = models.PositiveIntegerField(
+        default=60, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo SNMP (s)",
+    )
+    health_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo Health (s)",
+    )
+    icmp_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo ICMP (s)",
+    )
+    radio_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo Radio (s)",
+    )
+    ap_clients_poll_interval = models.PositiveIntegerField(
+        default=120, validators=[MinValueValidator(10), MaxValueValidator(3600)],
+        verbose_name="Intervalo clientes AP (s)",
+    )
+
+    class Meta:
+        db_table = "monitor_poller_config"
+        verbose_name = "Configuración de Pollers"
+        verbose_name_plural = "Configuración de Pollers"
+
+    def __str__(self):
+        return "Intervalos de los pollers"
+
+
 class TelegramCooldown(models.Model):
     """
     Persistencia del cooldown de Telegram por regla (y opcionalmente
     por device).
 
-    El cooldown de Telegram ya no vive solo en memoria del proceso monitor. 
+    El cooldown de Telegram ya no vive solo en memoria del proceso monitor.
     Se persiste en esta tabla para que sobreviva a reinicios del servicio.
 
     La clave `key` es un string con el formato:
       · `rule:<rule_id>`                 → cooldown por regla (v4)
       · `rule:<rule_id>:device:<id>`     → cooldown por regla+device (legacy)
 
-    Las alertas ya no tienen FK a device, así que se usa `rule:<rule_id>` siempre. 
-    La forma `rule:<id>:device:<id>` se conserva por compatibilidad si en el 
+    Las alertas ya no tienen FK a device, así que se usa `rule:<rule_id>` siempre.
+    La forma `rule:<id>:device:<id>` se conserva por compatibilidad si en el
     futuro se reintroduce el device en el motor de alertas.
 
     Se limpia automáticamente por el heartbeat del scheduler cuando

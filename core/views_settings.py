@@ -77,26 +77,46 @@ def system_settings(request):
         # Si está vacío, NO sobrescribimos el token existente.
 
         # ============================================================
-        # MONITOR
+        # MONITOR — `enabled` (config.toml) + intervalos (BD)
         # ============================================================
-        monitor_updates = {
+        # El toggle `monitor_enabled` sigue viviendo en `config.toml`.
+        monitor_toml_updates = {
             "enabled": "true" if _get_bool(request, "monitor_enabled") else "false",
-            "snmp_poll_interval": str(_clamp(
-                _get_int(request, "snmp_poll_interval", 60), 10, 3600
-            )),
-            "health_poll_interval": str(_clamp(
-                _get_int(request, "health_poll_interval", 120), 10, 3600
-            )),
-            "icmp_poll_interval": str(_clamp(
-                _get_int(request, "icmp_poll_interval", 120), 10, 3600
-            )),
-            "radio_poll_interval": str(_clamp(
-                _get_int(request, "radio_poll_interval", 120), 10, 3600
-            )),
-            "ap_clients_poll_interval": str(_clamp(
-                _get_int(request, "ap_clients_poll_interval", 120), 10, 3600
-            )),
         }
+
+        # Los 5 intervalos de polling se guardan en la tabla
+        # `monitor_poller_config` (modelo `PollerConfig`), no en
+        # `config.toml`. Se aplican en ≤60s vía heartbeat del scheduler.
+        from monitoreo.models import PollerConfig
+        poller_defaults = {
+            "snmp_poll_interval": _clamp(
+                _get_int(request, "snmp_poll_interval", 30), 10, 3600
+            ),
+            "health_poll_interval": _clamp(
+                _get_int(request, "health_poll_interval", 60), 10, 3600
+            ),
+            "icmp_poll_interval": _clamp(
+                _get_int(request, "icmp_poll_interval", 30), 10, 3600
+            ),
+            "radio_poll_interval": _clamp(
+                _get_int(request, "radio_poll_interval", 60), 10, 3600
+            ),
+            "ap_clients_poll_interval": _clamp(
+                _get_int(request, "ap_clients_poll_interval", 60), 10, 3600
+            ),
+        }
+
+        try:
+            PollerConfig.objects.update_or_create(
+                pk=1, defaults=poller_defaults,
+            )
+        except Exception as e:
+            log.exception("Error guardando PollerConfig")
+            messages.error(
+                request,
+                f"No se pudieron guardar los intervalos de polling: {e}",
+            )
+            return redirect("core:system_settings")
 
         # ============================================================
         # TELEGRAM
@@ -141,7 +161,7 @@ def system_settings(request):
             config_ini.write_sections(
                 updates={
                     "influxdb": influx_updates,
-                    "monitor": monitor_updates,
+                    "monitor": monitor_toml_updates,
                     "telegram": telegram_updates,
                     "grafana": grafana_updates,
                     "email": email_updates,
@@ -173,7 +193,7 @@ def system_settings(request):
 
         messages.success(
             request,
-            "Configuración guardada en config.ini. "
+            "Configuración guardada (config.toml + intervalos en BD). "
             "El monitor aplicará los cambios en menos de 60 segundos.",
         )
         return redirect("core:system_settings")

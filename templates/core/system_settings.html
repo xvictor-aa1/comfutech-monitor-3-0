@@ -30,11 +30,13 @@
 <div class="settings-banner">
     <i class="bi bi-shield-lock-fill"></i>
     <div class="settings-banner-content">
-        <strong>Configuración guardada en <code>config.toml</code></strong>
+        <strong>Configuración mixta: <code>config.toml</code> + base de datos</strong>
         <small>
-            Los valores sensibles (tokens, contraseñas) se guardan en un archivo
-            con permisos restringidos + backup automático.
-            Ruta: <code>{{ config_file_path }}</code>
+            Las credenciales sensibles (tokens, contraseñas) viven en
+            <code>{{ config_file_path }}</code> con permisos restringidos
+            y backup automático. Los intervalos de polling del monitor se
+            guardan en la tabla <code>monitor_poller_config</code> de la BD
+            y se editan desde el tab <em>Monitor</em>.
         </small>
     </div>
 </div>
